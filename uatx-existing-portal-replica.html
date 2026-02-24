@@ -1,0 +1,1518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UATX Student Portal</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ─── RESET & BASE ─── */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: 'Roboto', Arial, sans-serif;
+  background: #f5f0e8;
+  color: #2c2c2c;
+  display: flex;
+  min-height: 100vh;
+}
+
+/* ─── CSS VARIABLES ─── */
+:root {
+  --navy: #1a2332;
+  --navy-light: #243044;
+  --navy-mid: #1e2a3a;
+  --navy-dark: #111a26;
+  --gold: #c9a84c;
+  --gold-muted: #a08839;
+  --cream: #f5f0e8;
+  --cream-dark: #e8e0d0;
+  --white: #ffffff;
+  --text: #2c2c2c;
+  --text-light: #6b6b6b;
+  --border: #e0d8c8;
+  --sidebar-w: 264px;
+}
+
+/* ─── SIDEBAR ─── */
+.sidebar {
+  width: var(--sidebar-w);
+  min-height: 100vh;
+  background: var(--navy-dark);
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--navy-light);
+  overflow-y: auto;
+}
+.sidebar-header {
+  padding: 24px 18px 20px;
+  border-bottom: 1px solid var(--navy-light);
+}
+.sidebar-title {
+  font-family: 'Roboto', Arial, sans-serif;
+  color: var(--cream);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.sidebar-nav {
+  padding: 16px 0;
+  flex: 1;
+}
+.nav-section {
+  margin-bottom: 10px;
+}
+.nav-section-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  font-size: 15px;
+  font-weight: 500;
+  color: rgba(245,240,232,0.85);
+  cursor: pointer;
+  transition: all 0.15s;
+  text-decoration: none;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+}
+.nav-section-toggle:hover { color: var(--cream); }
+.nav-section-toggle.active {
+  color: var(--cream);
+  font-weight: 600;
+}
+.nav-section-toggle .arrow {
+  font-size: 9px;
+  transition: transform 0.2s;
+  display: inline-block;
+  width: 12px;
+}
+.nav-section-toggle .arrow.open { transform: rotate(90deg); }
+.nav-sub {
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height 0.25s ease;
+}
+.nav-sub.open { max-height: 500px; }
+.nav-sub a {
+  display: block;
+  padding: 8px 18px 8px 38px;
+  font-size: 14px;
+  color: rgba(245,240,232,0.6);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+.nav-sub a:hover { color: var(--cream); }
+
+/* ─── MAIN CONTENT ─── */
+.main {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  min-width: 0;
+}
+
+/* ─── HERO BANNER ─── */
+.hero {
+  position: relative;
+  height: 50vh;
+  background: url('https://t3.ftcdn.net/jpg/05/22/31/18/360_F_522311897_jvzAtywbLH7UVsfgVWIfL4kPRA2sg8L0.jpg') center center / cover no-repeat;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0.15) 50%, rgba(0,0,0,0.45) 100%);
+}
+.hero h1 {
+  position: relative;
+  z-index: 1;
+  color: var(--cream);
+  font-family: 'Roboto', Arial, sans-serif;
+  font-size: 48px;
+  font-weight: 700;
+  text-align: center;
+  line-height: 1.35;
+  max-width: 700px;
+  padding: 0 20px;
+  text-shadow: 0 2px 20px rgba(0,0,0,0.4);
+}
+
+/* ─── GOLD DIVIDER ─── */
+.gold-bar {
+  height: 30px;
+  background: var(--navy-dark);
+}
+
+/* ─── PAGE CONTAINER ─── */
+.page { display: none; }
+.page.active { display: block; }
+
+/* ─── HOME PAGE ─── */
+.home-section {
+  max-width: 100%;
+  margin: 0;
+  padding: 40px 48px;
+}
+.welcome-block {
+  display: flex;
+  gap: 32px;
+  align-items: flex-start;
+  margin-bottom: 48px;
+}
+.welcome-img {
+  width: 400px;
+  min-height: 200px;
+  background: linear-gradient(135deg, #1a3a5c, #1a2332);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.welcome-img-inner {
+  text-align: center;
+  padding: 20px;
+}
+.welcome-img-inner .crest {
+  font-size: 36px;
+  color: var(--gold);
+  margin-bottom: 8px;
+}
+.welcome-img-inner .uname {
+  color: var(--cream);
+  font-family: 'Roboto', Arial, sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.welcome-text h2 {
+  font-family: 'Roboto', Arial, sans-serif;
+  font-size: 26px;
+  color: var(--text);
+  margin-bottom: 16px;
+  line-height: 1.3;
+}
+.welcome-text p {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text);
+}
+
+/* ─── HOME SECTIONS (LinkedIn, MeritFirst, Finance) ─── */
+.info-section {
+  display: flex;
+  gap: 32px;
+  align-items: flex-start;
+  padding: 36px 0;
+  border-top: 1px solid var(--border);
+}
+.info-section.reverse { flex-direction: row-reverse; }
+.info-text { flex: 1; }
+.info-text h2 {
+  font-family: 'Roboto', Arial, sans-serif;
+  font-size: 24px;
+  color: var(--text);
+  margin-bottom: 14px;
+}
+.info-text p {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text);
+  margin-bottom: 16px;
+}
+.info-text a {
+  color: var(--gold-muted);
+  text-decoration: underline;
+}
+.info-img {
+  width: 260px;
+  height: 220px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 2px;
+}
+.btn-navy {
+  display: block;
+  width: 100%;
+  padding: 12px 24px;
+  background: var(--navy);
+  color: var(--cream);
+  font-family: 'Roboto', Arial, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: center;
+  text-decoration: none;
+  border: none;
+  cursor: pointer;
+  letter-spacing: 0.3px;
+  transition: background 0.2s;
+}
+.btn-navy:hover { background: var(--navy-light); }
+
+/* ─── OPPORTUNITIES PAGE ─── */
+.opp-band {
+  padding: 32px 0;
+}
+.opp-band:nth-child(odd) {
+  background: var(--navy-dark);
+}
+.opp-band:nth-child(even) {
+  background: #d5cfc5;
+}
+.opp-band-inner {
+  max-width: 900px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 0 20px;
+}
+.opp-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  width: 260px;
+  padding: 0 8px;
+}
+.opp-logo {
+  width: 100px;
+  height: 100px;
+  background: var(--white);
+  border: 1px solid rgba(255,255,255,0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.opp-logo-text {
+  color: var(--navy);
+  font-family: 'Roboto', Arial, sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  text-align: center;
+  line-height: 1.2;
+  padding: 6px;
+}
+.opp-info {}
+.opp-info .role {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--cream);
+  margin-bottom: 4px;
+  line-height: 1.3;
+}
+.opp-info .desc {
+  font-size: 10px;
+  color: rgba(245,240,232,0.55);
+  line-height: 1.5;
+}
+.opp-info .org-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--cream);
+  margin-top: 6px;
+  text-align: center;
+}
+/* Light-band text colors */
+.opp-band:nth-child(even) .opp-info .role { color: var(--text); }
+.opp-band:nth-child(even) .opp-info .desc { color: var(--text-light); }
+.opp-band:nth-child(even) .opp-card div[style*="color:#f5f0e8"],
+.opp-band:nth-child(even) .opp-card div:last-child > div:last-child { color: var(--text) !important; }
+
+.opp-card-centered {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 160px;
+  gap: 6px;
+  padding: 0 8px;
+}
+.opp-card-centered .opp-logo {
+  width: 90px;
+  height: 90px;
+}
+.opp-card-centered .opp-right {
+  text-align: center;
+}
+
+/* ─── EVENTS PAGE ─── */
+.events-band {
+  padding: 36px 0;
+}
+.events-band:nth-child(odd) { background: var(--navy-dark); }
+.events-band:nth-child(even) { background: #d5cfc5; }
+.events-band-inner {
+  max-width: 780px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+  flex-wrap: wrap;
+  padding: 0 20px;
+}
+.event-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 280px;
+  text-align: center;
+}
+.event-card .event-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cream);
+  margin-bottom: 2px;
+}
+.event-card .event-sub {
+  font-size: 10px;
+  color: rgba(245,240,232,0.5);
+  margin-bottom: 10px;
+  font-style: italic;
+}
+.event-logo {
+  width: 200px;
+  height: 160px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+.event-logo-box {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Roboto', Arial, sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--white);
+  text-align: center;
+  line-height: 1.2;
+  padding: 16px;
+}
+.event-learn {
+  font-size: 11px;
+  color: var(--gold);
+  text-decoration: none;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  font-weight: 600;
+  border-bottom: 1px solid var(--gold);
+  padding-bottom: 1px;
+  margin-top: 4px;
+}
+.event-learn:hover { color: var(--gold-muted); }
+
+/* Light-band event text */
+.events-band:nth-child(even) .event-title { color: var(--text); }
+.events-band:nth-child(even) .event-sub { color: var(--text-light); }
+.events-band:nth-child(even) .event-learn { color: var(--navy); }
+
+/* ─── LINKEDIN ICON ─── */
+.linkedin-box {
+  width: 180px;
+  height: 180px;
+  background: #0077B5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+.linkedin-box span {
+  font-family: 'Roboto', Arial, sans-serif;
+  font-size: 80px;
+  font-weight: 700;
+  color: white;
+}
+
+/* ─── MERITFIRST ICON ─── */
+.meritfirst-box {
+  width: 180px;
+  height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.meritfirst-icon {
+  font-size: 72px;
+  color: var(--navy);
+}
+
+/* ─── FINANCE ICON ─── */
+.finance-box {
+  width: 200px;
+  height: 180px;
+  background: #a3d977;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+.finance-icon {
+  font-size: 64px;
+  color: var(--navy-dark);
+}
+
+/* ─── FOOTER ─── */
+.footer {
+  background: var(--navy-dark);
+  padding: 10px 20px;
+  text-align: center;
+  font-size: 11px;
+  color: rgba(245,240,232,0.3);
+  border-top: 1px solid var(--navy-light);
+}
+
+/* ─── SUBPAGES ─── */
+.subpage-content {
+  max-width: 100%;
+  margin: 0;
+  padding: 40px 48px 60px;
+}
+.subpage-content h2 {
+  font-family: 'Roboto', Arial, sans-serif;
+  font-size: 24px;
+  color: var(--text);
+  margin: 32px 0 14px;
+  font-weight: 700;
+}
+.subpage-content h2:first-child { margin-top: 0; }
+.subpage-content h3 {
+  font-family: 'Roboto', Arial, sans-serif;
+  font-size: 18px;
+  color: var(--navy);
+  margin: 28px 0 10px;
+  font-weight: 700;
+}
+.subpage-content p {
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--text);
+  margin: 0 0 12px;
+}
+.subpage-content ul {
+  margin: 0 0 16px 20px;
+  padding: 0;
+}
+.subpage-content ul li {
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.subpage-content a {
+  color: var(--gold-muted);
+  text-decoration: underline;
+}
+.subpage-content .note {
+  font-size: 13px;
+  font-style: italic;
+  color: var(--text-light);
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.subpage-content .back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--gold-muted);
+  text-decoration: none;
+  margin-bottom: 24px;
+  font-weight: 500;
+}
+.subpage-content .back-link:hover { color: var(--gold); }
+.subpage-content .section-divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 28px 0;
+}
+.program-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  padding: 24px;
+  margin-bottom: 20px;
+}
+.program-card h3 {
+  margin-top: 0;
+  font-size: 20px;
+}
+.program-card .program-sub {
+  font-size: 15px;
+  color: var(--text-light);
+  margin: -6px 0 12px;
+  font-weight: 500;
+}
+.program-card .cost {
+  display: inline-block;
+  background: var(--navy);
+  color: var(--cream);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 4px 14px;
+  margin-bottom: 14px;
+}
+
+/* ─── ANIMATIONS ─── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.page.active { animation: fadeIn 0.3s ease; }
+</style>
+</head>
+<body>
+
+<!-- ─── SIDEBAR ─── -->
+<nav class="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-title">UATX Student Portal</div>
+  </div>
+  <div class="sidebar-nav">
+    <!-- Student Portal section -->
+    <div class="nav-section">
+      <button class="nav-section-toggle active" onclick="navToggle(this); navigateTo('home')">
+        <span class="arrow open">&#9654;</span> Student Portal
+      </button>
+      <div class="nav-sub open">
+        <a href="#" onclick="navigateTo('unpaid-internship'); return false;">Unpaid Internship Support</a>
+        <a href="#" onclick="navigateTo('meritfirst'); return false;">MeritFirst Exams</a>
+        <a href="#" onclick="navigateTo('finance-skills'); return false;">Finance Skills Development</a>
+      </div>
+    </div>
+    <!-- Opportunities section -->
+    <div class="nav-section">
+      <button class="nav-section-toggle" onclick="navigateTo('opportunities')">
+        <span class="arrow">&#9654;</span> Opportunities
+      </button>
+    </div>
+    <!-- Events section -->
+    <div class="nav-section">
+      <button class="nav-section-toggle" onclick="navToggle(this); navigateTo('events')">
+        <span class="arrow">&#9654;</span> UATX Sponsored Events &amp; Travel
+      </button>
+      <div class="nav-sub">
+        <a href="#" onclick="navigateTo('event-aei'); return false;">AEI</a>
+        <a href="#" onclick="navigateTo('event-aha'); return false;">AHA Foundation</a>
+        <a href="#" onclick="navigateTo('event-austin-institute'); return false;">Austin Institute</a>
+        <a href="#" onclick="navigateTo('event-forge'); return false;">Coign &amp; Forge</a>
+        <a href="#" onclick="navigateTo('event-pepperdine'); return false;">Pepperdine</a>
+        <a href="#" onclick="navigateTo('event-reagan'); return false;">Ronald Reagan Institute</a>
+        <a href="#" onclick="navigateTo('event-israel'); return false;">Study Abroad: Israel</a>
+        <a href="#" onclick="navigateTo('event-txse'); return false;">Texas Stock Exchange</a>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<!-- ─── MAIN ─── -->
+<div class="main">
+
+  <!-- ════════════ HOME PAGE ════════════ -->
+  <div id="page-home" class="page active">
+    <div class="hero">
+      <h1>Student Portal for Talent Network, Internship, and Career Development Opportunities</h1>
+    </div>
+    <div class="gold-bar"></div>
+
+    <div class="home-section">
+      <!-- Welcome -->
+      <div class="welcome-block">
+        <div class="welcome-img">
+          <img src="/images/Student Portal Page/studnt portal.png" alt="University of Austin" style="width:100%;height:100%;object-fit:cover;border-radius:8px;">
+        </div>
+        <div class="welcome-text">
+          <h2>Welcome to the UATX Student Opportunity Portal</h2>
+          <p>The UATX Talent Network connects students with industry leaders, curated opportunities, and a growing community of professionals who support the development of future builders and thinkers. This portal serves as your home base for discovering job opportunities, staying connected, and keeping your interests up to date.</p>
+        </div>
+      </div>
+
+      <!-- Unpaid Internship Support -->
+      <div class="info-section">
+        <div class="info-text" style="flex:1;">
+          <h2>Unpaid Internship Support</h2>
+          <p>UATX will offer an Educational Support award of up to $2,000 to students who secure unpaid summer internships, helping offset living expenses that may otherwise limit access to valuable experience.</p>
+          <a href="#" class="btn-navy" onclick="navigateTo('unpaid-internship'); return false;">Learn More</a>
+        </div>
+      </div>
+
+      <!-- LinkedIn -->
+      <div class="info-section reverse">
+        <div class="info-text">
+          <h2>Join the LinkedIn Group</h2>
+          <p>Join the UATX Talent Network LinkedIn group here. In order to join, you must have a presentable LinkedIn profile and resume. Send your resume to Nick Vainisi (<a href="mailto:nvainisi@uaustin.org">nvainisi@uaustin.org</a>) prior to requesting entry into the group.</p>
+          <a href="#" class="btn-navy">Join Now</a>
+        </div>
+        <div class="info-img">
+          <img src="/images/Student Portal Page/linkedin.png" alt="LinkedIn" style="width:220px;height:220px;object-fit:cover;border-radius:8px;">
+        </div>
+      </div>
+
+      <!-- Finance Skills -->
+      <div class="info-section">
+        <div class="info-text">
+          <h2>Finance Skills Development</h2>
+          <p>UATX is offering a partially funded opportunity for motivated students to complete a self-study finance training program, with reimbursement of up to $250 upon successful completion.</p>
+          <a href="#" class="btn-navy" onclick="navigateTo('finance-skills'); return false;">Learn More</a>
+        </div>
+        <div class="info-img">
+          <img src="/images/Student Portal Page/finance skill dev.png" alt="Finance Skills Development" style="width:220px;height:220px;object-fit:cover;border-radius:8px;">
+        </div>
+      </div>
+
+      <!-- MeritFirst -->
+      <div class="info-section reverse">
+        <div class="info-text">
+          <h2>MeritFirst Exams</h2>
+          <p>Talent is more than credentials. MeritFirst gives you short, practical assessments to demonstrate real skill and get in front of companies that hire on merit — not pedigree. Choose your track, show what you can do, and get matched as you test.</p>
+          <a href="#" class="btn-navy" onclick="navigateTo('meritfirst'); return false;">Learn More</a>
+        </div>
+        <div class="info-img">
+          <img src="/images/Student Portal Page/merit first exams.png" alt="MeritFirst" style="width:220px;height:220px;object-fit:contain;">
+        </div>
+      </div>
+    </div>
+    <div class="footer">&copy; UATX Student Portal</div>
+  </div>
+
+  <!-- ════════════ OPPORTUNITIES PAGE ════════════ -->
+  <div id="page-opportunities" class="page">
+    <div class="hero">
+      <h1>Job &amp; Internship Opportunities</h1>
+    </div>
+    <div class="gold-bar"></div>
+
+    <!-- Row 1: GovAI, RepublicProject, Colloquium -->
+    <div class="opp-band">
+      <div class="opp-band-inner" id="opp-row-1"></div>
+    </div>
+    <!-- Row 2: Governor, Casas Por Cristo, Maynard Nexsen -->
+    <div class="opp-band">
+      <div class="opp-band-inner" id="opp-row-2"></div>
+    </div>
+    <!-- Row 3: Setna IO, Hertog, Ted Cruz x2 -->
+    <div class="opp-band">
+      <div class="opp-band-inner" id="opp-row-3"></div>
+    </div>
+    <!-- Row 4: NAIA, Futures Forge, UATX -->
+    <div class="opp-band">
+      <div class="opp-band-inner" id="opp-row-4"></div>
+    </div>
+    <!-- Row 5: Hudson, Sen Fitzgerald, Claremont -->
+    <div class="opp-band">
+      <div class="opp-band-inner" id="opp-row-5"></div>
+    </div>
+    <!-- Row 6: Claremont RA, Open the Books, First Court -->
+    <div class="opp-band">
+      <div class="opp-band-inner" id="opp-row-6"></div>
+    </div>
+
+    <div class="footer">&copy; UATX Student Portal</div>
+  </div>
+
+  <!-- ════════════ UNPAID INTERNSHIP SUBPAGE ════════════ -->
+  <div id="page-unpaid-internship" class="page">
+    <div class="hero">
+      <h1>Unpaid Internship Support</h1>
+    </div>
+    <div class="gold-bar"></div>
+    <div class="subpage-content">
+      <a href="#" class="back-link" onclick="navigateTo('home'); return false;">&#9664; Back to Student Portal</a>
+
+      <p>UATX will offer an Educational Support award of up to $2,000 to students who secure unpaid summer internships. The purpose of the award is to help offset general living expenses that may otherwise limit access to learning opportunities aligned with a student's academic and career goals.</p>
+      <p>This award is not compensation for services and does not create an employment relationship with UATX.</p>
+
+      <hr class="section-divider">
+      <h2>Eligibility</h2>
+      <ul>
+        <li>Applicants must be a rising junior or senior (in the summer award is utilized) in good academic standing, currently enrolled at UATX, with the intention to return in the fall.</li>
+        <li>Applicants must have secured (or received an offer for) an unpaid, career-focused summer internship.</li>
+        <li>Internships are expected to involve a meaningful time commitment appropriate to the nature of the opportunity.</li>
+        <li>Award amounts may vary based on duration, financial need, and available funding.</li>
+      </ul>
+
+      <hr class="section-divider">
+      <h2>Deadline</h2>
+      <p>Applications should be submitted to Nick Vainisi at <a href="mailto:nvainisi@uaustin.org">nvainisi@uaustin.org</a> and will be reviewed on a rolling basis through <strong>May 1, 2026</strong>.</p>
+      <p>Decisions will be made within a reasonable time frame following submission.</p>
+
+      <hr class="section-divider">
+      <h2>Application Process</h2>
+      <p>Students must submit a one-page summary statement that includes:</p>
+      <ul>
+        <li>An overview of the student's academic program, internship details, and how the experience will support their educational and career goals</li>
+        <li>Internship organization name, job description, and the name and contact information of the supervisor</li>
+        <li>A summary of the intended use of the award funds</li>
+      </ul>
+
+      <hr class="section-divider">
+      <h2>Post-Internship Requirement</h2>
+      <p>Following completion of the internship, award recipients must submit a summary describing:</p>
+      <ul>
+        <li>The internship experience</li>
+        <li>How the opportunity contributed to their academic or career development</li>
+      </ul>
+
+      <hr class="section-divider">
+      <h2>Allowable Use of Funds</h2>
+      <p>Funds may be used at the student's discretion to help offset general expenses incurred during the internship period, including but not limited to:</p>
+      <ul>
+        <li>Housing</li>
+        <li>Food</li>
+        <li>Transportation</li>
+        <li>Relocation or travel expenses</li>
+      </ul>
+      <p>Students are responsible for managing the funds and determining their personal budget.</p>
+
+      <hr class="section-divider">
+      <h2>Award Amounts</h2>
+      <ul>
+        <li>Awards are capped at <strong>$2,000</strong> per student</li>
+        <li>Award amounts may be less than the maximum based on:
+          <ul>
+            <li>Demonstrated financial need</li>
+            <li>Internship duration</li>
+            <li>Available program funding</li>
+          </ul>
+        </li>
+      </ul>
+
+      <hr class="section-divider">
+      <h2>Disbursement</h2>
+      <ul>
+        <li>Awards are disbursed directly to students via ACH through our expense management system, Ramp.com</li>
+        <li>Disbursement may occur as a lump sum or in installments</li>
+        <li>Students must complete all required acceptance and verification steps prior to payment (signed award acceptance, internship start verification, active enrollment verification, must have W9 on file)</li>
+      </ul>
+
+      <hr class="section-divider">
+      <h2>Tax Notice</h2>
+      <p>Funds provided through this program may be considered taxable income under IRS regulations. The university does not withhold taxes from these payments. Students are responsible for any tax obligations associated with receipt of the award.</p>
+
+      <p class="note">*Award is subject to forfeiture or reimbursement should the student change internship status, quit, or terminate internship opportunity early.</p>
+    </div>
+    <div class="footer">&copy; UATX Student Portal</div>
+  </div>
+
+  <!-- ════════════ FINANCE SKILLS SUBPAGE ════════════ -->
+  <div id="page-finance-skills" class="page">
+    <div class="hero">
+      <h1>Finance Skills Development</h1>
+    </div>
+    <div class="gold-bar"></div>
+    <div class="subpage-content">
+      <a href="#" class="back-link" onclick="navigateTo('home'); return false;">&#9664; Back to Student Portal</a>
+
+      <p>Several students have expressed interest in gaining hands-on finance skills that will make you more competitive for internships and future roles in investment banking, private equity, corporate finance, or financial consulting. UATX is offering a partially funded opportunity for motivated students to complete a self-study finance training program, with reimbursement of up to $250 upon successful completion.</p>
+
+      <p>These programs are designed to provide practical knowledge of the finance industry and help you develop the core competencies that employers value, including financial modeling, valuation, and Excel skills. Completing them will not only strengthen your resume but also give you the terminology and confidence needed to communicate effectively in conversations and interviews.</p>
+
+      <p>Listed are several self-study programs recognized by many companies in the industry. While completing one of these programs does not guarantee an internship, it will provide you with a stronger knowledge base and demonstrable skills that can support your professional development and career pursuits. Each program offers unique content, so we encourage you to review them and determine which best aligns with your goals. The overview below provides a brief snapshot of each program, but is not comprehensive of all you will learn.</p>
+
+      <p>If you choose to complete one of these courses over the holidays or during the Winter or Spring Terms in 2026, we will reimburse up to <strong>$250</strong> upon submission of proof of successful completion. They do represent a substantial investment of time and effort, so plan accordingly.</p>
+
+      <hr class="section-divider">
+
+      <!-- Training the Street -->
+      <div class="program-card">
+        <img src="/images/Student Portal Page/finance skill dev/training the street.png" alt="Training the Street" style="max-width:240px;margin-bottom:16px;">
+        <h3>Training the Street</h3>
+        <div class="program-sub">Foundations + Advanced</div>
+        <div class="cost">Cost: $500 (we will reimburse up to $250)</div>
+        <h3>What You Will Learn</h3>
+        <ul>
+          <li>Excel techniques specifically tailored for financial modeling</li>
+          <li>Time value of money, discounting, and other foundational finance math</li>
+          <li>Understanding and interpreting the income, balance sheet, and cash flow statements</li>
+          <li>Accounting implications when companies merge or get acquired</li>
+          <li>Fundamentals of building integrated 3-statement models from scratch</li>
+          <li>Modeling cash sweeps (i.e., using excess cash to pay down debt)</li>
+          <li>Core valuation techniques, like DCF</li>
+          <li>Valuing companies using peer multiples</li>
+          <li>Valuation based on precedent transactions (M&A deals)</li>
+          <li>The basics of LBOs, including capital structure and return drivers</li>
+          <li>Detailed modeling of cash flows and discount rates</li>
+          <li>Building full LBO models in Excel</li>
+          <li>Building merger models (pro forma statements, synergies, etc.)</li>
+          <li>Understanding sources of capital, debt vs equity, and how corporations fund transactions</li>
+        </ul>
+        <h3>Why It's Valuable</h3>
+        <p>These topics cover what analysts and interns actually work on in finance roles. You don't just learn how to model, you also learn how to value, analyze deals, and use Excel.</p>
+      </div>
+
+      <!-- Wall Street Prep -->
+      <div class="program-card">
+        <img src="/images/Student Portal Page/finance skill dev/wallstreet prep.png" alt="Wall Street Prep" style="max-width:240px;margin-bottom:16px;">
+        <h3>Wall Street Prep</h3>
+        <div class="program-sub">Financial &amp; Valuation Modeling (Premium Package)</div>
+        <div class="cost">Cost: $499 (we will reimburse up to $250)</div>
+        <h3>What You Will Learn</h3>
+        <ul>
+          <li>Building 3-statement financial models from scratch</li>
+          <li>Discounted Cash Flow (DCF) valuation</li>
+          <li>Trading and transaction comparables</li>
+          <li>Mergers &amp; Acquisitions (M&A) modeling</li>
+          <li>Leveraged Buyout (LBO) modeling</li>
+        </ul>
+        <h3>Why It's Valuable</h3>
+        <p>This program mirrors the real-world modeling tasks that analysts and interns perform on the job. It's hands-on, practical, and highly regarded in the finance industry.</p>
+      </div>
+
+      <!-- Breaking Into Wall Street -->
+      <div class="program-card">
+        <img src="/images/Student Portal Page/finance skill dev/breaking into wallstreet.png" alt="Breaking Into Wall Street" style="max-width:280px;margin-bottom:16px;">
+        <h3>Breaking Into Wall Street</h3>
+        <div class="program-sub">Premium Package</div>
+        <div class="cost">Cost: $497 (we will reimburse up to $250)</div>
+        <h3>What You Will Learn</h3>
+        <ul>
+          <li>Core financial modeling (3-statement modeling, forecasting)</li>
+          <li>Valuation (DCF, comps, precedent transactions)</li>
+          <li>M&A and LBO modeling</li>
+          <li>Excel/VBA for financial modeling</li>
+          <li>Interview case studies and practical exercises used by banks and consulting firms</li>
+        </ul>
+        <h3>Why It's Valuable</h3>
+        <p>Extremely comprehensive and widely used by students preparing for internships. Includes hundreds of hours of video tutorials, exercises, and practice models.</p>
+      </div>
+    </div>
+    <div class="footer">&copy; UATX Student Portal</div>
+  </div>
+
+  <!-- ════════════ EVENTS PAGE ════════════ -->
+  <div id="page-events" class="page">
+    <div class="hero">
+      <h1>UATX Sponsored Events and Travel</h1>
+    </div>
+    <div class="gold-bar"></div>
+
+    <!-- Row 1: Texas Stock Exchange, AHA Foundation -->
+    <div class="events-band">
+      <div class="events-band-inner">
+        <div class="event-card">
+          <div class="event-title">Texas Stock Exchange</div>
+          <div class="event-sub">Student Visit</div>
+          <div class="event-logo">
+            <div class="event-logo-box" style="background:linear-gradient(135deg,#4a90c4,#7ab8e0);color:#fff;font-size:42px;letter-spacing:2px;">TX<br>SE</div>
+          </div>
+          <a class="event-learn" onclick="navigateTo('event-txse')">Learn More</a>
+        </div>
+        <div class="event-card">
+          <div class="event-title">AHA Foundation</div>
+          <div class="event-sub">If Not Now Fellowship</div>
+          <div class="event-logo">
+            <div class="event-logo-box" style="background:linear-gradient(135deg,#5ba0d0,#8ec5e8);font-size:14px;flex-direction:column;">
+              <svg width="60" height="60" viewBox="0 0 60 60" fill="none">
+                <circle cx="30" cy="30" r="28" stroke="white" stroke-width="1.5" fill="none"/>
+                <line x1="30" y1="10" x2="30" y2="50" stroke="white" stroke-width="1"/>
+                <line x1="10" y1="30" x2="50" y2="30" stroke="white" stroke-width="1"/>
+                <line x1="15" y1="15" x2="45" y2="45" stroke="white" stroke-width="0.8"/>
+                <line x1="45" y1="15" x2="15" y2="45" stroke="white" stroke-width="0.8"/>
+              </svg>
+              <span style="font-size:11px;margin-top:6px;font-family:'Roboto',Arial,sans-serif;font-weight:500;">aha<strong>foundation</strong></span>
+            </div>
+          </div>
+          <a class="event-learn" onclick="navigateTo('event-aha')">Learn More</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 2: Study Abroad Israel, AEI -->
+    <div class="events-band">
+      <div class="events-band-inner">
+        <div class="event-card">
+          <div class="event-title">Study Abroad Israel</div>
+          <div class="event-sub">June 21 &ndash; July 1, 2026</div>
+          <div class="event-logo">
+            <div class="event-logo-box" style="background:#fff;flex-direction:column;gap:0;">
+              <div style="width:100%;height:20px;background:#3b5ea6;"></div>
+              <div style="flex:1;display:flex;align-items:center;justify-content:center;">
+                <svg width="50" height="50" viewBox="0 0 50 50" fill="none">
+                  <polygon points="25,5 30,18 44,18 33,27 37,40 25,32 13,40 17,27 6,18 20,18" fill="none" stroke="#3b5ea6" stroke-width="2"/>
+                  <polygon points="25,12 28,20 37,20 30,26 33,34 25,29 17,34 20,26 13,20 22,20" fill="none" stroke="#3b5ea6" stroke-width="1.5"/>
+                </svg>
+              </div>
+              <div style="width:100%;height:20px;background:#3b5ea6;"></div>
+            </div>
+          </div>
+          <a class="event-learn" onclick="navigateTo('event-israel')">Learn More</a>
+        </div>
+        <div class="event-card">
+          <div class="event-title">AEI</div>
+          <div class="event-sub">Summer Honors Program</div>
+          <div class="event-logo">
+            <div class="event-logo-box" style="background:#6fa8d6;font-size:42px;letter-spacing:4px;font-family:'Roboto',Arial,sans-serif;font-weight:700;">AEI</div>
+          </div>
+          <a class="event-learn" onclick="navigateTo('event-aei')">Learn More</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 3: Austin Institute, Pepperdine -->
+    <div class="events-band">
+      <div class="events-band-inner">
+        <div class="event-card">
+          <div class="event-title">Austin Institute</div>
+          <div class="event-sub">The Student Forum: Religion, Science, &amp; the State</div>
+          <div class="event-logo">
+            <div class="event-logo-box" style="background:var(--navy);font-size:52px;color:var(--gold);">
+              <span style="font-family:'Roboto',Arial,sans-serif;">AI</span>
+            </div>
+          </div>
+          <a class="event-learn" onclick="navigateTo('event-austin-institute')">Learn More</a>
+        </div>
+        <div class="event-card">
+          <div class="event-title">Pepperdine School of Public Policy</div>
+          <div class="event-sub">Multiple Programs</div>
+          <div class="event-logo">
+            <div class="event-logo-box" style="background:var(--navy);font-size:14px;color:white;flex-direction:column;gap:4px;font-family:'Roboto',Arial,sans-serif;letter-spacing:2px;">
+              <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+                <circle cx="20" cy="20" r="16" stroke="white" stroke-width="1.5" fill="none"/>
+                <path d="M12 28 L20 8 L28 28" stroke="white" stroke-width="1.5" fill="none"/>
+                <line x1="15" y1="22" x2="25" y2="22" stroke="white" stroke-width="1"/>
+              </svg>
+              <span style="font-weight:700;font-size:12px;">PEPPERDINE</span>
+              <span style="font-size:9px;font-weight:400;">UNIVERSITY</span>
+            </div>
+          </div>
+          <a class="event-learn" onclick="navigateTo('event-pepperdine')">Learn More</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 4: Coign & Forge, Ronald Reagan Institute -->
+    <div class="events-band">
+      <div class="events-band-inner">
+        <div class="event-card">
+          <div class="event-title">Coign &amp; Forge</div>
+          <div class="event-sub">Forge Leadership Summit</div>
+          <div class="event-logo">
+            <div class="event-logo-box" style="background:var(--navy);font-size:14px;color:white;flex-direction:column;gap:6px;border:2px solid var(--gold);">
+              <span style="font-size:20px;font-weight:700;letter-spacing:2px;">FORGE</span>
+              <span style="font-size:12px;font-weight:600;letter-spacing:1px;">LEADERSHIP</span>
+              <span style="font-size:12px;font-weight:600;letter-spacing:1px;">SUMMITS</span>
+              <span style="font-size:9px;color:var(--gold);margin-top:4px;font-style:italic;">APPLY TODAY</span>
+              <span style="font-size:8px;color:rgba(255,255,255,0.5);line-height:1.4;">Nashville, TN &middot; June 15-19<br>Columbus, OH &middot; July 20-24</span>
+            </div>
+          </div>
+          <a class="event-learn" onclick="navigateTo('event-forge')">Learn More</a>
+        </div>
+        <div class="event-card">
+          <div class="event-title">Ronald Reagan Institute</div>
+          <div class="event-sub">Multiple Student Programs</div>
+          <div class="event-logo">
+            <div class="event-logo-box" style="background:var(--navy);font-size:14px;color:white;flex-direction:column;gap:4px;">
+              <span style="font-size:28px;font-weight:700;color:var(--gold);font-family:'Roboto',Arial,sans-serif;">RRI</span>
+              <span style="font-size:9px;letter-spacing:1px;font-weight:500;">RONALD REAGAN<br>INSTITUTE</span>
+            </div>
+          </div>
+          <a class="event-learn" onclick="navigateTo('event-reagan')">Learn More</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">&copy; UATX Student Portal</div>
+  </div>
+
+  <!-- ════════════ MERITFIRST SUBPAGE ════════════ -->
+  <div id="page-meritfirst" class="page">
+    <div class="hero">
+      <h1>MeritFirst Exams</h1>
+    </div>
+    <div class="gold-bar"></div>
+    <div class="subpage-content">
+      <a href="#" class="back-link" onclick="navigateTo('home'); return false;">&#9664; Back to Student Portal</a>
+
+      <img src="/images/Student Portal Page/merit first/Merit First exams.png" alt="MeritFirst" style="max-width:100%;margin-bottom:24px;border-radius:4px;">
+
+      <p>Talent is more than credentials. MeritFirst gives you short, practical assessments to demonstrate real skill and get in front of companies that hire on merit — not pedigree. Choose your track, show what you can do, and get matched as you test.</p>
+
+      <p>Visit <a href="http://www.meritfirst.us" target="_blank">www.meritfirst.us</a> to get started.</p>
+    </div>
+    <div class="footer">&copy; UATX Student Portal</div>
+  </div>
+
+  <!-- ════════════ EVENT: AEI ════════════ -->
+  <div id="page-event-aei" class="page">
+    <div class="hero">
+      <h1>American Enterprise Institute</h1>
+    </div>
+    <div class="gold-bar"></div>
+    <div class="subpage-content">
+      <a href="#" class="back-link" onclick="navigateTo('events'); return false;">&#9664; Back to Events &amp; Travel</a>
+
+      <h2>About AEI</h2>
+      <p>The American Enterprise Institute (AEI) is a Washington, D.C.–based public policy think tank that promotes ideas rooted in free markets, limited government, individual liberty, and a strong national defense. It conducts research on economics, foreign and domestic policy, health care, education, and constitutional studies. AEI is known for emphasizing empirical research and debate rather than advocating a single party platform. Its scholars frequently influence public discussion through books, media commentary, and testimony before Congress.</p>
+
+      <hr class="section-divider">
+      <h2>2026 Summer Honors Program</h2>
+      <p>The Summer Honors Program at the American Enterprise Institute (AEI) is an intensive, fully-funded educational and professional development opportunity for top undergraduate students. Situated in the heart of Washington, DC, this program provides participants the opportunity to connect with the ideas, research, and network of AEI–one of America's preeminent policy think tanks. This will occur during an intensive one-week seminar led by an AEI scholar or partner instructor.</p>
+
+      <p>The program assembles a diverse cohort of students from a wide range of ideological perspectives to engage in substantive dialogue and debate about the most pressing issues facing the country and world. The core feature of the program is a series of discussion-based seminars that offer participants forums to delve deeply into policy areas of their choice. Outside of the seminars, students participate in briefings with distinguished guests, high-level networking opportunities, and site visits in Washington.</p>
+
+      <p>The program aims to provide students with a deeper understanding of contemporary public policy challenges, a greater appreciation for substantive dialogue across ideological divides, and the knowledge and networks to pursue a future career in the policy world.</p>
+
+      <hr class="section-divider">
+      <h2>Full Course List</h2>
+
+      <h3>June 1–5</h3>
+      <ul>
+        <li>"Thinking About War" with Kori Schake</li>
+        <li>"Culture, Covenant, and Country: American Religion and American Identity in a Nationalist Era" with Paul D. Miller (Georgetown University)</li>
+        <li>"The American Dream Is Not Dead: Principles and Practices of Democratic Capitalism" with Michael R. Strain</li>
+        <li>"The American Safety Net: Work, Poverty, and Opportunity" with Angela Rachidi</li>
+        <li>"Hormones, Sex, and Society: An Evolutionary Perspective" with Carole Hooven</li>
+      </ul>
+
+      <h3>June 8–12</h3>
+      <ul>
+        <li>"Liberalism and the Common Good" with Yuval Levin</li>
+        <li>"Across Borders: Navigating Globalization" with Stan Veuger</li>
+        <li>"Molding the Middle East: US Foreign Policy" with Danielle Pletka and Daniel J. Samet</li>
+        <li>"China and Competition in the Indo-Pacific" with Zack Cooper</li>
+        <li>"Fiscal Foundations: Tax Policy in America" with Alex Brill</li>
+      </ul>
+
+      <h3>June 22–26</h3>
+      <ul>
+        <li>"The Founding and the Bible: Biblical Inspiration and the Meaning of America" with Meir Y. Soloveichik (Yeshiva University)</li>
+        <li>"Unbreaking the News: Journalism as Vocation" with Chris Stirewalt and Anna Sugg (NewsNation)</li>
+        <li>"The Constitution: Original Meanings" with John Yoo</li>
+        <li>"Technology's Challenge to Public Life" with Christine Rosen</li>
+        <li>"Plato's Symposium: Love and Politics, Ancient and Modern" with Benjamin Storey</li>
+      </ul>
+
+      <h3>July 6–10</h3>
+      <ul>
+        <li>"Transatlantic Partnerships: History and Future Risks" with Dalibor Rohac</li>
+        <li>"Climate Risks and Realities: Science and Policymaking" with Roger Pielke Jr.</li>
+        <li>"K–12 Education: The Foundation of American Democracy, Society, and Economy" with Michael Q. McShane</li>
+        <li>"More Than a Paycheck: Work and Dignity in a Rapidly Changing Economy" with Brent Orrell</li>
+      </ul>
+
+      <hr class="section-divider">
+      <h2>Details</h2>
+      <ul>
+        <li><strong>Location:</strong> Washington, DC</li>
+        <li><strong>Dates:</strong> Students participate in a one-week course in Summer 2026</li>
+        <li><strong>Funding:</strong> This is a fully-funded program. Participants will receive: reimbursement for travel to DC, housing, a $250 stipend, and lunch and dinner on most class days.</li>
+        <li><strong>Class Size:</strong> 12–18 students per class</li>
+      </ul>
+
+      <hr class="section-divider">
+      <h2>How to Apply</h2>
+      <p><strong>Deadline: March 15, 2026</strong></p>
+      <p>Complete the application here.</p>
+    </div>
+    <div class="footer">&copy; UATX Student Portal</div>
+  </div>
+
+  <!-- ════════════ EVENT: AHA FOUNDATION ════════════ -->
+  <div id="page-event-aha" class="page">
+    <div class="hero">
+      <h1>AHA Foundation — If Not Now Fellowship</h1>
+    </div>
+    <div class="gold-bar"></div>
+    <div class="subpage-content">
+      <a href="#" class="back-link" onclick="navigateTo('events'); return false;">&#9664; Back to Events &amp; Travel</a>
+
+      <h2>If Not Now Fellowship</h2>
+      <p><strong>May 17–20, 2026 | New York City</strong></p>
+      <p>The If Not Now Fellowship is a week-long immersive experience for mid- to upper-level college student leaders that will equip them to stand up for their Jewish peers and confront antisemitism on their campuses.</p>
+
+      <hr class="section-divider">
+      <h2>Details</h2>
+      <p>Participating students will be offered a <strong>$500 travel stipend</strong>, and hotel and meals are covered during the program.</p>
+      <p>The curriculum combines lectures on antisemitism (its history, manifestations, how to recognize antisemitic bias on their campuses, etc.), rights the students hold on campus to be able to advocate for their Jewish peers (likely folks from FIRE or other nonprofits that focus on campus free speech), and excursions around NYC that tie into the programmatic themes of the fellowship.</p>
+
+      <p>By the end of the fellowship, participants will emerge with:</p>
+      <ul>
+        <li>A deeper understanding of how to identify and productively confront antisemitism</li>
+        <li>Practical tools to stand up for their Jewish peers in their communities</li>
+        <li>A supportive network of student leaders and nonprofit professionals</li>
+        <li>The confidence to lead with integrity and purpose</li>
+      </ul>
+      <p>Accommodations will be arranged for Jewish students observing the holiday of Shavuot.</p>
+
+      <hr class="section-divider">
+      <h2>Ideal Candidates</h2>
+      <p>AHA Foundation is accepting 15 students, and hope to include a mix of Christian, Jewish, and non-religious participants.</p>
+      <p>Admissions are rolling until the 15 student cohort is filled.</p>
+      <p>Selected students should have a predisposition to be pro-Israel; during the program, AHA works to deepen their understanding of why that position matters and how to engage effectively with peers who hold different views.</p>
+      <p>Students who are accepted will have shown leadership on their campus whether that be a part of a formal role in campus clubs or informal in the classroom.</p>
+
+      <hr class="section-divider">
+      <h2>How to Apply</h2>
+      <p>Send an email to Nick Vainisi (<a href="mailto:nvainisi@uaustin.org">nvainisi@uaustin.org</a>) with a CV and why you are interested in attending the program.</p>
+    </div>
+    <div class="footer">&copy; UATX Student Portal</div>
+  </div>
+
+  <!-- ════════════ EVENT: AUSTIN INSTITUTE ════════════ -->
+  <div id="page-event-austin-institute" class="page">
+    <div class="hero">
+      <h1>Austin Institute — The Student Forum</h1>
+    </div>
+    <div class="gold-bar"></div>
+    <div class="subpage-content">
+      <a href="#" class="back-link" onclick="navigateTo('events'); return false;">&#9664; Back to Events &amp; Travel</a>
+
+      <h2>The Student Forum — "Religion, Science &amp; the State"</h2>
+      <p>For Alexis de Tocqueville, the study of politics always involved the study of "mores," the moral and intellectual habits that define a people. In this seminar series, we will explore Tocqueville's study of American and democratic mores as they manifest in the domains of religion and science.</p>
+
+      <hr class="section-divider">
+      <h2>About the Event</h2>
+      <p>The short seminars are led by an expert in the field and focus on exploring topics that help develop intellectual and moral virtues, particularly those that contribute to the flourishing of the individual and the establishment of healthy human relationships.</p>
+
+      <hr class="section-divider">
+      <h2>Date/Time</h2>
+      <ul>
+        <li>Feb 04, 2026, 6:00 PM – 7:30 PM</li>
+        <li>Feb 11, 2026, 6:00 PM – 7:30 PM</li>
+        <li>Feb 18, 2026, 6:00 PM – 7:30 PM</li>
+      </ul>
+    </div>
+    <div class="footer">&copy; UATX Student Portal</div>
+  </div>
+
+  <!-- ════════════ EVENT: COIGN & FORGE ════════════ -->
+  <div id="page-event-forge" class="page">
+    <div class="hero">
+      <h1>Coign &amp; Forge — Forge Leadership Summit</h1>
+    </div>
+    <div class="gold-bar"></div>
+    <div class="subpage-content">
+      <a href="#" class="back-link" onclick="navigateTo('events'); return false;">&#9664; Back to Events &amp; Travel</a>
+
+      <h2>Win an All-Expenses-Paid Trip to a 2026 Forge Leadership Summit</h2>
+      <p><strong>June 21 – July 1, 2026 | Israel</strong></p>
+      <p>Are you — or do you know — a young conservative looking to bolster your leadership skills and connect with other like-minded leaders?</p>
+      <p>In partnership with Forge Leadership Institute, a previous Coign charity recipient, we are offering three all-expenses-paid spots to attend a 2026 Forge Leadership Summit in Nashville, TN (June 15–19) or Columbus, OH (July 20–24). Applicants must be 18–25 years old and submit a 90-second video sharing how Forge would prepare them to lead, serve, and make a lasting impact. Travel, lodging and conference fees are covered. Apply now and take the next step in forging your leadership future.</p>
+
+      <hr class="section-divider">
+      <h2>Details</h2>
+      <p>Forge Leadership Institute — a previous Coign charity recipient — is committed to fostering the minds, character, and conviction of the next generation of conservative leaders. Through immersive leadership summits, Forge equips young Americans with the principles, relationships and practical tools needed to lead with courage, responsibility and purpose in their communities, careers and country.</p>
+      <p>Attendees will refine their skills through experiential learning exercises, including a media training workshop, legislative process simulations, relationship building activities and more. Legislators, policy experts and cultural leaders will also share their experiences turning ideas and values into action.</p>
+      <p>This is more than a conference — it's an investment in those who aspire to help strengthen American culture, institutions and civic life.</p>
+
+      <hr class="section-divider">
+      <h2>Locations and Dates</h2>
+      <ul>
+        <li><strong>Nashville, TN:</strong> June 15–19, 2026</li>
+        <li><strong>Columbus, OH:</strong> July 20–24, 2026</li>
+      </ul>
+
+      <h2>Winners Will Receive</h2>
+      <ul>
+        <li>Summit Registration</li>
+        <li>Round-Trip Airfare</li>
+        <li>Lodging, Meals and On-Site Accommodations</li>
+      </ul>
+
+      <h2>Eligibility</h2>
+      <ul>
+        <li>Age 18–25 at the time of the summit</li>
+        <li>Available to attend at least one of the listed dates</li>
+        <li>Demonstrated interest in leadership and service and a commitment to the values of Coign and the Forge Leadership Institute</li>
+      </ul>
+
+      <hr class="section-divider">
+      <h2>How to Apply</h2>
+      <p>Applicants must submit a video no longer than 90 seconds responding to one of the following prompts:</p>
+      <ul>
+        <li>What issue in America today most motivates you to lead — and how do you hope Forge Leadership will help prepare you to address it?</li>
+        <li>How do you plan to use the leadership training and relationships from the Forge Leadership Summit to strengthen your community, industry or the country over the next 10 years?</li>
+        <li>Forge invests in leaders who value responsibility, freedom and service. How do these principles shape your vision for making America stronger?</li>
+        <li>Why are you personally committed to contributing to America's future — and why is now the right time for you to attend the Forge Leadership Summit?</li>
+      </ul>
+      <p>Applicants are encouraged to be thoughtful, authentic and forward-looking. Professional production quality is not required — your clarity, conviction and vision matter most.</p>
+      <p>To apply, please email the video, along with the following information, to <a href="mailto:marketing@coign.com">marketing@coign.com</a> no later than <strong>March 6, 2026</strong>.</p>
+      <ul>
+        <li>Full Legal Name</li>
+        <li>Personal Email Address</li>
+        <li>Work/School Email, if applicable</li>
+        <li>Mobile Phone Number</li>
+        <li>Gender</li>
+        <li>Date of Birth</li>
+        <li>Permanent Address (Street, City, State, Zipcode)</li>
+        <li>Are you currently a student?</li>
+        <li>If going to school, where? If not, did you graduate? If so, when and where do you attend school?</li>
+      </ul>
+      <p>If the video file is too large to attach, please upload it to a cloud-based storage service (Google Drive, Dropbox, OneDrive, etc.) and include the link in your application. Please ensure the permissions allow viewing by changing the access to "Anyone with the link."</p>
+    </div>
+    <div class="footer">&copy; UATX Student Portal</div>
+  </div>
+
+  <!-- ════════════ EVENT: PEPPERDINE ════════════ -->
+  <div id="page-event-pepperdine" class="page">
+    <div class="hero">
+      <h1>Pepperdine School of Public Policy</h1>
+    </div>
+    <div class="gold-bar"></div>
+    <div class="subpage-content">
+      <a href="#" class="back-link" onclick="navigateTo('events'); return false;">&#9664; Back to Events &amp; Travel</a>
+
+      <h2>Multiple Programs</h2>
+      <p>We're just a week out from our app deadline for our new full-scholarship Master of Middle East Policy Studies degree (at Pepperdine DC), as well as an undergrad opportunity, and a new summer program for junior faculty. Here are the dates:</p>
+
+      <ul>
+        <li><strong>Friday, FEB 6th:</strong> Final App Deadline for Master of Middle East Policy Studies. This is a full-tuition scholarship program offered to only 25 students at Pepperdine's Washington, DC campus.</li>
+        <li><strong>FEB 14th:</strong> Final app deadline for our "Roots of American Order Faculty Program." This will be hosted at Pepperdine's campus in Washington, DC.</li>
+        <li><strong>March 2nd:</strong> "Roots of American Order Summer Certificate." Application only for this cohort of 100 undergraduate students (including spring grads).</li>
+      </ul>
+
+      <p>We're seeing a great response to our MPP program for fall applications.</p>
+    </div>
+    <div class="footer">&copy; UATX Student Portal</div>
+  </div>
+
+  <!-- ════════════ EVENT: RONALD REAGAN INSTITUTE ════════════ -->
+  <div id="page-event-reagan" class="page">
+    <div class="hero">
+      <h1>Ronald Reagan Institute</h1>
+    </div>
+    <div class="gold-bar"></div>
+    <div class="subpage-content">
+      <a href="#" class="back-link" onclick="navigateTo('events'); return false;">&#9664; Back to Events &amp; Travel</a>
+
+      <h2>About the Ronald Reagan Institute</h2>
+      <p>The Ronald Reagan Institute serves to advance the principles and legacy of President Ronald Reagan in today's policy landscape. The Institute convenes bipartisan leaders, produces research on national security and economic prosperity, and develops the next generation of public servants through its fellowship and internship programs. Through initiatives such as the Reagan National Defense Survey and high-level forums, it plays a leading role in shaping conversations around American leadership, democratic values, and global security.</p>
+
+      <hr class="section-divider">
+      <h2>Programs &amp; Fellowships</h2>
+
+      <h3>Academy for Civic Education and Democracy (early June–late July)</h3>
+      <p>In partnership with the George Washington University, ACED offers high-achieving college students the opportunity to spend a summer learning leadership skills and civic engagement while immersed in Washington DC life. Students participate in an internship with one of our DC-based partners and take a class about presidential leadership at RRI. They live in GWU housing, take field trips, and participate in networking opportunities to make their time in DC uniquely meaningful!</p>
+
+      <h3>Civic Leaders Fellowship (November–April)</h3>
+      <p>Our CLF students participate in a six month leadership and professional development program designed to cultivate them into the next generation of civic-minded professionals. They meet six times — thrice virtually, twice in Washington, DC, and once at the Reagan Library in Simi Valley, CA. They'll be paired with a professional mentor in RRI's network and learn real-world skills and ideas that will translate far beyond their college graduation.</p>
+
+      <h3>National Defense Fellowship (September–December)</h3>
+      <p>Run in conjunction with the Alexander Hamilton Society, NDF seeks to educate about 20 advanced students in the vocabulary, theory, practice, and organization of U.S. defense policy. The main components of the fellowship include the Peace Through Strength Boot Camp in September, a four day weekend program in Washington DC that introduces the fundamentals of national security policy with leaders in the field, and participation in the Reagan National Defense Forum, where they'll get to hear from Secretaries of Defense, Chairmen of the Joint Chiefs of Staff, members of Congress, industry leaders, and more at a day long conference in Simi Valley, CA.</p>
+
+      <h3>American Opportunity Bootcamp (October)</h3>
+      <p>AOB is a three day weekend convening in Washington DC that seeks to educate undergraduates about economic policymaking process and explore current ideas and debates in applied political economy — including the role of research, business, interest groups, lobbying, think tanks, and journalism in the policymaking process; and current policy debates related to economics and opportunity.</p>
+    </div>
+    <div class="footer">&copy; UATX Student Portal</div>
+  </div>
+
+  <!-- ════════════ EVENT: STUDY ABROAD ISRAEL ════════════ -->
+  <div id="page-event-israel" class="page">
+    <div class="hero">
+      <h1>Study Abroad in Israel</h1>
+    </div>
+    <div class="gold-bar"></div>
+    <div class="subpage-content">
+      <a href="#" class="back-link" onclick="navigateTo('events'); return false;">&#9664; Back to Events &amp; Travel</a>
+
+      <h2>Study Abroad in Israel</h2>
+      <p><strong>June 21 – July 1, 2026 | Israel</strong></p>
+      <p>We are pleased to invite applications for an 11-day study abroad program in Israel. Supported by a generous grant from the Dell Foundation, this program offers an opportunity to explore the history, culture, and geopolitics of the region. The trip will entail a 1.5 credit hour course taught by Prof. JJ Kimche on Israel's past and future, and will require a 3–5 hour Zoom seminar in the week prior to the program.</p>
+
+      <p>The trip, organized by Herut, immerses students in the complexities of Israeli sovereignty, security doctrine, and history through strategic visits to Jerusalem, Judea &amp; Samaria, and the Gaza Envelope. Participants will engage in high-level meetings with Knesset members and military strategists, alongside touring iconic historical sites such as the City of David and Masada to understand the continuity of Jewish history. The itinerary concludes in Tel Aviv with a focus on the future, balancing the nation's founding story with its modern innovation economy and global influence.</p>
+
+      <hr class="section-divider">
+      <h2>Key Details</h2>
+      <ul>
+        <li><strong>Dates:</strong> June 21 – July 1</li>
+        <li><strong>Subsidized Cost:</strong> $2,000 (includes round-trip airfare, lodging, and programming). Due by May 1, 2026.</li>
+        <li><strong>Eligibility:</strong> Open to students with an academic average of 83 or higher. If you do not have CSA yet or are near the threshold, please apply.</li>
+      </ul>
+
+      <hr class="section-divider">
+      <h2>How to Apply</h2>
+      <p>Space is strictly limited. Participants will be selected based on academic standing and a statement of interest.</p>
+      <p><strong>Deadline:</strong> Applications are due by Friday, January 30 at the start of the day (8:00 AM CST).</p>
+    </div>
+    <div class="footer">&copy; UATX Student Portal</div>
+  </div>
+
+  <!-- ════════════ EVENT: TEXAS STOCK EXCHANGE ════════════ -->
+  <div id="page-event-txse" class="page">
+    <div class="hero">
+      <h1>Texas Stock Exchange — Student Visit</h1>
+    </div>
+    <div class="gold-bar"></div>
+    <div class="subpage-content">
+      <a href="#" class="back-link" onclick="navigateTo('events'); return false;">&#9664; Back to Events &amp; Travel</a>
+
+      <h2>Visit the Texas Stock Exchange</h2>
+      <p><strong>April 1, 2026</strong></p>
+      <p>We are excited to offer a unique opportunity for a select group of students to visit the Texas Stock Exchange in Dallas. Students selected for this experience will meet with the exchange's founders, tour the facilities, and join them for a private lunch in their offices. This visit is designed for students who are genuinely curious about markets, finance, and the changing landscape of American capital formation.</p>
+
+      <p><strong>Important:</strong> Students will not be excused from class for attending this visit. If you have a class or academic commitment that conflicts with the timing of the trip, you must resolve it directly with your professor before accepting a spot.</p>
+
+      <hr class="section-divider">
+      <h2>About the Texas Stock Exchange</h2>
+      <p>The Texas Stock Exchange (TXSE) is a newly established national securities exchange headquartered in Dallas. Founded with the goal of creating a more competitive, issuer-friendly alternative to legacy exchanges, TXSE seeks to streamline listing requirements, reduce regulatory friction, and attract companies and investors who value transparency, innovation, and choice. Positioned at the intersection of Texas's fast-growing economic ecosystem and the broader U.S. capital markets, TXSE aims to become a major trading venue that supports entrepreneurial growth, investment, and long-term economic vitality.</p>
+
+      <hr class="section-divider">
+      <h2>How to Apply</h2>
+      <p><strong>Deadline: February 20, 2026</strong></p>
+      <p>Students interested in attending should submit short written responses by email to Nick Vainisi (<a href="mailto:nvainisi@uaustin.org">nvainisi@uaustin.org</a>). Your email should include answers to the following:</p>
+      <ul>
+        <li>Why are you interested in visiting the Texas Stock Exchange?</li>
+        <li>What do you hope to learn from the experience?</li>
+        <li>What is one question you would ask a leader at the Texas Stock Exchange, and why?</li>
+        <li>In your view, what role do stock exchanges play in a free and prosperous society?</li>
+        <li>Are you currently following a specific market, index, asset class, or sector? If so:
+          <ul>
+            <li>Which one are you following?</li>
+            <li>Why did you choose it?</li>
+            <li>What have you been learning from tracking it?</li>
+          </ul>
+        </li>
+      </ul>
+      <p>Students will be chosen based on clarity of interest, thoughtfulness of responses, demonstrated curiosity about markets, and overall professionalism.</p>
+    </div>
+    <div class="footer">&copy; UATX Student Portal</div>
+  </div>
+
+</div>
+
+<!-- ─── JAVASCRIPT ─── -->
+<script>
+// ─── DATA ───
+const opportunities = [
+  { org: "GovAI", title: "DC Senate Fellowship", desc: "Staffing a policy advisor in a U.S. Senate office, conducting legislative research, attending briefings, and supporting policy development on AI governance and technology issues.", initials: "GovAI" },
+  { org: "RepublicProject.com", title: "Career Consultation & Job Placement", desc: "Provides career consultation, portfolio development, and interview coaching to help students connect with employers.", initials: "RP" },
+  { org: "Colloquium", title: "DC Political Science Journal", desc: "An opportunity to contribute to a political science journal based in Washington, D.C.", initials: "C" },
+  { org: "Office of the Texas Governor", title: "Multiple Roles", desc: "Internship offerings in various departments within the Governor's office, including legislative affairs, communications, and constituent services.", initials: "GOV" },
+  { org: "Casas Por Cristo", title: "Multiple Roles", desc: "A faith-based nonprofit focused on building homes for families in need. Multiple roles available in community development.", initials: "CPC" },
+  { org: "Maynard Nexsen", title: "Legal Internship Program", desc: "This internship offers a hands-on legal experience at a major law firm. Interns participate in legal research, client meetings, and regulatory analysis.", initials: "MN" },
+  { org: "Setna IO", title: "Multiple Roles", desc: "Software and security startup with multiple roles available including engineering, product development, and operations internships.", initials: "SETNA" },
+  { org: "Hertog Foundation", title: "Political Studies Program", desc: "An intensive seminar on political philosophy and statesmanship. Participants study the great works of political thought.", initials: "HF" },
+  { org: "Senator Ted Cruz", title: "Administrative Intern", desc: "Work on legislative research, constituent correspondence, policy briefings, and administrative support in the Senator's office.", initials: "TC" },
+  { org: "Senator Ted Cruz", title: "Summer Intern", desc: "Summer internship program in the Senator's office covering legislative analysis, research projects, and Capitol Hill operations.", initials: "TC" },
+  { org: "New American Industrial Alliance", title: "Content Manager", desc: "Manage and create digital content, research industrial policy topics, and support communications.", initials: "NAIA" },
+  { org: "Futures Forge", title: "Pardners", desc: "Futures Forge partners with students through its Pardners program to explore career pathways and build professional networks.", initials: "FF" },
+  { org: "UATX", title: "Work Study", desc: "The UATX Work Study program provides on-campus employment opportunities that allow students to develop professional skills.", initials: "UATX" },
+  { org: "Hudson Institute", title: "Political Studies Fellowship", desc: "The Hudson Institute fellowship offers research opportunities in national security, foreign policy, and economics.", initials: "HI" },
+  { org: "Senator Barry Fitzgerald", title: "Summer Fellowship", desc: "A legislative summer fellowship providing hands-on experience in state-level policy development and constituent services.", initials: "BF" },
+  { org: "Claremont Institute", title: "Publius Research Fellowship", desc: "Study American political thought and constitutional governance through this competitive fellowship.", initials: "CI" },
+  { org: "Claremont Institute", title: "Research Assistant", desc: "Assist senior fellows with research on constitutional law, political philosophy, and public policy.", initials: "CI" },
+  { org: "Open the Books", title: "Multiple Roles", desc: "A government transparency organization with internship roles in data analysis, investigative journalism, and communications.", initials: "OTB" },
+  { org: "First Court of Appeals Panel", title: "Judicial Externship", desc: "Externship opportunity at the First Court of Appeals providing experience in judicial research and opinion drafting.", initials: "FCA" },
+];
+
+// Group into rows of 3-4 (matching the original layout)
+const rows = [
+  [0, 1, 2],       // Bloom, Republic, Colloquium
+  [3, 4, 5],       // Governor, Casas, Maynard
+  [6, 7, 8, 9],    // Setna, Hertog, Cruz x2
+  [10, 11, 12],    // NAIA, Futures Forge, UATX
+  [13, 14, 15],    // Hudson, Fitzgerald, Claremont
+  [16, 17, 18],    // Claremont RA, Open the Books, First Court
+];
+
+function renderOppCard(item) {
+  return `
+    <div class="opp-card">
+      <div class="opp-logo">
+        <div class="opp-logo-text">${item.initials}</div>
+      </div>
+      <div class="opp-info">
+        <div class="role">${item.title}</div>
+        <div class="desc">${item.desc}</div>
+      </div>
+    </div>
+  `;
+}
+
+// Per-company logo styles for realistic appearance
+const logoStyles = {
+  "GovAI": "background:#1a2332;color:#fff;font-family:'Roboto',Arial,sans-serif;font-weight:700;font-size:18px;",
+  "RepublicProject.com": "background:#2a6e3f;color:#fff;font-size:11px;",
+  "Colloquium": "background:#f5f0e8;color:#1a2332;font-family:'Roboto',Arial,sans-serif;font-size:22px;font-weight:700;font-style:italic;",
+  "Office of the Texas Governor": "background:#f5f0e8;color:#1a2332;font-size:10px;font-weight:600;",
+  "Casas Por Cristo": "background:#fff;color:#8b4513;font-size:10px;font-weight:700;letter-spacing:0.5px;",
+  "Maynard Nexsen": "background:#fff;color:#1a2332;font-size:10px;font-weight:600;letter-spacing:1px;",
+  "Setna IO": "background:#1a2332;color:#4fc3f7;font-family:'Roboto',Arial,sans-serif;font-weight:700;font-size:13px;letter-spacing:2px;",
+  "Hertog Foundation": "background:#c9a84c;color:#1a2332;font-family:'Roboto',Arial,sans-serif;font-weight:700;font-size:12px;letter-spacing:1px;",
+  "Senator Ted Cruz": "background:#1a2332;color:#c9a84c;font-size:11px;font-weight:600;",
+  "New American Industrial Alliance": "background:#fff;color:#1a2332;font-weight:700;font-size:13px;",
+  "Futures Forge": "background:#fff;color:#1a2332;font-size:11px;font-weight:600;",
+  "UATX": "background:linear-gradient(135deg,#1a3a5c,#1a2332);color:#c9a84c;font-family:'Roboto',Arial,sans-serif;font-weight:700;font-size:18px;",
+  "Hudson Institute": "background:#1a2332;color:#fff;font-size:11px;font-weight:600;letter-spacing:0.5px;",
+  "Senator Barry Fitzgerald": "background:#1a2332;color:#c9a84c;font-size:10px;font-weight:600;",
+  "Claremont Institute": "background:#fff;color:#1a2332;font-size:11px;font-weight:700;",
+  "Open the Books": "background:#fff;color:#c75c3a;font-weight:700;font-size:11px;",
+  "First Court of Appeals Panel": "background:#1a2332;color:#c9a84c;font-size:10px;font-weight:600;",
+};
+
+// Render opportunity rows
+rows.forEach((indices, i) => {
+  const container = document.getElementById(`opp-row-${i + 1}`);
+  if (container) {
+    container.innerHTML = indices.map(idx => {
+      const item = opportunities[idx];
+      const style = logoStyles[item.org] || "background:#243044;color:#c9a84c;";
+      return `
+        <div class="opp-card">
+          <div class="opp-logo" style="${style}">
+            <div class="opp-logo-text" style="color:inherit;">${item.initials}</div>
+          </div>
+          <div>
+            <div class="opp-info">
+              <div class="role">${item.title}</div>
+              <div class="desc">${item.desc}</div>
+            </div>
+            <div style="font-size:11px;font-weight:600;color:#f5f0e8;margin-top:8px;">${item.org}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+});
+
+// ─── NAVIGATION ───
+function navigateTo(pageId) {
+  // Hide all pages
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  // Show target
+  const target = document.getElementById('page-' + pageId);
+  if (target) {
+    target.classList.add('active');
+    target.scrollTop = 0;
+  }
+  // Update sidebar active states
+  document.querySelectorAll('.nav-section-toggle').forEach(btn => btn.classList.remove('active'));
+  // Find and activate the right toggle
+  const toggles = document.querySelectorAll('.nav-section-toggle');
+  const portalPages = ['home', 'unpaid-internship', 'finance-skills', 'meritfirst'];
+  const eventPages = ['events', 'event-aei', 'event-aha', 'event-austin-institute', 'event-forge', 'event-pepperdine', 'event-reagan', 'event-israel', 'event-txse'];
+  if (portalPages.includes(pageId)) toggles[0]?.classList.add('active');
+  if (pageId === 'opportunities') toggles[1]?.classList.add('active');
+  if (eventPages.includes(pageId)) toggles[2]?.classList.add('active');
+
+  window.scrollTo(0, 0);
+}
+
+function navToggle(btn) {
+  const sub = btn.nextElementSibling;
+  const arrow = btn.querySelector('.arrow');
+  if (sub && sub.classList.contains('nav-sub')) {
+    sub.classList.toggle('open');
+    arrow?.classList.toggle('open');
+  }
+}
+</script>
+</body>
+</html>

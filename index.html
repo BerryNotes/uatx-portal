@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UATX Student Portal — Dev</title>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;600;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Libre Franklin', sans-serif;
+  background: #0d1520;
+  color: #f5f0e8;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.container {
+  text-align: center;
+  max-width: 700px;
+  padding: 40px;
+}
+h1 {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 36px;
+  margin-bottom: 8px;
+}
+.sub {
+  color: #c9a84c;
+  font-size: 13px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 48px;
+}
+.cards {
+  display: flex;
+  gap: 24px;
+  justify-content: center;
+}
+.card {
+  flex: 1;
+  max-width: 300px;
+  background: #1a2332;
+  border: 1px solid #243044;
+  padding: 32px 24px;
+  text-decoration: none;
+  color: #f5f0e8;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.card:hover {
+  border-color: #c9a84c;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+}
+.card h2 {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 22px;
+}
+.card p {
+  font-size: 13px;
+  color: #a0a0b8;
+  line-height: 1.6;
+  flex: 1;
+}
+.badge {
+  display: inline-block;
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  border-radius: 2px;
+  align-self: flex-start;
+}
+.badge-gold { background: #c9a84c22; color: #c9a84c; border: 1px solid #c9a84c44; }
+.badge-blue { background: #3b82f622; color: #60a5fa; border: 1px solid #3b82f644; }
+.arrow {
+  color: #c9a84c;
+  font-size: 14px;
+  font-weight: 600;
+  align-self: flex-end;
+  margin-top: auto;
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>UATX Student Portal</h1>
+  <div class="sub">Development Server</div>
+  <div class="cards">
+    <a href="/replica" class="card">
+      <span class="badge badge-gold">Google Sites Copy</span>
+      <h2>Replica</h2>
+      <p>Exact copy of the existing Google Sites portal — matching layout, content, and styling.</p>
+      <span class="arrow">View &rarr;</span>
+    </a>
+    <a href="/prototype" class="card">
+      <span class="badge badge-blue">Improved Version</span>
+      <h2>Prototype</h2>
+      <p>Redesigned portal with search, filters, calendar, profiles, and modern UI components.<br><span style="color:#c9a84c;font-size:11px;font-weight:600;margin-top:4px;display:inline-block">(Requires UATX sign-in)</span></p>
+      <span class="arrow">View &rarr;</span>
+    </a>
+  </div>
+</div>
+</body>
+</html>
