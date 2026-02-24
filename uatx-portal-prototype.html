@@ -1183,7 +1183,7 @@ const TopNav = ({activeTab, subPage, navigate, onSignOut, currentUser}) => {
     {id:"calendar",label:"Calendar"},
     {id:"profile",label:"My Profile"},
     {id:"community",label:"Community"},
-    {id:"events",label:"Events & Travel",hasDropdown:true},
+    {id:"events",label:"Events & Travel",hasDropdown:true,hideArrow:true},
   ];
 
   const homeSubItems = [
@@ -1368,7 +1368,7 @@ const HomePage = ({navigate}) => {
             {title:"Finance Skills Development",tagline:"Up to $250 Reimbursement",desc:"Choose from Training the Street, Wall Street Prep, or Breaking Into Wall Street. Master financial modeling, valuation, and Excel skills that top employers demand.",details:"Complete the self-study program on your own schedule and submit your certificate of completion to receive reimbursement of up to $250. Covers core skills: DCF, LBO, M&A modeling.",link:"finance-skills",action:"Learn More",accent:C.success,img:"/images/Student Portal Page/finance skill dev.png"},
             {title:"MeritFirst Exams",tagline:"Skills-Based Hiring",desc:"Take short, practical assessments that showcase your abilities to employers who value talent over pedigree. No cost to students \u2014 results shared directly with hiring partners.",details:"Choose your track, demonstrate real-world skills, and get matched with companies as you test. Assessments are designed to level the playing field for all students.",link:"meritfirst",action:"Learn More",accent:C.alert,img:"/images/Student Portal Page/merit first exams.png",imgContain:true},
           ].map((sec,i) => (
-            <div key={i} onClick={sec.link?()=>navigate(sec.link):undefined} style={{backgroundColor:C.white,border:"1px solid "+C.border,overflow:"hidden",cursor:sec.link?"pointer":"default",transition:"box-shadow 0.2s ease, transform 0.2s ease",display:"flex",flexDirection:i%2===1?"row-reverse":"row",alignItems:"stretch",minHeight:200}} onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 6px 24px rgba(0,0,0,0.1)";e.currentTarget.style.transform="translateY(-2px)";}} onMouseLeave={e=>{e.currentTarget.style.boxShadow="none";e.currentTarget.style.transform="translateY(0)";}}>
+            <div key={i} onClick={sec.link?()=>navigate(sec.link):undefined} style={{backgroundColor:C.white,border:"1px solid "+C.border,overflow:"hidden",cursor:sec.link?"pointer":"default",transition:"box-shadow 0.2s ease, transform 0.2s ease",display:"flex",flexDirection:"row",alignItems:"stretch",minHeight:200}} onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 6px 24px rgba(0,0,0,0.1)";e.currentTarget.style.transform="translateY(-2px)";}} onMouseLeave={e=>{e.currentTarget.style.boxShadow="none";e.currentTarget.style.transform="translateY(0)";}}>
               <div style={{width:4,backgroundColor:sec.accent,flexShrink:0}}/>
               <div style={{flex:1,padding:"32px 40px",display:"flex",flexDirection:"column",justifyContent:"center"}}>
                 <div style={{fontSize:10,fontWeight:700,color:sec.accent,textTransform:"uppercase",letterSpacing:"1px",marginBottom:8}}>{sec.tagline}</div>
