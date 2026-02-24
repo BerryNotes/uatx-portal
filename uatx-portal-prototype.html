@@ -1489,7 +1489,7 @@ const OpportunitiesPage = ({navigate, showToast, savedOpps, setSavedOpps, select
           {filtered.map(item => {
             const isVis = visibleIds.has(String(item.id));
             return (
-            <div key={item.id} ref={el=>sidebarItemRefs.current[item.id]=el} onClick={()=>scrollToCard(item.id)} style={{padding:"9px 20px",cursor:"pointer",transition:"all 0.2s",display:"flex",alignItems:"center",gap:10,backgroundColor:isVis?C.navyLight:"transparent",borderLeft:isVis?"3px solid "+C.gold:"3px solid transparent"}} onMouseEnter={e=>{if(!isVis)e.currentTarget.style.backgroundColor=C.navyLight+"88";}} onMouseLeave={e=>{if(!isVis)e.currentTarget.style.backgroundColor="transparent";}}>
+            <div key={item.id} ref={el=>sidebarItemRefs.current[item.id]=el} onClick={()=>item.subPage?navigate(item.subPage):scrollToCard(item.id)} style={{padding:"9px 20px",cursor:"pointer",transition:"all 0.2s",display:"flex",alignItems:"center",gap:10,backgroundColor:isVis?C.navyLight:"transparent",borderLeft:isVis?"3px solid "+C.gold:"3px solid transparent"}} onMouseEnter={e=>{if(!isVis)e.currentTarget.style.backgroundColor=C.navyLight+"88";}} onMouseLeave={e=>{if(!isVis)e.currentTarget.style.backgroundColor="transparent";}}>
               {item.logo ? (
                 <img src={item.logo} alt="" style={{width:26,height:26,borderRadius:4,objectFit:"contain",backgroundColor:"#fff",flexShrink:0}} onError={e=>{e.target.style.display="none";}}/>
               ) : (
