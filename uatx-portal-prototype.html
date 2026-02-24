@@ -37,9 +37,13 @@
 const { useState, useEffect, useRef } = React;
 
 // ─── HELPERS ───
-const load = (key, fallback) => { try { const v = localStorage.getItem("uatx_" + key); return v !== null ? JSON.parse(v) : fallback; } catch(e) { return fallback; } };
-const save = (key, val) => { try { localStorage.setItem("uatx_" + key, JSON.stringify(val)); } catch(e) {} };
-const api = (path, opts) => fetch(path, { headers: {"Content-Type":"application/json"}, ...opts }).then(r => r.json());
+let _lsUserId = "";
+const load = (key, fallback) => { try { const v = localStorage.getItem("uatx_" + _lsUserId + "_" + key); return v !== null ? JSON.parse(v) : fallback; } catch(e) { return fallback; } };
+const save = (key, val) => { try { localStorage.setItem("uatx_" + _lsUserId + "_" + key, JSON.stringify(val)); } catch(e) {} };
+const api = (path, opts) => fetch(path, { headers: {"Content-Type":"application/json"}, ...opts }).then(r => {
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return r.json();
+});
 
 // Debounce helper for preference sync
 const debounce = (fn, ms) => { let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); }; };
@@ -593,9 +597,9 @@ const SUBPAGE_CONTENT = {
     backLabel: "Back to Opportunities",
     content: [
       {h2:"Judicial Internships"},
-      {p:"<strong>First Session:</strong> June 2 \u2013 June 27, 2025"},
-      {p:"<strong>Second Session:</strong> July 7 \u2013 August 1, 2025"},
-      {p:"The First Court of Appeals is accepting applications from law students who will be rising second- and third-year students during Summer 2025 for unpaid judicial internship positions. The positions may be volunteer or for credit. Your school or an outside organization may financially support judicial internships."},
+      {p:"<strong>First Session:</strong> June 2 \u2013 June 27, 2026"},
+      {p:"<strong>Second Session:</strong> July 7 \u2013 August 1, 2026"},
+      {p:"The First Court of Appeals is accepting applications from law students who will be rising second- and third-year students during Summer 2026 for unpaid judicial internship positions. The positions may be volunteer or for credit. Your school or an outside organization may financially support judicial internships."},
       {hr:true},
       {h2:"About the Program"},
       {p:"The First Court's intern program provides an opportunity to improve research and writing skills, while also providing a behind-the-scenes view of how an intermediate court of appeals works. Interns research factual and legal issues, review appellate records, perform substantive citation checks, write memoranda of law, discuss those memoranda with the judges and the Court's attorneys, observe the judges' discussion of issues in cases that are submitted, observe oral argument, and observe post-submission resolution of legal issues raised in oral argument."},
@@ -900,7 +904,7 @@ const SUBPAGE_CONTENT = {
       {h2:"The Adam Andrzejewski Memorial Scholarship"},
       {p:"The Adam Andrzejewski Memorial Scholarship honors the legacy of Open the Books' late founder and CEO by supporting the next generation of transparency leaders."},
       {p:"Each year, Open the Books awards a <strong>$25,000 scholarship</strong> to one high school junior or senior, or current college student, who demonstrates leadership in advancing financial transparency, accountability, and public service."},
-      {p:'Applications are due June 30, 2025. Contact: <a href="mailto:scholarship@openthebooks.com" style="color:#a08839">scholarship@openthebooks.com</a>'},
+      {p:'Applications are due June 30, 2026. Contact: <a href="mailto:scholarship@openthebooks.com" style="color:#a08839">scholarship@openthebooks.com</a>'},
     ]
   },
 
@@ -1394,7 +1398,7 @@ const HomePage = ({navigate}) => {
 };
 
 // ─── OPPORTUNITIES ───
-const OpportunitiesPage = ({navigate, showToast, savedOpps, setSavedOpps, selectedIndustries, customListings, setCustomListings, serverOpps=[]}) => {
+const OpportunitiesPage = ({navigate, showToast, savedOpps, setSavedOpps, selectedIndustries, serverOpps=[]}) => {
   const [search, setSearch] = useState("");
   const [filterInd, setFilterInd] = useState("All");
   const [filterType, setFilterType] = useState("All");
@@ -1406,7 +1410,7 @@ const OpportunitiesPage = ({navigate, showToast, savedOpps, setSavedOpps, select
   const cardRefs = useRef({});
   const sidebarItemRefs = useRef({});
 
-  const allItemsRaw = [...serverOpps, ...INTERNSHIPS, ...customListings];
+  const allItemsRaw = [...serverOpps, ...INTERNSHIPS];
   const seenKeys = new Set();
   const allItems = allItemsRaw.filter(o => {
     const key = (o.org + "|" + o.title).toLowerCase();
@@ -1436,11 +1440,12 @@ const OpportunitiesPage = ({navigate, showToast, savedOpps, setSavedOpps, select
 
   const submitListing = () => {
     if (!form.org || !form.title) return;
-    const newItem = {...form, id:"custom-"+Date.now(), featured:false, deadline:form.deadline||"2026-06-01"};
-    setCustomListings(prev => [...prev, newItem]);
+    const newItem = {...form, featured:false, deadline:form.deadline||"2026-06-01"};
+    api("/api/admin/opportunities", { method: "POST", body: JSON.stringify({ opportunity: newItem }) })
+      .then(() => showToast("Your listing has been submitted!"))
+      .catch(() => showToast("Submission failed — you may need admin access"));
     setForm({org:"",title:"",description:"",industry:"Finance & Banking",type:"Internship",location:"",deadline:"",paid:false,contactEmail:""});
     setShowModal(false);
-    showToast("Your listing has been submitted!");
   };
 
   // Track which cards are visible via IntersectionObserver
@@ -2040,10 +2045,18 @@ const CommunityPage = ({joinedClubs, setJoinedClubs, showToast, serverActivities
 };
 
 // ─── EVENTS ───
-const EventsPage = ({navigate}) => {
+const EventsPage = ({navigate, serverEvents=[]}) => {
   const [eventFilter, setEventFilter] = useState("All");
-  const types = ["All", ...Array.from(new Set(EVENTS.map(e=>e.type)))];
-  const filtered = eventFilter==="All" ? EVENTS : EVENTS.filter(e=>e.type===eventFilter);
+  // Merge server events with hardcoded fallback, server takes precedence
+  const seenEvt = new Set();
+  const mergedEvents = [...serverEvents.map(e => ({...e, desc: e.description || e.desc, subPage: e.sub_page || e.subPage})), ...EVENTS].filter(e => {
+    const key = e.title.toLowerCase();
+    if (seenEvt.has(key)) return false;
+    seenEvt.add(key);
+    return true;
+  });
+  const types = ["All", ...Array.from(new Set(mergedEvents.map(e=>e.type)))];
+  const filtered = eventFilter==="All" ? mergedEvents : mergedEvents.filter(e=>e.type===eventFilter);
 
   return (
     <div style={{padding:"32px 40px",animation:"fadeIn 0.3s ease"}}>
@@ -2104,7 +2117,7 @@ const Footer = () => (
         <div style={{display:"flex",flexDirection:"column",gap:6}}>
           <a href="https://www.uaustin.org" target="_blank" rel="noopener noreferrer" style={{fontSize:12,color:C.cream+"bb",textDecoration:"none"}}>University of Austin</a>
           <a href="https://www.linkedin.com/groups/12870638/" target="_blank" rel="noopener noreferrer" style={{fontSize:12,color:C.cream+"bb",textDecoration:"none"}}>LinkedIn Talent Network</a>
-          <span style={{fontSize:12,color:C.cream+"bb",cursor:"pointer"}}>Privacy Policy</span>
+          <a href="https://www.uaustin.org/privacy-policy" target="_blank" rel="noopener noreferrer" style={{fontSize:12,color:C.cream+"bb",textDecoration:"none"}}>Privacy Policy</a>
         </div>
       </div>
     </div>
@@ -2195,10 +2208,9 @@ const App = () => {
   const [selectedAreas, setSelectedAreas] = useState(() => load("areas", []));
   const [emailAlerts, setEmailAlerts] = useState(() => load("emailAlerts", true));
   const [internshipHistory, setInternshipHistory] = useState(() => load("history", []));
-  const [customListings, setCustomListings] = useState(() => load("customListings", []));
-  const [customActivities, setCustomActivities] = useState(() => load("customActivities", []));
   const [serverOpps, setServerOpps] = useState([]);
   const [serverActivities, setServerActivities] = useState([]);
+  const [serverEvents, setServerEvents] = useState([]);
 
   // Toast state
   const [toasts, setToasts] = useState([]);
@@ -2212,10 +2224,12 @@ const App = () => {
   useEffect(() => {
     api("/api/auth/me").then(data => {
       if (data.user) {
+        _lsUserId = data.user.id;
         setCurrentUser(data.user);
         loadServerPrefs();
         loadServerOpps();
         loadServerActivities();
+        loadServerEvents();
       }
       setAuthChecked(true);
     }).catch(() => setAuthChecked(true));
@@ -2226,12 +2240,12 @@ const App = () => {
     api("/api/preferences").then(data => {
       if (data.preferences) {
         const p = data.preferences;
-        if (p.selected_industries?.length) { setSelectedIndustries(p.selected_industries); save("industries", p.selected_industries); }
-        if (p.selected_areas?.length) { setSelectedAreas(p.selected_areas); save("areas", p.selected_areas); }
+        if (p.selected_industries !== undefined) { setSelectedIndustries(p.selected_industries); save("industries", p.selected_industries); }
+        if (p.selected_areas !== undefined) { setSelectedAreas(p.selected_areas); save("areas", p.selected_areas); }
         if (p.email_alerts !== undefined) { setEmailAlerts(p.email_alerts); save("emailAlerts", p.email_alerts); }
-        if (p.saved_opps?.length) { setSavedOpps(p.saved_opps); save("savedOpps", p.saved_opps); }
-        if (p.joined_clubs?.length) { setJoinedClubs(p.joined_clubs); save("joinedClubs", p.joined_clubs); }
-        if (p.internship_history?.length) { setInternshipHistory(p.internship_history); save("history", p.internship_history); }
+        if (p.saved_opps !== undefined) { setSavedOpps(p.saved_opps); save("savedOpps", p.saved_opps); }
+        if (p.joined_clubs !== undefined) { setJoinedClubs(p.joined_clubs); save("joinedClubs", p.joined_clubs); }
+        if (p.internship_history !== undefined) { setInternshipHistory(p.internship_history); save("history", p.internship_history); }
       }
     }).catch(() => {});
   };
@@ -2283,24 +2297,28 @@ const App = () => {
     }).catch(() => {});
   };
 
+  // Load server events
+  const loadServerEvents = () => {
+    api("/api/events").then(data => {
+      if (data.events) setServerEvents(data.events);
+    }).catch(() => {});
+  };
+
   // Debounced preference sync to server
-  const syncPrefsRef = useRef(null);
-  if (!syncPrefsRef.current) {
-    syncPrefsRef.current = debounce((prefs) => {
+  const debouncedSync = useRef(null);
+  if (!debouncedSync.current) {
+    debouncedSync.current = debounce((prefs) => {
       api("/api/preferences", { method: "PUT", body: JSON.stringify(prefs) }).catch(() => {});
     }, 500);
   }
 
+  // Keep a ref to latest prefs so sync always reads fresh values
+  const prefsRef = useRef({});
+  prefsRef.current = { selected_industries: selectedIndustries, selected_areas: selectedAreas, email_alerts: emailAlerts, saved_opps: savedOpps, joined_clubs: joinedClubs, internship_history: internshipHistory };
+
   const syncToServer = () => {
     if (!currentUser) return;
-    syncPrefsRef.current({
-      selected_industries: selectedIndustries,
-      selected_areas: selectedAreas,
-      email_alerts: emailAlerts,
-      saved_opps: savedOpps,
-      joined_clubs: joinedClubs,
-      internship_history: internshipHistory,
-    });
+    debouncedSync.current(prefsRef.current);
   };
 
   // Auto-save effects (localStorage + server sync)
@@ -2310,15 +2328,15 @@ const App = () => {
   useEffect(() => { save("areas", selectedAreas); syncToServer(); }, [selectedAreas]);
   useEffect(() => { save("emailAlerts", emailAlerts); syncToServer(); }, [emailAlerts]);
   useEffect(() => { save("history", internshipHistory); syncToServer(); }, [internshipHistory]);
-  useEffect(() => { save("customListings", customListings); }, [customListings]);
-  useEffect(() => { save("customActivities", customActivities); }, [customActivities]);
 
   // Handle sign-in callback
   const handleSignIn = (user) => {
+    _lsUserId = user.id;
     setCurrentUser(user);
     loadServerPrefs();
     loadServerOpps();
     loadServerActivities();
+    loadServerEvents();
   };
 
   // Handle sign-out
@@ -2347,7 +2365,7 @@ const App = () => {
   // Merge opportunities: server DB is source of truth, then custom user listings
   // Server opps first so admin edits take precedence over hardcoded INTERNSHIPS
   const seen = new Set();
-  const allInternships = [...serverOpps, ...INTERNSHIPS, ...customListings].filter(o => {
+  const allInternships = [...serverOpps, ...INTERNSHIPS].filter(o => {
     const key = (o.org + "|" + o.title).toLowerCase();
     if (seen.has(key)) return false;
     seen.add(key);
@@ -2356,11 +2374,11 @@ const App = () => {
 
   const pages = {
     home: <HomePage navigate={navigate}/>,
-    opportunities: <OpportunitiesPage navigate={navigate} showToast={showToast} savedOpps={savedOpps} setSavedOpps={setSavedOpps} selectedIndustries={selectedIndustries} customListings={customListings} setCustomListings={setCustomListings} serverOpps={serverOpps}/>,
+    opportunities: <OpportunitiesPage navigate={navigate} showToast={showToast} savedOpps={savedOpps} setSavedOpps={setSavedOpps} selectedIndustries={selectedIndustries} serverOpps={serverOpps}/>,
     calendar: <CalendarPage allInternships={allInternships} navigate={navigate}/>,
     profile: <ProfilePage showToast={showToast} selectedIndustries={selectedIndustries} setSelectedIndustries={setSelectedIndustries} selectedAreas={selectedAreas} setSelectedAreas={setSelectedAreas} emailAlerts={emailAlerts} setEmailAlerts={setEmailAlerts} internshipHistory={internshipHistory} setInternshipHistory={setInternshipHistory} currentUser={currentUser} serverActivities={serverActivities} joinedClubs={joinedClubs} setJoinedClubs={setJoinedClubs}/>,
     community: <CommunityPage joinedClubs={joinedClubs} setJoinedClubs={setJoinedClubs} showToast={showToast} serverActivities={serverActivities} navigate={navigate} refreshActivities={loadServerActivities}/>,
-    events: <EventsPage navigate={navigate}/>,
+    events: <EventsPage navigate={navigate} serverEvents={serverEvents}/>,
   };
 
   // Show loading spinner while checking auth

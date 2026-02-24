@@ -110,9 +110,13 @@ const rosterAll = db.prepare(`
   ORDER BY r.created_at DESC
 `);
 const rosterDelete = db.prepare("DELETE FROM roster WHERE id = ?");
-const rosterFindByEmail = db.prepare(
+const rosterFindByEmailStmt = db.prepare(
   "SELECT * FROM roster WHERE LOWER(email) = LOWER(?)"
 );
+
+function rosterFindByEmail(email) {
+  return rosterFindByEmailStmt.get(email);
+}
 
 function addToRoster(name, email, isAdmin = 0) {
   return rosterInsert.run(name, email, isAdmin ? 1 : 0);
@@ -136,7 +140,7 @@ function removeFromRoster(id) {
 }
 
 function isOnRoster(email) {
-  return !!rosterFindByEmail.get(email);
+  return !!rosterFindByEmail(email);
 }
 
 // ─── USERS ───
@@ -161,14 +165,25 @@ const usersAll = db.prepare(`
   ORDER BY u.created_at DESC
 `);
 
+const userUpdateAdmin = db.prepare(
+  "UPDATE users SET is_admin = ? WHERE id = ?"
+);
+
 function findOrCreateUser({ email, name, googleSub, avatarUrl, isAdmin }) {
   let user = userFindByEmail.get(email);
   if (user) {
     userUpdate.run(name, googleSub, avatarUrl, user.id);
-    return { ...userFindById.get(user.id), isNew: false };
+    // Sync admin status from roster
+    const adminVal = isAdmin ? 1 : 0;
+    if (user.is_admin !== adminVal) {
+      userUpdateAdmin.run(adminVal, user.id);
+    }
+    const updated = userFindById.get(user.id);
+    return { id: updated.id, isNew: false, welcome_email_sent: updated.welcome_email_sent };
   }
   const info = userInsert.run(email, name, googleSub, avatarUrl, isAdmin ? 1 : 0);
-  return { ...userFindById.get(info.lastInsertRowid), isNew: true };
+  const newUser = userFindById.get(info.lastInsertRowid);
+  return { id: newUser.id, isNew: true, welcome_email_sent: newUser.welcome_email_sent };
 }
 
 function getUserById(id) {
@@ -328,13 +343,15 @@ function deleteActivity(id) {
 // ─── SEED ACTIVITIES ───
 
 function seedActivities(activities) {
+  if (!activities || activities.length === 0) return;
   const count = db.prepare("SELECT COUNT(*) AS c FROM activities").get().c;
   if (count > 0) return;
   const insert = db.transaction((entries) => {
     for (const a of entries) {
       activityInsert.run(
         a.title, a.description || "", a.category || "",
-        a.members || 0, a.meet_day || "", a.president_email || ""
+        a.members || 0, a.meet_day || "", a.president_email || "",
+        a.status || "approved", a.submitted_by || ""
       );
     }
   });
@@ -344,12 +361,19 @@ function seedActivities(activities) {
 // ─── CLUB MEMBERS ───
 
 function getClubMembers(activityId) {
-  return db.prepare(`
-    SELECT u.email, u.name
+  // Use JSON array-aware matching to avoid partial ID matches (e.g. 1 matching 10, 11)
+  const allRows = db.prepare(`
+    SELECT u.email, u.name, up.joined_clubs
     FROM users u
     JOIN user_preferences up ON up.user_id = u.id
-    WHERE up.joined_clubs LIKE ?
-  `).all(`%${activityId}%`);
+    WHERE up.joined_clubs != '[]'
+  `).all();
+  return allRows.filter(row => {
+    try {
+      const clubs = JSON.parse(row.joined_clubs);
+      return Array.isArray(clubs) && clubs.includes(activityId);
+    } catch { return false; }
+  }).map(({ email, name }) => ({ email, name }));
 }
 
 function getActivitiesByPresidentEmail(email) {
@@ -416,14 +440,19 @@ function seedEvents(events) {
 // ─── EMAIL TARGETING ───
 
 function getStudentsForNotification(industry) {
-  const rows = db.prepare(`
-    SELECT u.email, u.name
+  const allRows = db.prepare(`
+    SELECT u.email, u.name, up.selected_industries
     FROM users u
     JOIN user_preferences up ON up.user_id = u.id
     WHERE up.email_alerts = 1
-      AND up.selected_industries LIKE ?
-  `).all(`%"${industry}"%`);
-  return rows;
+      AND up.selected_industries != '[]'
+  `).all();
+  return allRows.filter(row => {
+    try {
+      const industries = JSON.parse(row.selected_industries);
+      return Array.isArray(industries) && industries.includes(industry);
+    } catch { return false; }
+  }).map(({ email, name }) => ({ email, name }));
 }
 
 // ─── SESSION STORE (for express-session) ───
@@ -434,6 +463,14 @@ class SQLiteStore {
     class S extends Store {
       constructor(opts) {
         super(opts);
+        // Clean up expired sessions every hour
+        this._cleanupInterval = setInterval(() => {
+          try {
+            db.prepare("DELETE FROM sessions WHERE expires <= ?").run(Date.now());
+          } catch (e) { /* ignore cleanup errors */ }
+        }, 60 * 60 * 1000);
+        // Run initial cleanup
+        try { db.prepare("DELETE FROM sessions WHERE expires <= ?").run(Date.now()); } catch (e) {}
       }
       get(sid, cb) {
         try {
@@ -470,7 +507,7 @@ function seedAdminEmails(emails) {
   for (const email of emails) {
     const trimmed = email.trim();
     if (!trimmed) continue;
-    const existing = rosterFindByEmail.get(trimmed);
+    const existing = rosterFindByEmailStmt.get(trimmed);
     if (!existing) {
       rosterInsert.run(trimmed.split("@")[0], trimmed, 1);
     } else if (!existing.is_admin) {

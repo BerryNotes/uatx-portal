@@ -44,13 +44,39 @@ const { sendWelcomeEmail, sendOpportunityNotification, sendClubEmail, sendClubSu
 
 const PORT = process.env.PORT || 3333;
 const DIR = __dirname;
+const IS_PROD = process.env.NODE_ENV === "production";
 
 const app = express();
 
 // ─── MIDDLEWARE ───
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+if (IS_PROD) app.set("trust proxy", 1);
+
+app.use(express.json({ limit: "100kb" }));
+app.use(express.urlencoded({ extended: false, limit: "100kb" }));
+
+// Simple in-memory rate limiter
+const rateLimits = new Map();
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of rateLimits) {
+    if (now - entry.start > 120000) rateLimits.delete(key);
+  }
+}, 60000);
+function rateLimit(windowMs, max) {
+  return (req, res, next) => {
+    const key = req.ip + ":" + req.path;
+    const now = Date.now();
+    let entry = rateLimits.get(key);
+    if (!entry || now - entry.start > windowMs) {
+      entry = { start: now, count: 0 };
+      rateLimits.set(key, entry);
+    }
+    entry.count++;
+    if (entry.count > max) return res.status(429).json({ error: "Too many requests" });
+    next();
+  };
+}
 
 const store = new SQLiteStore(session);
 app.use(
@@ -59,7 +85,12 @@ app.use(
     secret: process.env.SESSION_SECRET || "dev-secret-change-me",
     resave: false,
     saveUninitialized: false,
-    cookie: { maxAge: 7 * 24 * 60 * 60 * 1000, sameSite: "lax" },
+    cookie: {
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      sameSite: "lax",
+      secure: IS_PROD,
+      httpOnly: true,
+    },
   })
 );
 
@@ -93,9 +124,6 @@ seedOpportunities([
   { org:"Cicero Institute", title:"Research Assistant", industry:"Government", type:"Internship", deadline:"2026-04-01", description:"Entry-level position supporting state-focused policy reforms through rigorous research and polished written products.", location:"Austin, TX", paid:true, featured:false, logo:"/images/Opportunities/cicero.png" },
   { org:"The American Housing Corporation", title:"Summer 2026 Internship", industry:"Technology", type:"Internship", deadline:"2026-04-15", description:"Opportunities in Engineering, Design, Marketing, Architecture, and Supply Chain at a startup solving the housing crisis.", location:"TBD", paid:true, featured:false },
 ]);
-
-// Seed built-in activities into DB on first run
-seedActivities([]);
 
 // Seed events into DB on first run
 seedEvents([
@@ -170,7 +198,7 @@ app.get("/calendar/uatx-events.ics", (req, res) => {
     lines.push("DTSTART:" + dt);
     lines.push("SUMMARY:" + icsEscape(ev.title));
     if (ev.desc) lines.push("DESCRIPTION:" + icsEscape(ev.desc));
-    if (ev.org) lines.push("ORGANIZER;CN=" + icsEscape(ev.org) + ":mailto:noreply@uaustinportal.org");
+    if (ev.org) lines.push('ORGANIZER;CN="' + icsEscape(ev.org) + '":mailto:noreply@uaustinportal.org');
     lines.push("END:VEVENT");
   });
 
@@ -194,7 +222,7 @@ app.get("/calendar/uatx-events.ics", (req, res) => {
 
 // ─── AUTH ROUTES ───
 
-app.post("/api/auth/google", async (req, res) => {
+app.post("/api/auth/google", rateLimit(60000, 10), async (req, res) => {
   const { credential } = req.body;
   if (!credential) return res.status(400).json({ error: "Missing credential" });
 
@@ -229,7 +257,7 @@ app.post("/api/auth/google", async (req, res) => {
     }
 
     // Check if this email is an admin on the roster
-    const rosterEntry = rosterFindByEmail.get(email);
+    const rosterEntry = rosterFindByEmail(email);
     const isAdmin = rosterEntry && rosterEntry.is_admin;
 
     // Create or update user
@@ -291,7 +319,14 @@ app.get("/api/preferences", requireAuth, (req, res) => {
 });
 
 app.put("/api/preferences", requireAuth, (req, res) => {
-  setPreferences(req.session.userId, req.body);
+  const body = req.body;
+  const MAX_ARRAY = 100;
+  if (body.selected_industries && body.selected_industries.length > MAX_ARRAY) return res.status(400).json({ error: "Too many industries" });
+  if (body.selected_areas && body.selected_areas.length > MAX_ARRAY) return res.status(400).json({ error: "Too many areas" });
+  if (body.saved_opps && body.saved_opps.length > 500) return res.status(400).json({ error: "Too many saved opportunities" });
+  if (body.internship_history && body.internship_history.length > 50) return res.status(400).json({ error: "Too many internship history entries" });
+  if (JSON.stringify(body).length > 50000) return res.status(400).json({ error: "Payload too large" });
+  setPreferences(req.session.userId, body);
   res.json({ ok: true });
 });
 
@@ -340,7 +375,7 @@ app.get("/api/my-clubs", requireAuth, (req, res) => {
 });
 
 // President sends email to all club members
-app.post("/api/activities/:id/email", requireAuth, async (req, res) => {
+app.post("/api/activities/:id/email", requireAuth, rateLimit(60000, 5), async (req, res) => {
   const user = getUserById(req.session.userId);
   const activities = getActivitiesByPresidentEmail(user.email);
   const club = activities.find(a => a.id === parseInt(req.params.id));
@@ -448,6 +483,10 @@ app.post("/api/admin/roster/csv", requireAdmin, (req, res) => {
 });
 
 // Opportunities (admin CRUD)
+app.get("/api/admin/opportunities", requireAdmin, (req, res) => {
+  res.json({ opportunities: getAllOpportunities() });
+});
+
 app.post("/api/admin/opportunities", requireAdmin, async (req, res) => {
   const { opportunity, notify } = req.body;
   if (!opportunity || !opportunity.org || !opportunity.title) {
@@ -567,9 +606,7 @@ app.put("/api/admin/student/:email/preferences", requireAdmin, (req, res) => {
 app.listen(PORT, () => {
   console.log(`UATX Student Portal`);
   console.log(`──────────────────────────────`);
-  console.log(`  Home:       http://localhost:${PORT}`);
-  console.log(`  Replica:    http://localhost:${PORT}/replica`);
-  console.log(`  Prototype:  http://localhost:${PORT}/prototype`);
-  console.log(`  Admin:      http://localhost:${PORT}/admin`);
+  console.log(`  Home:   http://localhost:${PORT}`);
+  console.log(`  Admin:  http://localhost:${PORT}/admin`);
   console.log(`──────────────────────────────`);
 });

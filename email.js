@@ -1,6 +1,11 @@
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const FROM_EMAIL = "UATX Student Portal <onboarding@resend.dev>";
 
+function escapeHtml(str) {
+  if (!str) return "";
+  return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
 async function sendEmail({ to, subject, html, replyTo }) {
   if (!RESEND_API_KEY || RESEND_API_KEY === "re_xxxxxxxxxxxx") {
     console.log(`[email] Skipped (no API key): "${subject}" → ${to}`);
@@ -53,7 +58,7 @@ const wrapper = (content) => `
 </html>`;
 
 function sendWelcomeEmail(to, name) {
-  const firstName = name.split(" ")[0];
+  const firstName = escapeHtml(name.split(" ")[0]);
   return sendEmail({
     to,
     subject: "Welcome to the UATX Student Portal",
@@ -79,10 +84,16 @@ function sendWelcomeEmail(to, name) {
 }
 
 function sendOpportunityNotification(to, name, opportunity) {
-  const firstName = name.split(" ")[0];
+  const firstName = escapeHtml(name.split(" ")[0]);
   const deadlineStr = opportunity.deadline
     ? new Date(opportunity.deadline).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
     : "Rolling";
+  const title = escapeHtml(opportunity.title);
+  const org = escapeHtml(opportunity.org);
+  const desc = escapeHtml(opportunity.description);
+  const loc = escapeHtml(opportunity.location);
+  const type = escapeHtml(opportunity.type || "Internship");
+  const industry = escapeHtml(opportunity.industry);
   return sendEmail({
     to,
     subject: `New Opportunity: ${opportunity.title} at ${opportunity.org}`,
@@ -92,16 +103,16 @@ function sendOpportunityNotification(to, name, opportunity) {
         Hi ${firstName}, a new opportunity matching your interests was just posted:
       </p>
       <div style="margin:20px 0;padding:20px;background:#f9f7f3;border-left:3px solid #c9a84c;">
-        <h3 style="margin:0 0 4px;color:#1a2332;font-size:17px;">${opportunity.title}</h3>
-        <p style="margin:0 0 12px;color:#c9a84c;font-size:13px;font-weight:600;">${opportunity.org}</p>
-        <p style="margin:0 0 8px;color:#2c2c2c;font-size:14px;line-height:1.6;">${opportunity.description}</p>
+        <h3 style="margin:0 0 4px;color:#1a2332;font-size:17px;">${title}</h3>
+        <p style="margin:0 0 12px;color:#c9a84c;font-size:13px;font-weight:600;">${org}</p>
+        <p style="margin:0 0 8px;color:#2c2c2c;font-size:14px;line-height:1.6;">${desc}</p>
         <p style="margin:0;font-size:13px;color:#6b6b6b;">
-          ${opportunity.location ? opportunity.location + " &middot; " : ""}${opportunity.type || "Internship"} &middot; Deadline: ${deadlineStr}
+          ${loc ? loc + " &middot; " : ""}${type} &middot; Deadline: ${deadlineStr}
           ${opportunity.paid ? ' &middot; <span style="color:#4a7c59;font-weight:600;">Paid</span>' : ""}
         </p>
       </div>
       <p style="margin:0;color:#6b6b6b;font-size:12px;">
-        You're receiving this because you have email alerts enabled and "${opportunity.industry}" is in your interests.
+        You're receiving this because you have email alerts enabled and "${industry}" is in your interests.
         Update your preferences in the Portal to change your notification settings.
       </p>
     `),
@@ -113,26 +124,32 @@ function sendClubEmail(to, memberName, clubTitle, presidentName, presidentEmail,
     to,
     replyTo: presidentEmail,
     subject: `${clubTitle}: ${subject}`,
-    html: `<pre style="font-family:sans-serif;white-space:pre-wrap;margin:0;">${message}</pre>`,
+    html: `<pre style="font-family:sans-serif;white-space:pre-wrap;margin:0;">${escapeHtml(message)}</pre>`,
   });
 }
 
 function sendClubSubmissionNotification(adminEmail, activity, submitterName) {
+  const name = escapeHtml(submitterName);
+  const title = escapeHtml(activity.title);
+  const category = escapeHtml(activity.category);
+  const desc = escapeHtml(activity.description);
+  const meetDay = escapeHtml(activity.meet_day);
+  const presEmail = escapeHtml(activity.president_email);
   return sendEmail({
     to: adminEmail,
     subject: `New Club Submission: ${activity.title}`,
     html: wrapper(`
       <h2 style="margin:0 0 16px;color:#1a2332;font-size:22px;">New Club Submission</h2>
       <p style="margin:0 0 16px;color:#2c2c2c;font-size:15px;line-height:1.7;">
-        <strong>${submitterName}</strong> submitted a new club for review:
+        <strong>${name}</strong> submitted a new club for review:
       </p>
       <div style="margin:20px 0;padding:20px;background:#f9f7f3;border-left:3px solid #c9a84c;">
-        <h3 style="margin:0 0 8px;color:#1a2332;font-size:17px;">${activity.title}</h3>
-        ${activity.category ? '<p style="margin:0 0 6px;color:#c9a84c;font-size:13px;font-weight:600;">' + activity.category + '</p>' : ''}
-        ${activity.description ? '<p style="margin:0 0 8px;color:#2c2c2c;font-size:14px;line-height:1.6;">' + activity.description + '</p>' : ''}
+        <h3 style="margin:0 0 8px;color:#1a2332;font-size:17px;">${title}</h3>
+        ${category ? '<p style="margin:0 0 6px;color:#c9a84c;font-size:13px;font-weight:600;">' + category + '</p>' : ''}
+        ${desc ? '<p style="margin:0 0 8px;color:#2c2c2c;font-size:14px;line-height:1.6;">' + desc + '</p>' : ''}
         <p style="margin:0;font-size:13px;color:#6b6b6b;">
-          ${activity.meet_day ? 'Meets: ' + activity.meet_day + ' &middot; ' : ''}
-          ${activity.president_email ? 'President: ' + activity.president_email : ''}
+          ${meetDay ? 'Meets: ' + meetDay + ' &middot; ' : ''}
+          ${presEmail ? 'President: ' + presEmail : ''}
         </p>
       </div>
       <p style="margin:0;color:#2c2c2c;font-size:14px;line-height:1.7;">

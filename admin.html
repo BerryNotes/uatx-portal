@@ -722,7 +722,7 @@ async function uploadCSV() {
 let editingOppId = null;
 
 async function loadOpportunities() {
-  const res = await fetch("/api/opportunities");
+  const res = await fetch("/api/admin/opportunities");
   const data = await res.json();
   lastCustomOpps = data.opportunities;
   renderOpportunities(data.opportunities);
