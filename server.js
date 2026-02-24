@@ -131,9 +131,7 @@ app.get("/api/config", (req, res) => {
 
 // ─── STATIC ROUTES (preserve existing behavior) ───
 
-app.get("/", (req, res) => res.sendFile(path.join(DIR, "index.html")));
-app.get("/replica", (req, res) => res.sendFile(path.join(DIR, "uatx-existing-portal-replica.html")));
-app.get("/prototype", (req, res) => res.sendFile(path.join(DIR, "uatx-portal-prototype.html")));
+app.get("/", (req, res) => res.sendFile(path.join(DIR, "uatx-portal-prototype.html")));
 app.get("/admin", (req, res) => res.sendFile(path.join(DIR, "admin.html")));
 
 // Serve images from "UATX Portal Images" folder
