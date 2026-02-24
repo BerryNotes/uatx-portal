@@ -491,7 +491,8 @@ function seedOpportunities(opps) {
         o.industry || "", o.type || "Internship",
         o.location || "", o.deadline || null,
         o.paid ? 1 : 0, o.featured ? 1 : 0,
-        o.logo || null
+        o.logo || null, o.detail_content || "",
+        o.apply_url || ""
       );
     }
   });
