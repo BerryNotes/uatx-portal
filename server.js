@@ -137,6 +137,61 @@ app.get("/admin", (req, res) => res.sendFile(path.join(DIR, "admin.html")));
 // Serve images from "UATX Portal Images" folder
 app.use("/images", express.static(path.join(DIR, "UATX Portal Images")));
 
+// ─── ICS CALENDAR FEED ───
+
+function icsDate(dateStr) {
+  const d = new Date(dateStr);
+  if (isNaN(d)) return null;
+  return d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+}
+
+function icsEscape(str) {
+  return (str || "").replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
+}
+
+app.get("/calendar/uatx-events.ics", (req, res) => {
+  const events = getAllEvents();
+  const opps = getAllOpportunities();
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//UATX Portal//EN",
+    "X-WR-CALNAME:UATX Portal",
+    "X-WR-CALDESC:Events and deadlines from the UATX Student Portal",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+  ];
+
+  events.forEach((ev, i) => {
+    const dt = icsDate(ev.date);
+    if (!dt) return;
+    lines.push("BEGIN:VEVENT");
+    lines.push("UID:event-" + (ev.id || i) + "@uaustinportal.org");
+    lines.push("DTSTART:" + dt);
+    lines.push("SUMMARY:" + icsEscape(ev.title));
+    if (ev.desc) lines.push("DESCRIPTION:" + icsEscape(ev.desc));
+    if (ev.org) lines.push("ORGANIZER;CN=" + icsEscape(ev.org) + ":mailto:noreply@uaustinportal.org");
+    lines.push("END:VEVENT");
+  });
+
+  opps.forEach((opp, i) => {
+    const dt = icsDate(opp.deadline);
+    if (!dt) return;
+    lines.push("BEGIN:VEVENT");
+    lines.push("UID:deadline-" + (opp.id || i) + "@uaustinportal.org");
+    lines.push("DTSTART:" + dt);
+    lines.push("SUMMARY:[Deadline] " + icsEscape(opp.org + " — " + opp.title));
+    if (opp.description) lines.push("DESCRIPTION:" + icsEscape(opp.description));
+    if (opp.location) lines.push("LOCATION:" + icsEscape(opp.location));
+    lines.push("END:VEVENT");
+  });
+
+  lines.push("END:VCALENDAR");
+  res.setHeader("Content-Type", "text/calendar; charset=utf-8");
+  res.setHeader("Content-Disposition", 'attachment; filename="uatx-events.ics"');
+  res.send(lines.join("\r\n"));
+});
+
 // ─── AUTH ROUTES ───
 
 app.post("/api/auth/google", async (req, res) => {
