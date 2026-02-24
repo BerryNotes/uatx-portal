@@ -2121,13 +2121,10 @@ const App = () => {
   // Persisted state (localStorage as fast cache, server as source of truth)
   const [savedOpps, setSavedOpps] = useState(() => load("savedOpps", []));
   const [joinedClubs, setJoinedClubs] = useState(() => load("joinedClubs", []));
-  const [selectedIndustries, setSelectedIndustries] = useState(() => load("industries", ["Finance & Banking","Law & Policy","Government"]));
+  const [selectedIndustries, setSelectedIndustries] = useState(() => load("industries", []));
   const [selectedAreas, setSelectedAreas] = useState(() => load("areas", []));
   const [emailAlerts, setEmailAlerts] = useState(() => load("emailAlerts", true));
-  const [internshipHistory, setInternshipHistory] = useState(() => load("history", [
-    {id:1,org:"Senator Ted Cruz",role:"Legislative Intern",dates:"Jun \u2013 Aug 2024",industry:"Government",description:"",summary:"",careerNotes:""},
-    {id:2,org:"Futures Forge",role:"Venture Fellow",dates:"Jan \u2013 May 2024",industry:"Finance & Banking",description:"",summary:"",careerNotes:""},
-  ]));
+  const [internshipHistory, setInternshipHistory] = useState(() => load("history", []));
   const [customListings, setCustomListings] = useState(() => load("customListings", []));
   const [customActivities, setCustomActivities] = useState(() => load("customActivities", []));
   const [serverOpps, setServerOpps] = useState([]);
