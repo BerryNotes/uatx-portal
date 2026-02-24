@@ -2347,20 +2347,39 @@ const App = () => {
     setSubPage(null);
   };
 
-  // Navigation
+  // Navigation with browser history support
   const mainTabs = ["home","opportunities","calendar","profile","community","events"];
-  const navigate = (target) => {
-    if (mainTabs.includes(target)) {
-      setActiveTab(target);
-      setSubPage(null);
+  const navigateTo = (tab, sub) => {
+    if (mainTabs.includes(tab)) {
+      setActiveTab(tab);
+      setSubPage(sub || null);
     } else {
-      setSubPage(target);
-      if (target.startsWith("event-")) setActiveTab("events");
-      else if (target.startsWith("opp-")) setActiveTab("opportunities");
+      setSubPage(tab);
+      if (tab.startsWith("event-")) setActiveTab("events");
+      else if (tab.startsWith("opp-")) setActiveTab("opportunities");
       else setActiveTab("home");
     }
     window.scrollTo(0, 0);
   };
+  const navigate = (target) => {
+    const state = mainTabs.includes(target) ? { tab: target } : { tab: null, sub: target };
+    window.history.pushState(state, "", "");
+    navigateTo(target);
+  };
+
+  // Handle browser back/forward buttons
+  useEffect(() => {
+    // Set initial history state
+    window.history.replaceState({ tab: "home" }, "", "");
+    const onPopState = (e) => {
+      const s = e.state;
+      if (!s) return;
+      if (s.sub) navigateTo(s.sub);
+      else if (s.tab) navigateTo(s.tab);
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
 
   // Merge opportunities: server DB is source of truth, then custom user listings
   // Server opps first so admin edits take precedence over hardcoded INTERNSHIPS
