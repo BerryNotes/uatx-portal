@@ -54,6 +54,9 @@
     .detail-panel .history-role { font-size: 12px; color: #c4c4d4; }
     .detail-panel .history-dates { font-size: 11px; color: #6b7280; }
     .detail-panel .empty-note { font-size: 12px; color: #4b5563; font-style: italic; }
+    .edit-tag { display: inline-block; padding: 4px 10px; margin: 2px; font-size: 11px; background: #111a26; color: #6b7280; border: 1px solid #243044; border-radius: 2px; cursor: pointer; transition: all 0.15s; user-select: none; }
+    .edit-tag:hover { border-color: #c9a84c; color: #d4b96a; }
+    .edit-tag.selected { background: rgba(201,168,76,0.15); color: #d4b96a; border-color: #c9a84c; }
 
     /* Badges */
     .badge-admin { color: #c9a84c; background: rgba(201,168,76,0.12); font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; padding: 2px 6px; border-radius: 3px; }
@@ -510,7 +513,15 @@ async function loadStudentDetail(rosterId, email) {
       return act ? act.title : 'Club #' + id;
     });
 
+    // Store current prefs for editing
+    el.dataset.email = email;
+    el.dataset.prefs = JSON.stringify({ selected_industries: industries, selected_areas: areas, email_alerts: prefs ? prefs.email_alerts : true, saved_opps: prefs && prefs.saved_opps ? prefs.saved_opps : [], joined_clubs: clubIds, internship_history: history });
+
     el.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <span style="font-size:11px;color:#4b5563">Joined: ${formatDate(data.student.created_at)}</span>
+        <button class="btn btn-gold" onclick="openProfileEdit('${esc(email)}', ${rosterId})">Edit Profile</button>
+      </div>
       <div class="detail-grid">
         <div class="detail-section">
           <h4>Interests</h4>
@@ -536,10 +547,109 @@ async function loadStudentDetail(rosterId, email) {
           </div>
         `).join('') : '<p class="empty-note">No history recorded</p>'}
       </div>
-      <p style="margin-top:12px;font-size:11px;color:#4b5563">Joined: ${formatDate(data.student.created_at)}</p>
     `;
   } catch (e) {
     el.innerHTML = '<span class="empty-note">Failed to load details.</span>';
+  }
+}
+
+const ALL_INDUSTRIES = ["Finance & Banking","Technology","Law & Policy","Government","Nonprofit","Media & Journalism","Consulting","Healthcare","Education","Energy","Real Estate","Defense & Security"];
+
+function openProfileEdit(email, rosterId) {
+  const el = document.getElementById("detail-" + rosterId);
+  if (!el) return;
+  const prefs = JSON.parse(el.dataset.prefs || '{}');
+  const industries = prefs.selected_industries || [];
+  const history = prefs.internship_history || [];
+
+  el.innerHTML = `
+    <div style="border:1px solid #243044;padding:16px;background:#0d1520">
+      <h4 style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#c9a84c;margin-bottom:12px">Edit Profile — ${esc(email)}</h4>
+
+      <div style="margin-bottom:16px">
+        <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;display:block;margin-bottom:8px">Industry Interests</label>
+        <div style="display:flex;flex-wrap:wrap;gap:6px" id="edit-industries">
+          ${ALL_INDUSTRIES.map(ind => `<div onclick="this.classList.toggle('selected')" class="edit-tag${industries.includes(ind) ? ' selected' : ''}" data-value="${esc(ind)}">${esc(ind)}</div>`).join('')}
+        </div>
+      </div>
+
+      <div style="margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280">Internship History</label>
+          <button class="btn btn-outline" onclick="addHistoryRow()" style="font-size:11px;padding:3px 10px">+ Add</button>
+        </div>
+        <div id="edit-history">
+          ${history.length ? history.map((h, i) => historyRowHtml(h, i)).join('') : '<p class="empty-note" id="no-history-note">No history — click + Add</p>'}
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="btn btn-gold" onclick="saveProfileEdit('${esc(email)}', ${rosterId})">Save</button>
+        <button class="btn btn-outline" onclick="loadStudentDetail(${rosterId}, '${esc(email)}')">Cancel</button>
+      </div>
+    </div>
+  `;
+}
+
+let historyCounter = 0;
+function historyRowHtml(h, idx) {
+  const id = 'hist-' + (historyCounter++);
+  return `<div class="history-edit-row" id="${id}" style="display:grid;grid-template-columns:1fr 1fr 120px 120px auto;gap:8px;margin-bottom:6px;align-items:center">
+    <input class="h-org" value="${esc(h.org || '')}" placeholder="Organization" style="background:#111a26;color:#f5f0e8;border:1px solid #243044;padding:6px 8px;font-size:12px;font-family:inherit">
+    <input class="h-role" value="${esc(h.role || '')}" placeholder="Role" style="background:#111a26;color:#f5f0e8;border:1px solid #243044;padding:6px 8px;font-size:12px;font-family:inherit">
+    <input class="h-dates" value="${esc(h.dates || '')}" placeholder="Dates" style="background:#111a26;color:#f5f0e8;border:1px solid #243044;padding:6px 8px;font-size:12px;font-family:inherit">
+    <select class="h-industry" style="background:#111a26;color:#f5f0e8;border:1px solid #243044;padding:6px 8px;font-size:12px;font-family:inherit">
+      <option value="">Industry</option>
+      ${ALL_INDUSTRIES.map(ind => `<option value="${esc(ind)}"${h.industry === ind ? ' selected' : ''}>${esc(ind)}</option>`).join('')}
+    </select>
+    <button class="btn btn-danger" onclick="this.parentElement.remove()" style="padding:4px 8px;font-size:11px">&times;</button>
+  </div>`;
+}
+
+function addHistoryRow() {
+  const note = document.getElementById("no-history-note");
+  if (note) note.remove();
+  document.getElementById("edit-history").insertAdjacentHTML("beforeend", historyRowHtml({}, -1));
+}
+
+async function saveProfileEdit(email, rosterId) {
+  const el = document.getElementById("detail-" + rosterId);
+  // Collect industries
+  const indTags = el.querySelectorAll("#edit-industries .edit-tag.selected");
+  const selectedIndustries = Array.from(indTags).map(t => t.dataset.value);
+
+  // Collect history
+  const rows = el.querySelectorAll(".history-edit-row");
+  const internshipHistory = Array.from(rows).map(r => ({
+    id: Date.now() + Math.random(),
+    org: r.querySelector(".h-org").value.trim(),
+    role: r.querySelector(".h-role").value.trim(),
+    dates: r.querySelector(".h-dates").value.trim(),
+    industry: r.querySelector(".h-industry").value,
+    description: "", summary: "", careerNotes: ""
+  })).filter(h => h.org);
+
+  // Preserve existing prefs we're not editing
+  const existing = JSON.parse(el.dataset.prefs || '{}');
+
+  const body = {
+    selected_industries: selectedIndustries,
+    selected_areas: existing.selected_areas || [],
+    email_alerts: existing.email_alerts !== undefined ? existing.email_alerts : true,
+    saved_opps: existing.saved_opps || [],
+    joined_clubs: existing.joined_clubs || [],
+    internship_history: internshipHistory
+  };
+
+  try {
+    const res = await fetch("/api/admin/student/" + encodeURIComponent(email) + "/preferences", {
+      method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)
+    });
+    if (!res.ok) { const d = await res.json(); toast(d.error || "Save failed", true); return; }
+    toast("Profile updated");
+    loadStudentDetail(rosterId, email);
+  } catch (e) {
+    toast("Failed to save", true);
   }
 }
 

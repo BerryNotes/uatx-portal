@@ -496,6 +496,17 @@ app.get("/api/admin/student/:email", requireAdmin, (req, res) => {
   res.json({ student: { ...user, is_admin: !!user.is_admin }, preferences: prefs });
 });
 
+// Admin: update a student's preferences/profile
+app.put("/api/admin/student/:email/preferences", requireAdmin, (req, res) => {
+  const user = require("./db").db.prepare(
+    "SELECT * FROM users WHERE LOWER(email) = LOWER(?)"
+  ).get(req.params.email);
+  if (!user) return res.status(404).json({ error: "Student not found" });
+  setPreferences(user.id, req.body);
+  const prefs = getPreferences(user.id);
+  res.json({ ok: true, preferences: prefs });
+});
+
 // ─── START ───
 
 app.listen(PORT, () => {

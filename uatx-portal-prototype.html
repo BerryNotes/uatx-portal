@@ -1252,7 +1252,7 @@ const TopNav = ({activeTab, subPage, navigate, onSignOut, currentUser}) => {
   return (
     <div ref={dropdownRef} style={{position:"fixed",top:0,left:0,right:0,height:72,backgroundColor:"#0e162a",display:"flex",alignItems:"center",zIndex:10,borderBottom:"1px solid #1a2332",padding:"0 28px"}}>
       {/* Left: Crest + Title */}
-      <div style={{display:"flex",alignItems:"center",marginRight:32,flexShrink:0}}>
+      <div style={{display:"flex",alignItems:"center",marginRight:32,flexShrink:0,cursor:"pointer"}} onClick={()=>navigate("home")}>
         <Crest/>
       </div>
 
