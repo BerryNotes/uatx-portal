@@ -1,4 +1,4 @@
-const Database = require("better-sqlite3");
+const Database = require("better-sqlite3-multiple-ciphers");
 const path = require("path");
 const fs = require("fs");
 
@@ -6,6 +6,19 @@ const DATA_DIR = path.join(__dirname, "data");
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR);
 
 const db = new Database(path.join(DATA_DIR, "portal.db"), {});
+
+// Decrypt if encryption key is set
+const dbKey = process.env.DB_ENCRYPTION_KEY;
+if (dbKey) {
+  db.pragma(`key='${dbKey}'`);
+  try {
+    db.prepare("SELECT 1").get();
+  } catch (e) {
+    db.close();
+    throw new Error("Invalid DB_ENCRYPTION_KEY — cannot open database");
+  }
+}
+
 db.pragma("journal_mode = WAL");
 db.pragma("foreign_keys = ON");
 
