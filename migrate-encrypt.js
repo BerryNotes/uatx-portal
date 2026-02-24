@@ -61,6 +61,9 @@ try {
   process.exit(1);
 }
 
+// rekey requires DELETE journal mode (not WAL)
+db.pragma("journal_mode = DELETE");
+
 // Encrypt in-place
 db.pragma(`rekey='${key}'`);
 db.close();
