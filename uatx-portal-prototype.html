@@ -1402,6 +1402,9 @@ const OpportunitiesPage = ({navigate, showToast, savedOpps, setSavedOpps, select
   const [showSaved, setShowSaved] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({org:"",title:"",description:"",industry:"Finance & Banking",type:"Internship",location:"",deadline:"",paid:false,contactEmail:""});
+  const [visibleIds, setVisibleIds] = useState(new Set());
+  const cardRefs = useRef({});
+  const sidebarItemRefs = useRef({});
 
   const allItemsRaw = [...serverOpps, ...INTERNSHIPS, ...customListings];
   const seenKeys = new Set();
@@ -1440,61 +1443,94 @@ const OpportunitiesPage = ({navigate, showToast, savedOpps, setSavedOpps, select
     showToast("Your listing has been submitted!");
   };
 
+  // Track which cards are visible via IntersectionObserver
+  useEffect(() => {
+    const observer = new IntersectionObserver((entries) => {
+      setVisibleIds(prev => {
+        const next = new Set(prev);
+        entries.forEach(e => {
+          const id = e.target.dataset.oppId;
+          if (e.isIntersecting) next.add(id); else next.delete(id);
+        });
+        return next;
+      });
+    }, { rootMargin: "-80px 0px -40% 0px", threshold: 0 });
+    Object.values(cardRefs.current).forEach(el => { if (el) observer.observe(el); });
+    return () => observer.disconnect();
+  }, [filtered.length, search, filterInd, filterType, sortBy, showSaved]);
+
+  // Auto-scroll sidebar to first visible item
+  useEffect(() => {
+    if (visibleIds.size === 0) return;
+    const firstVisible = filtered.find(item => visibleIds.has(String(item.id)));
+    if (firstVisible && sidebarItemRefs.current[firstVisible.id]) {
+      sidebarItemRefs.current[firstVisible.id].scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }, [visibleIds]);
+
+  const scrollToCard = (id) => {
+    const el = cardRefs.current[id];
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   const typeTip = {Internship:"Short-term work experience, typically 1 semester or summer",Fellowship:"Competitive program with stipend, mentorship, and structured curriculum",Program:"Training, placement, or certification-based opportunity"};
   const sel = {padding:"8px 12px",border:"1px solid "+C.border,backgroundColor:C.white,fontSize:13,color:C.text,fontFamily:"'Libre Franklin', sans-serif",cursor:"pointer",minWidth:160};
   const inputStyle = {width:"100%",padding:8,border:"1px solid "+C.border,fontSize:13,boxSizing:"border-box",fontFamily:"'Libre Franklin', sans-serif"};
 
   return (
-    <div style={{padding:"32px 40px",animation:"fadeIn 0.3s ease"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
-        <h1 style={{fontFamily:"Georgia, serif",fontSize:26,color:C.navy,margin:0}}>Job & Internship Opportunities</h1>
-      </div>
-      <div style={{display:"flex",gap:12,marginBottom:24,alignItems:"center",flexWrap:"wrap"}}>
-        <input type="text" placeholder="Search opportunities..." value={search} onChange={e=>setSearch(e.target.value)} style={{flex:1,minWidth:200,padding:"10px 14px",border:"1px solid "+C.border,fontSize:13,fontFamily:"'Libre Franklin', sans-serif",backgroundColor:C.white}}/>
-        <div onClick={()=>setShowSaved(!showSaved)} style={{padding:"8px 14px",border:"1px solid "+(showSaved?C.gold:C.border),backgroundColor:showSaved?C.gold+"15":C.white,cursor:"pointer",display:"flex",alignItems:"center",gap:6,fontSize:13,fontWeight:showSaved?600:400,color:showSaved?C.goldMuted:C.textLight,transition:"all 0.15s ease",whiteSpace:"nowrap"}}><span style={{fontSize:18,lineHeight:1}}>{showSaved?"\u2605":"\u2606"}</span> Saved{savedOpps.length>0?" ("+savedOpps.length+")":""}</div>
-        {availableIndustries.length > 1 && <select value={filterInd} onChange={e=>setFilterInd(e.target.value)} style={sel}>
-          <option value="All">All Industries</option>
-          {availableIndustries.map(ind=><option key={ind} value={ind}>{ind}</option>)}
-        </select>}
-        {availableTypes.length > 1 && <select value={filterType} onChange={e=>setFilterType(e.target.value)} style={sel}>
-          <option value="All">All Types</option>
-          {availableTypes.map(t=><option key={t} value={t}>{t}</option>)}
-        </select>}
-        <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={sel}>
-          <option value="deadline">Sort by Deadline</option>
-          <option value="org">Sort by Organization</option>
-          <option value="title">Sort by Title</option>
-          <option value="type">Sort by Type</option>
-        </select>
-      </div>
-      <div style={{display:"flex",gap:24,alignItems:"flex-start"}}>
-        {/* Sidebar — quick nav list */}
-        <div data-lenis-prevent style={{width:240,flexShrink:0,backgroundColor:C.navy,borderRadius:10,padding:"16px 0",maxHeight:"calc(100vh - 200px)",overflowY:"auto",position:"sticky",top:96}}>
-          <div style={{padding:"0 16px 12px",borderBottom:"1px solid "+C.navyLight,marginBottom:4}}>
-            <div style={{fontSize:13,fontWeight:700,color:C.cream,letterSpacing:"0.3px"}}>All Opportunities</div>
-            <div style={{fontSize:11,color:C.goldLight,marginTop:2}}>{filtered.length} listed</div>
+    <div style={{animation:"fadeIn 0.3s ease"}}>
+      <div style={{display:"flex",alignItems:"stretch",minHeight:"calc(100vh - 72px)"}}>
+        {/* Sidebar — full-height nav */}
+        <div data-lenis-prevent style={{width:260,flexShrink:0,backgroundColor:C.navy,overflowY:"auto",position:"sticky",top:72,height:"calc(100vh - 72px)",padding:"20px 0",borderRight:"1px solid "+C.navyLight}}>
+          <div style={{padding:"0 20px 14px",borderBottom:"1px solid "+C.navyLight,marginBottom:6}}>
+            <div style={{fontSize:14,fontWeight:700,color:C.cream,letterSpacing:"0.3px"}}>Opportunities</div>
+            <div style={{fontSize:11,color:C.goldLight,marginTop:3}}>{filtered.length} listed</div>
           </div>
-          {filtered.map(item => (
-            <div key={item.id} onClick={()=>item.subPage&&navigate(item.subPage)} style={{padding:"8px 16px",cursor:item.subPage?"pointer":"default",transition:"background 0.15s",display:"flex",alignItems:"center",gap:10}} onMouseEnter={e=>e.currentTarget.style.background=C.navyLight} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+          {filtered.map(item => {
+            const isVis = visibleIds.has(String(item.id));
+            return (
+            <div key={item.id} ref={el=>sidebarItemRefs.current[item.id]=el} onClick={()=>scrollToCard(item.id)} style={{padding:"9px 20px",cursor:"pointer",transition:"all 0.2s",display:"flex",alignItems:"center",gap:10,backgroundColor:isVis?C.navyLight:"transparent",borderLeft:isVis?"3px solid "+C.gold:"3px solid transparent"}} onMouseEnter={e=>{if(!isVis)e.currentTarget.style.backgroundColor=C.navyLight+"88";}} onMouseLeave={e=>{if(!isVis)e.currentTarget.style.backgroundColor="transparent";}}>
               {item.logo ? (
-                <img src={item.logo} alt="" style={{width:24,height:24,borderRadius:4,objectFit:"contain",backgroundColor:"#fff",flexShrink:0}} onError={e=>{e.target.style.display="none";}}/>
+                <img src={item.logo} alt="" style={{width:26,height:26,borderRadius:4,objectFit:"contain",backgroundColor:"#fff",flexShrink:0}} onError={e=>{e.target.style.display="none";}}/>
               ) : (
-                <div style={{width:24,height:24,borderRadius:4,backgroundColor:C.navyLight,display:"flex",alignItems:"center",justifyContent:"center",color:C.gold,fontSize:10,fontWeight:700,fontFamily:"Georgia, serif",flexShrink:0}}>{item.org.charAt(0)}</div>
+                <div style={{width:26,height:26,borderRadius:4,backgroundColor:C.navyDark,display:"flex",alignItems:"center",justifyContent:"center",color:C.gold,fontSize:11,fontWeight:700,fontFamily:"Georgia, serif",flexShrink:0}}>{item.org.charAt(0)}</div>
               )}
-              <div style={{minWidth:0}}>
-                <div style={{fontSize:12,fontWeight:600,color:C.cream,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{item.org}</div>
-                <div style={{fontSize:10,color:"#8899aa",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{item.title}</div>
+              <div style={{minWidth:0,flex:1}}>
+                <div style={{fontSize:12,fontWeight:isVis?700:500,color:isVis?C.cream:"#b0bcc8",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",transition:"all 0.2s"}}>{item.org}</div>
+                <div style={{fontSize:10,color:isVis?"#aab4be":"#667788",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{item.title}</div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Main content — cards */}
-        <div style={{flex:1,minWidth:0}}>
+        <div style={{flex:1,minWidth:0,padding:"24px 40px"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+            <h1 style={{fontFamily:"Georgia, serif",fontSize:26,color:C.navy,margin:0}}>Job & Internship Opportunities</h1>
+          </div>
+          <div style={{display:"flex",gap:10,marginBottom:20,alignItems:"center",flexWrap:"wrap"}}>
+            <input type="text" placeholder="Search opportunities..." value={search} onChange={e=>setSearch(e.target.value)} style={{flex:1,minWidth:180,padding:"9px 14px",border:"1px solid "+C.border,fontSize:13,fontFamily:"'Libre Franklin', sans-serif",backgroundColor:C.white}}/>
+            <div onClick={()=>setShowSaved(!showSaved)} style={{padding:"7px 12px",border:"1px solid "+(showSaved?C.gold:C.border),backgroundColor:showSaved?C.gold+"15":C.white,cursor:"pointer",display:"flex",alignItems:"center",gap:6,fontSize:12,fontWeight:showSaved?600:400,color:showSaved?C.goldMuted:C.textLight,transition:"all 0.15s ease",whiteSpace:"nowrap"}}><span style={{fontSize:16,lineHeight:1}}>{showSaved?"\u2605":"\u2606"}</span> Saved{savedOpps.length>0?" ("+savedOpps.length+")":""}</div>
+            {availableIndustries.length > 1 && <select value={filterInd} onChange={e=>setFilterInd(e.target.value)} style={sel}>
+              <option value="All">All Industries</option>
+              {availableIndustries.map(ind=><option key={ind} value={ind}>{ind}</option>)}
+            </select>}
+            {availableTypes.length > 1 && <select value={filterType} onChange={e=>setFilterType(e.target.value)} style={sel}>
+              <option value="All">All Types</option>
+              {availableTypes.map(t=><option key={t} value={t}>{t}</option>)}
+            </select>}
+            <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={sel}>
+              <option value="deadline">Sort by Deadline</option>
+              <option value="org">Sort by Organization</option>
+              <option value="title">Sort by Title</option>
+              <option value="type">Sort by Type</option>
+            </select>
+          </div>
           <div style={{fontSize:12,color:C.textLight,marginBottom:16}}>{filtered.length} opportunities found</div>
           <div style={{display:"flex",flexDirection:"column",gap:20}}>
             {filtered.map(item => (
-              <div key={item.id} style={{backgroundColor:C.white,border:"1px solid "+C.border,cursor:item.subPage?"pointer":"default",transition:"box-shadow 0.2s ease, transform 0.2s ease",borderLeft:matches(item.industry)?"3px solid "+C.gold:"3px solid transparent",display:"flex",flexDirection:"column",overflow:"hidden"}} onClick={()=>item.subPage&&navigate(item.subPage)} onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 6px 24px rgba(0,0,0,0.1)";e.currentTarget.style.transform="translateY(-2px)";}} onMouseLeave={e=>{e.currentTarget.style.boxShadow="none";e.currentTarget.style.transform="translateY(0)";}}>
+              <div key={item.id} ref={el=>{if(el){el.dataset.oppId=String(item.id);cardRefs.current[item.id]=el;}}} style={{backgroundColor:C.white,border:"1px solid "+C.border,cursor:item.subPage?"pointer":"default",transition:"box-shadow 0.2s ease, transform 0.2s ease",borderLeft:matches(item.industry)?"3px solid "+C.gold:"3px solid transparent",display:"flex",flexDirection:"column",overflow:"hidden",scrollMarginTop:"88px"}} onClick={()=>item.subPage&&navigate(item.subPage)} onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 6px 24px rgba(0,0,0,0.1)";e.currentTarget.style.transform="translateY(-2px)";}} onMouseLeave={e=>{e.currentTarget.style.boxShadow="none";e.currentTarget.style.transform="translateY(0)";}}>
                 <div style={{padding:"24px 28px 20px",flex:1}}>
                   <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:16}}>
                     {item.logo ? (
