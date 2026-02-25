@@ -257,6 +257,32 @@
     justify-content: center;
   }
 
+  /* ─── Scroll indicator ─── */
+
+  .scroll-track {
+    position: fixed;
+    left: 5vw;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 2px;
+    height: 50vh;
+    background: rgba(255,255,255,0.08);
+    border-radius: 1px;
+    z-index: 5;
+    pointer-events: none;
+  }
+
+  .scroll-thumb {
+    position: absolute;
+    top: 0;
+    left: -1px;
+    width: 4px;
+    height: 20px;
+    background: rgba(255,255,255,0.35);
+    border-radius: 2px;
+    transition: top 0.6s cubic-bezier(0.25, 0.1, 0.25, 1), height 0.3s ease;
+  }
+
   /* ─── View hidden ─── */
   .view-hidden { display: none !important; }
 </style>
@@ -269,6 +295,7 @@
   <button class="ctrl-btn" onclick="openEditor()">+</button>
 </div>
 
+<div class="scroll-track" id="scroll-track"><div class="scroll-thumb" id="scroll-thumb"></div></div>
 <div class="scroll-wrap" id="scroll-wrap"></div>
 
 <div class="empty view-hidden" id="empty-state">
@@ -396,7 +423,7 @@
   function updateBlur() {
     const quotes = document.querySelectorAll('.quote');
     const center = window.innerHeight / 2;
-    const arcMaxShift = 220; // px shift to the right at edges
+    const arcMaxShift = 220;
 
     quotes.forEach(q => {
       const rect = q.getBoundingClientRect();
@@ -407,12 +434,30 @@
 
       const blur = t * 6;
       const opacity = 1 - t * 0.65;
-      const xShift = t * t * arcMaxShift; // quadratic for a smooth arc
+      const xShift = t * t * arcMaxShift;
 
       q.style.filter = `blur(${blur}px)`;
       q.style.opacity = opacity;
       q.style.transform = `translateX(${xShift}px)`;
     });
+
+    updateScrollIndicator();
+  }
+
+  function updateScrollIndicator() {
+    const quotes = document.querySelectorAll('.quote');
+    const thumb = document.getElementById('scroll-thumb');
+    const track = document.getElementById('scroll-track');
+    if (quotes.length < 2) { track.style.opacity = 0; return; }
+    track.style.opacity = 1;
+
+    const trackH = track.offsetHeight;
+    const progress = targetIndex / (quotes.length - 1);
+    const thumbH = Math.max(12, trackH / quotes.length);
+    const thumbTop = progress * (trackH - thumbH);
+
+    thumb.style.height = thumbH + 'px';
+    thumb.style.top = thumbTop + 'px';
   }
 
   // ─── Smooth snap scroll ───
@@ -436,7 +481,7 @@
     return window.scrollY + rect.top + rect.height / 2 - window.innerHeight / 2;
   }
 
-  function snapTo(index, fast) {
+  function snapTo(index, duration) {
     const quotes = document.querySelectorAll('.quote');
     if (quotes.length === 0) return;
     index = Math.max(0, Math.min(index, quotes.length - 1));
@@ -445,7 +490,7 @@
     scrollFrom = window.scrollY;
     scrollTo = getQuoteTarget(index);
     scrollStart = performance.now();
-    scrollDuration = fast ? 800 : 2400;
+    scrollDuration = duration || 2400;
 
     if (!animId) tick();
   }
@@ -467,19 +512,33 @@
   }
 
   let wheelCooldown = false;
+  let rapidCount = 0;
+  let rapidTimer = null;
+
   window.addEventListener('wheel', (e) => {
     e.preventDefault();
     if (wheelCooldown) return;
     wheelCooldown = true;
-    setTimeout(() => { wheelCooldown = false; }, 150);
+    setTimeout(() => { wheelCooldown = false; }, 120);
 
     const quotes = document.querySelectorAll('.quote');
     if (quotes.length === 0) return;
 
+    // Track rapid scrolling
+    rapidCount++;
+    clearTimeout(rapidTimer);
+    rapidTimer = setTimeout(() => { rapidCount = 0; }, 400);
+
+    // Skip more quotes when scrolling rapidly
+    const skip = rapidCount >= 5 ? 3 : rapidCount >= 3 ? 2 : 1;
+    const dir = e.deltaY > 0 ? 1 : -1;
     const isMoving = animId !== null;
-    const next = e.deltaY > 0 ? targetIndex + 1 : targetIndex - 1;
-    snapTo(next, isMoving);
+    const speed = rapidCount >= 3 ? 400 : (isMoving ? 800 : 2400);
+
+    const next = targetIndex + dir * skip;
+    snapTo(next, speed);
   }, { passive: false });
+
 
   window.addEventListener('resize', updateBlur);
 
