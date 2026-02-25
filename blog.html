@@ -783,12 +783,12 @@
     el.textContent = text;
     const left = 3 + Math.random() * 42;
     const top = 5 + Math.random() * 85;
-    const duration = 18 + Math.random() * 22;
-    const delay = Math.random() * 8;
+    const duration = 6 + Math.random() * 10;
+    const delay = Math.random() * 4;
     const opacity = type === 'heart' ? (0.08 + Math.random() * 0.17) : (0.06 + Math.random() * 0.12);
     const size = type === 'heart' ? (0.8 + Math.random() * 0.7) : (0.6 + Math.random() * 0.2);
-    const dx = (Math.random() - 0.5) * 120;
-    const dy = (Math.random() - 0.5) * 100;
+    const dx = (Math.random() - 0.5) * 240;
+    const dy = (Math.random() - 0.5) * 200;
     el.style.cssText = `left:${left}%;top:${top}%;font-size:${size}rem;`
       + `--float-opacity:${opacity};--dx:${dx}px;--dy:${dy}px;`
       + `--duration:${duration}s;--delay:${delay}s;`;
@@ -804,7 +804,7 @@
       const data = await res.json();
       document.getElementById('like-count').textContent = data.likes || '';
       spawnBurstHeart();
-      loadReactions(activePostId);
+      document.getElementById('floater-container').appendChild(createFloater('\u2661', 'heart'));
     } catch (e) { /* ignore */ }
   }
 
@@ -833,7 +833,9 @@
         body: JSON.stringify({ content }),
       });
       document.getElementById('comment-text').value = '';
-      loadReactions(activePostId);
+      const count = parseInt(document.getElementById('comment-count').textContent || '0') + 1;
+      document.getElementById('comment-count').textContent = count;
+      document.getElementById('floater-container').appendChild(createFloater(content.substring(0, 40), 'comment'));
     } catch (e) { /* ignore */ }
   }
 
