@@ -300,7 +300,7 @@
   }
 
   .floater-heart {
-    color: rgba(220, 80, 80, var(--float-opacity));
+    color: rgba(255, 255, 255, var(--float-opacity));
   }
 
   .floater-comment {
@@ -421,7 +421,7 @@
 <div class="scroll-wrap" id="scroll-wrap"></div>
 
 <div class="reaction-bar" id="reaction-bar">
-  <button class="react-btn" onclick="likePost()"><span class="icon">♥</span> <span id="like-count">0</span></button>
+  <button class="react-btn" onclick="likePost()"><span class="icon">♡</span> <span id="like-count">0</span></button>
   <button class="react-btn" onclick="toggleCommentForm()"><span class="icon">💬</span> <span id="comment-count">0</span></button>
   <div class="comment-form view-hidden" id="comment-form">
     <input type="text" class="text-input" id="comment-text" placeholder="Add a comment..." onkeydown="if(event.key==='Enter')submitComment()">
@@ -769,7 +769,7 @@
     const container = document.getElementById('floater-container');
     const maxHearts = Math.min(likeCount, 15);
     for (let i = 0; i < maxHearts; i++) {
-      container.appendChild(createFloater('\u2764', 'heart'));
+      container.appendChild(createFloater('\u2661', 'heart'));
     }
     const cmts = comments.slice(0, 10);
     for (const c of cmts) {
@@ -781,14 +781,14 @@
     const el = document.createElement('div');
     el.className = 'floater floater-' + type;
     el.textContent = text;
-    const left = 15 + Math.random() * 75;
-    const top = 8 + Math.random() * 80;
-    const duration = 20 + Math.random() * 25;
+    const left = 3 + Math.random() * 42;
+    const top = 5 + Math.random() * 85;
+    const duration = 18 + Math.random() * 22;
     const delay = Math.random() * 8;
     const opacity = type === 'heart' ? (0.08 + Math.random() * 0.17) : (0.06 + Math.random() * 0.12);
     const size = type === 'heart' ? (0.8 + Math.random() * 0.7) : (0.6 + Math.random() * 0.2);
-    const dx = (Math.random() - 0.5) * 60;
-    const dy = (Math.random() - 0.5) * 40;
+    const dx = (Math.random() - 0.5) * 120;
+    const dy = (Math.random() - 0.5) * 100;
     el.style.cssText = `left:${left}%;top:${top}%;font-size:${size}rem;`
       + `--float-opacity:${opacity};--dx:${dx}px;--dy:${dy}px;`
       + `--duration:${duration}s;--delay:${delay}s;`;
@@ -812,8 +812,8 @@
     const container = document.getElementById('floater-container');
     const el = document.createElement('div');
     el.className = 'floater-burst';
-    el.textContent = '\u2764';
-    el.style.cssText = `left:${8 + Math.random() * 25}%;bottom:60px;font-size:1.6rem;color:rgba(220,80,80,0.7);`;
+    el.textContent = '\u2661';
+    el.style.cssText = `left:${5 + Math.random() * 30}%;bottom:60px;font-size:1.6rem;color:rgba(255,255,255,0.6);`;
     container.appendChild(el);
     setTimeout(() => el.remove(), 2000);
   }
