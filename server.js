@@ -44,10 +44,6 @@ const {
   createBlogPost,
   updateBlogPost,
   deleteBlogPost,
-  getBlogLikeCount,
-  addBlogLike,
-  getBlogComments,
-  addBlogComment,
 } = require("./db");
 const { sendWelcomeEmail, sendOpportunityNotification, sendClubEmail, sendClubSubmissionNotification } = require("./email");
 
@@ -651,29 +647,6 @@ app.delete("/api/blog/posts/:id", (req, res) => {
   const existing = getBlogPostById(req.params.id);
   if (!existing) return res.status(404).json({ error: "Post not found" });
   deleteBlogPost(req.params.id);
-  res.json({ ok: true });
-});
-
-app.get("/api/blog/posts/:id/reactions", (req, res) => {
-  const likes = getBlogLikeCount(parseInt(req.params.id));
-  const comments = getBlogComments(parseInt(req.params.id));
-  res.json({ likes, comments });
-});
-
-app.post("/api/blog/posts/:id/like", rateLimit(5000, 3), (req, res) => {
-  const post = getBlogPostById(req.params.id);
-  if (!post) return res.status(404).json({ error: "Post not found" });
-  addBlogLike(parseInt(req.params.id));
-  const count = getBlogLikeCount(parseInt(req.params.id));
-  res.json({ ok: true, likes: count });
-});
-
-app.post("/api/blog/posts/:id/comment", rateLimit(10000, 5), (req, res) => {
-  const post = getBlogPostById(req.params.id);
-  if (!post) return res.status(404).json({ error: "Post not found" });
-  const { name, content } = req.body;
-  if (!content || !content.trim()) return res.status(400).json({ error: "Comment is required" });
-  addBlogComment(parseInt(req.params.id), (name || '').trim() || 'Anonymous', content.trim().substring(0, 280));
   res.json({ ok: true });
 });
 
