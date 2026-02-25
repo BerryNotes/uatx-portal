@@ -283,6 +283,128 @@
     transition: top 0.6s cubic-bezier(0.25, 0.1, 0.25, 1), height 0.3s ease;
   }
 
+  /* ─── Floating reactions ─── */
+
+  .floater-container {
+    position: fixed;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    overflow: hidden;
+  }
+
+  .floater {
+    position: absolute;
+    animation: float-drift var(--duration) ease-in-out infinite;
+    animation-delay: var(--delay);
+  }
+
+  .floater-heart {
+    color: rgba(220, 80, 80, var(--float-opacity));
+  }
+
+  .floater-comment {
+    font-family: 'Inter', sans-serif;
+    color: rgba(255, 255, 255, var(--float-opacity));
+    max-width: 180px;
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  @keyframes float-drift {
+    0%, 100% { transform: translate(0, 0); }
+    25% { transform: translate(var(--dx), var(--dy)); }
+    50% { transform: translate(calc(var(--dx) * -0.7), calc(var(--dy) * 0.5)); }
+    75% { transform: translate(calc(var(--dx) * 0.3), calc(var(--dy) * -0.8)); }
+  }
+
+  .floater-burst {
+    position: absolute;
+    animation: floater-burst 2s ease-out forwards !important;
+    pointer-events: none;
+  }
+
+  @keyframes floater-burst {
+    0% { transform: scale(0.5) translateY(0); opacity: 0.7; }
+    100% { transform: scale(1.3) translateY(-180px); opacity: 0; }
+  }
+
+  /* ─── Reaction bar ─── */
+
+  .reaction-bar {
+    position: fixed;
+    bottom: 32px;
+    left: 10vw;
+    z-index: 8;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+  }
+
+  .reaction-bar.visible { opacity: 1; }
+
+  .react-btn {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.72rem;
+    color: rgba(255,255,255,0.4);
+    background: none;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: color 0.2s;
+    padding: 4px 0;
+    letter-spacing: 0.04em;
+  }
+
+  .react-btn:hover { color: rgba(255,255,255,0.8); }
+  .react-btn .icon { font-size: 0.9rem; }
+
+  .comment-form {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .comment-form input {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.72rem;
+    font-weight: 300;
+    color: #fff;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 100px;
+    padding: 5px 14px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .comment-form input:focus { border-color: rgba(255,255,255,0.3); }
+  .comment-form input::placeholder { color: rgba(255,255,255,0.18); }
+  .comment-form input.name-input { width: 100px; }
+  .comment-form input.text-input { width: 200px; }
+
+  .comment-form .send-btn {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.6rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.4);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px 6px;
+    transition: color 0.2s;
+  }
+
+  .comment-form .send-btn:hover { color: #fff; }
+
   /* ─── View hidden ─── */
   .view-hidden { display: none !important; }
 </style>
@@ -290,6 +412,7 @@
 <body>
 
 <div class="bg"></div>
+<div class="floater-container" id="floater-container"></div>
 
 <div class="controls" id="controls">
   <button class="ctrl-btn" onclick="openEditor()">+</button>
@@ -297,6 +420,16 @@
 
 <div class="scroll-track" id="scroll-track"><div class="scroll-thumb" id="scroll-thumb"></div></div>
 <div class="scroll-wrap" id="scroll-wrap"></div>
+
+<div class="reaction-bar" id="reaction-bar">
+  <button class="react-btn" onclick="likePost()"><span class="icon">♥</span> <span id="like-count">0</span></button>
+  <button class="react-btn" onclick="toggleCommentForm()"><span class="icon">💬</span> <span id="comment-count">0</span></button>
+  <div class="comment-form view-hidden" id="comment-form">
+    <input type="text" class="name-input" id="comment-name" placeholder="Name">
+    <input type="text" class="text-input" id="comment-text" placeholder="Add a comment..." onkeydown="if(event.key==='Enter')submitComment()">
+    <button class="send-btn" onclick="submitComment()">Send</button>
+  </div>
+</div>
 
 <div class="empty view-hidden" id="empty-state">
   <p>Nothing here yet.</p>
@@ -410,12 +543,13 @@
     wrap.innerHTML = posts.map(p => {
       const text = stripHtml(p.excerpt || '');
       return `<div class="quote" data-id="${p.id}" onclick="openPost(${p.id})">
-        <div class="quote-text">${escapeHtml(text)}</div>
+        <div class="quote-text">${escapeHtml(text).replace(/\n/g, '<br>')}</div>
         <div class="quote-date">${formatDate(p.created_at)}</div>
       </div>`;
     }).join('');
 
     updateBlur();
+    scheduleReactionLoad();
   }
 
   // ─── Scroll blur effect ───
@@ -486,6 +620,7 @@
     if (quotes.length === 0) return;
     index = Math.max(0, Math.min(index, quotes.length - 1));
     targetIndex = index;
+    scheduleReactionLoad();
 
     scrollFrom = window.scrollY;
     scrollTo = getQuoteTarget(index);
@@ -585,6 +720,124 @@
   function editCurrent() {
     closeOverlay();
     openEditor(currentPostId);
+  }
+
+  // ─── Reactions ───
+
+  let activePostId = null;
+  let reactionDebounce = null;
+  let commentFormOpen = false;
+
+  function getActivePostId() {
+    if (posts.length === 0) return null;
+    const idx = Math.max(0, Math.min(targetIndex, posts.length - 1));
+    return posts[idx].id;
+  }
+
+  function scheduleReactionLoad() {
+    clearTimeout(reactionDebounce);
+    reactionDebounce = setTimeout(onActiveQuoteChange, 400);
+  }
+
+  function onActiveQuoteChange() {
+    const pid = getActivePostId();
+    if (pid === activePostId) return;
+    activePostId = pid;
+    if (!pid) {
+      document.getElementById('reaction-bar').classList.remove('visible');
+      clearFloaters();
+      return;
+    }
+    document.getElementById('reaction-bar').classList.add('visible');
+    loadReactions(pid);
+  }
+
+  async function loadReactions(postId) {
+    try {
+      const res = await fetch(`/api/blog/posts/${postId}/reactions`);
+      const data = await res.json();
+      document.getElementById('like-count').textContent = data.likes || 0;
+      document.getElementById('comment-count').textContent = (data.comments || []).length;
+      spawnFloaters(data.likes || 0, data.comments || []);
+    } catch (e) { /* ignore */ }
+  }
+
+  function clearFloaters() {
+    document.getElementById('floater-container').innerHTML = '';
+  }
+
+  function spawnFloaters(likeCount, comments) {
+    clearFloaters();
+    const container = document.getElementById('floater-container');
+    const maxHearts = Math.min(likeCount, 15);
+    for (let i = 0; i < maxHearts; i++) {
+      container.appendChild(createFloater('\u2764', 'heart'));
+    }
+    const cmts = comments.slice(0, 10);
+    for (const c of cmts) {
+      container.appendChild(createFloater(c.content.substring(0, 40), 'comment'));
+    }
+  }
+
+  function createFloater(text, type) {
+    const el = document.createElement('div');
+    el.className = 'floater floater-' + type;
+    el.textContent = text;
+    const left = 15 + Math.random() * 75;
+    const top = 8 + Math.random() * 80;
+    const duration = 20 + Math.random() * 25;
+    const delay = Math.random() * 8;
+    const opacity = type === 'heart' ? (0.08 + Math.random() * 0.17) : (0.06 + Math.random() * 0.12);
+    const size = type === 'heart' ? (0.8 + Math.random() * 0.7) : (0.6 + Math.random() * 0.2);
+    const dx = (Math.random() - 0.5) * 60;
+    const dy = (Math.random() - 0.5) * 40;
+    el.style.cssText = `left:${left}%;top:${top}%;font-size:${size}rem;`
+      + `--float-opacity:${opacity};--dx:${dx}px;--dy:${dy}px;`
+      + `--duration:${duration}s;--delay:${delay}s;`;
+    return el;
+  }
+
+  async function likePost() {
+    if (!activePostId) return;
+    try {
+      const res = await fetch(`/api/blog/posts/${activePostId}/like`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+      });
+      const data = await res.json();
+      document.getElementById('like-count').textContent = data.likes || '';
+      spawnBurstHeart();
+      loadReactions(activePostId);
+    } catch (e) { /* ignore */ }
+  }
+
+  function spawnBurstHeart() {
+    const container = document.getElementById('floater-container');
+    const el = document.createElement('div');
+    el.className = 'floater-burst';
+    el.textContent = '\u2764';
+    el.style.cssText = `left:${8 + Math.random() * 25}%;bottom:60px;font-size:1.6rem;color:rgba(220,80,80,0.7);`;
+    container.appendChild(el);
+    setTimeout(() => el.remove(), 2000);
+  }
+
+  function toggleCommentForm() {
+    commentFormOpen = !commentFormOpen;
+    document.getElementById('comment-form').classList.toggle('view-hidden', !commentFormOpen);
+    if (commentFormOpen) document.getElementById('comment-text').focus();
+  }
+
+  async function submitComment() {
+    const name = document.getElementById('comment-name').value.trim();
+    const content = document.getElementById('comment-text').value.trim();
+    if (!content || !activePostId) return;
+    try {
+      await fetch(`/api/blog/posts/${activePostId}/comment`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name || 'Anonymous', content }),
+      });
+      document.getElementById('comment-text').value = '';
+      loadReactions(activePostId);
+    } catch (e) { /* ignore */ }
   }
 
   // ─── Init ───

@@ -109,6 +109,20 @@ db.exec(`
     content TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS blog_likes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    post_id INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS blog_comments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    post_id INTEGER NOT NULL,
+    name TEXT NOT NULL DEFAULT '',
+    content TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
 `);
 
 // ─── MIGRATIONS (add columns to existing tables) ───
@@ -591,6 +605,30 @@ function deleteBlogPost(id) {
   return blogPostDelete.run(id);
 }
 
+// ─── BLOG REACTIONS ───
+
+const blogLikesCount = db.prepare("SELECT COUNT(*) as count FROM blog_likes WHERE post_id = ?");
+const blogLikeInsert = db.prepare("INSERT INTO blog_likes (post_id) VALUES (?)");
+const blogCommentsAll = db.prepare("SELECT id, name, content, created_at FROM blog_comments WHERE post_id = ? ORDER BY created_at DESC");
+const blogCommentInsert = db.prepare("INSERT INTO blog_comments (post_id, name, content) VALUES (?, ?, ?)");
+
+function getBlogLikeCount(postId) {
+  return blogLikesCount.get(postId).count;
+}
+
+function addBlogLike(postId) {
+  return blogLikeInsert.run(postId);
+}
+
+function getBlogComments(postId) {
+  return blogCommentsAll.all(postId);
+}
+
+function addBlogComment(postId, name, content) {
+  const info = blogCommentInsert.run(postId, name, content);
+  return info.lastInsertRowid;
+}
+
 module.exports = {
   db,
   SQLiteStore,
@@ -632,4 +670,8 @@ module.exports = {
   createBlogPost,
   updateBlogPost,
   deleteBlogPost,
+  getBlogLikeCount,
+  addBlogLike,
+  getBlogComments,
+  addBlogComment,
 };
