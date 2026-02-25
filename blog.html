@@ -386,8 +386,7 @@
 
   .comment-form input:focus { border-color: rgba(255,255,255,0.3); }
   .comment-form input::placeholder { color: rgba(255,255,255,0.18); }
-  .comment-form input.name-input { width: 100px; }
-  .comment-form input.text-input { width: 200px; }
+  .comment-form input.text-input { width: 220px; }
 
   .comment-form .send-btn {
     font-family: 'Inter', sans-serif;
@@ -425,7 +424,6 @@
   <button class="react-btn" onclick="likePost()"><span class="icon">♥</span> <span id="like-count">0</span></button>
   <button class="react-btn" onclick="toggleCommentForm()"><span class="icon">💬</span> <span id="comment-count">0</span></button>
   <div class="comment-form view-hidden" id="comment-form">
-    <input type="text" class="name-input" id="comment-name" placeholder="Name">
     <input type="text" class="text-input" id="comment-text" placeholder="Add a comment..." onkeydown="if(event.key==='Enter')submitComment()">
     <button class="send-btn" onclick="submitComment()">Send</button>
   </div>
@@ -827,13 +825,12 @@
   }
 
   async function submitComment() {
-    const name = document.getElementById('comment-name').value.trim();
     const content = document.getElementById('comment-text').value.trim();
     if (!content || !activePostId) return;
     try {
       await fetch(`/api/blog/posts/${activePostId}/comment`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name || 'Anonymous', content }),
+        body: JSON.stringify({ content }),
       });
       document.getElementById('comment-text').value = '';
       loadReactions(activePostId);
