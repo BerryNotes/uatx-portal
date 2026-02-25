@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nuggets from the Form of the Good</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: #000;
+    color: #fff;
+    margin: 0;
+    overflow-x: hidden;
+  }
+
+  /* ─── Background ─── */
+
+  .bg {
+    position: fixed;
+    inset: 0;
+    background: url('/blog-bg.jpg') center / cover no-repeat;
+    z-index: 0;
+  }
+
+  .bg::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+  }
+
+  .bg::before {
+    content: '';
+    position: absolute;
+    inset: -50% -50%;
+    width: 200%;
+    height: 200%;
+    z-index: 1;
+    background: radial-gradient(ellipse at 30% 50%, rgba(255,255,255,0.06) 0%, transparent 60%),
+                radial-gradient(ellipse at 70% 30%, rgba(255,255,255,0.04) 0%, transparent 50%);
+    animation: shimmer 12s ease-in-out infinite alternate;
+    pointer-events: none;
+  }
+
+  @keyframes shimmer {
+    0%   { transform: translate(0%, 0%) rotate(0deg); opacity: 0.4; }
+    33%  { transform: translate(5%, -3%) rotate(1deg); opacity: 0.7; }
+    66%  { transform: translate(-3%, 4%) rotate(-0.5deg); opacity: 0.5; }
+    100% { transform: translate(2%, -2%) rotate(0.5deg); opacity: 0.8; }
+  }
+
+  /* ─── Scroll container ─── */
+
+  html { scrollbar-width: none; }
+  html::-webkit-scrollbar { display: none; }
+
+  .scroll-wrap {
+    position: relative;
+    z-index: 1;
+    padding: 0 0 0 0;
+  }
+
+  /* ─── Quote items ─── */
+
+  .quote {
+    max-width: 520px;
+    margin-left: 28vw;
+    text-align: left;
+    cursor: pointer;
+    will-change: transform, filter, opacity;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .quote-text {
+    font-size: 2.4rem;
+    font-weight: 300;
+    line-height: 1.5;
+    letter-spacing: -0.01em;
+    color: rgba(255, 255, 255, 0.95);
+  }
+
+  .quote-date {
+    margin-top: 20px;
+    font-size: 0.7rem;
+    font-weight: 400;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.35);
+  }
+
+  /* ─── Controls ─── */
+
+  .controls {
+    position: fixed;
+    top: 24px;
+    right: 28px;
+    z-index: 10;
+    display: flex;
+    gap: 10px;
+  }
+
+  .ctrl-btn {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.7rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 8px 18px;
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 100px;
+    background: rgba(0,0,0,0.4);
+    color: rgba(255,255,255,0.7);
+    cursor: pointer;
+    transition: all 0.2s;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .ctrl-btn:hover {
+    background: rgba(255,255,255,0.15);
+    color: #fff;
+    border-color: rgba(255,255,255,0.5);
+  }
+
+  .ctrl-btn-danger { border-color: rgba(180,60,60,0.5); color: rgba(220,100,100,0.8); }
+  .ctrl-btn-danger:hover { background: rgba(180,60,60,0.3); color: #fff; }
+
+  /* ─── Empty state ─── */
+
+  .empty {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .empty p {
+    font-size: 1rem;
+    font-weight: 300;
+    color: rgba(255,255,255,0.4);
+    letter-spacing: 0.04em;
+  }
+
+  /* ─── Post detail overlay ─── */
+
+  .overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    background: rgba(0,0,0,0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    overflow-y: auto;
+  }
+
+  .overlay.open { display: flex; align-items: center; justify-content: center; }
+
+  .overlay-inner {
+    max-width: 640px;
+    width: 100%;
+    padding: 80px 48px;
+    text-align: center;
+    margin: 0 auto;
+  }
+
+  .overlay-text {
+    font-size: 2rem;
+    font-weight: 300;
+    line-height: 1.55;
+    letter-spacing: -0.01em;
+    color: rgba(255,255,255,0.95);
+  }
+
+  .overlay-text p { margin-bottom: 1em; }
+
+  .overlay-date {
+    margin-top: 32px;
+    font-size: 0.72rem;
+    font-weight: 400;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.3);
+  }
+
+  .overlay-actions {
+    margin-top: 40px;
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+  }
+
+  .overlay-close {
+    position: fixed;
+    top: 24px;
+    left: 28px;
+    z-index: 21;
+  }
+
+  /* ─── Editor overlay ─── */
+
+  .editor {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    background: rgba(0,0,0,0.9);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    align-items: center;
+    justify-content: center;
+  }
+
+  .editor.open { display: flex; }
+
+  .editor-inner {
+    width: 100%;
+    max-width: 560px;
+    padding: 48px;
+  }
+
+  .editor-inner textarea {
+    width: 100%;
+    min-height: 200px;
+    font-family: 'Inter', sans-serif;
+    font-size: 1.3rem;
+    font-weight: 300;
+    line-height: 1.6;
+    color: #fff;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid rgba(255,255,255,0.15);
+    padding: 16px 0;
+    outline: none;
+    resize: vertical;
+    text-align: center;
+  }
+
+  .editor-inner textarea::placeholder { color: rgba(255,255,255,0.2); }
+
+  .editor-actions {
+    margin-top: 28px;
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+  }
+
+  /* ─── View hidden ─── */
+  .view-hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="bg"></div>
+
+<div class="controls" id="controls">
+  <button class="ctrl-btn" onclick="openEditor()">+</button>
+</div>
+
+<div class="scroll-wrap" id="scroll-wrap"></div>
+
+<div class="empty view-hidden" id="empty-state">
+  <p>Nothing here yet.</p>
+  <button class="ctrl-btn" onclick="openEditor()">Add a quote</button>
+</div>
+
+<!-- Post detail overlay -->
+<div class="overlay" id="overlay">
+  <a class="ctrl-btn overlay-close" onclick="closeOverlay()">Back</a>
+  <div class="overlay-inner">
+    <div class="overlay-text" id="overlay-text"></div>
+    <div class="overlay-date" id="overlay-date"></div>
+    <div class="overlay-actions" id="overlay-actions">
+      <button class="ctrl-btn" onclick="editCurrent()">Edit</button>
+      <button class="ctrl-btn ctrl-btn-danger" onclick="deleteCurrent()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Editor overlay -->
+<div class="editor" id="editor">
+  <div class="editor-inner">
+    <textarea id="editor-content" placeholder="Write a quote..." rows="4"></textarea>
+    <div class="editor-actions">
+      <button class="ctrl-btn" onclick="saveQuote()">Publish</button>
+      <button class="ctrl-btn" onclick="closeEditor()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  let posts = [];
+  let currentPostId = null;
+  let editingPostId = null;
+  // ─── API ───
+
+  async function fetchPosts() {
+    const res = await fetch('/api/blog/posts');
+    const data = await res.json();
+    posts = data.posts;
+    render();
+  }
+
+  async function fetchPost(id) {
+    const res = await fetch(`/api/blog/posts/${id}`);
+    const data = await res.json();
+    return data.post;
+  }
+
+  async function saveQuote() {
+    const raw = document.getElementById('editor-content').value.trim();
+    if (!raw) return;
+
+    const content = raw.split(/\n{2,}/).filter(p => p.trim()).map(p =>
+      `<p>${escapeHtml(p.trim()).replace(/\n/g, '<br>')}</p>`
+    ).join('\n');
+
+    // Use first line as title (for the API)
+    const title = raw.split('\n')[0].substring(0, 120);
+    const url = editingPostId ? `/api/blog/posts/${editingPostId}` : '/api/blog/posts';
+    const method = editingPostId ? 'PUT' : 'POST';
+
+    const res = await fetch(url, {
+      method, headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, content }),
+    });
+    if (!res.ok) return alert('Failed to save');
+
+    editingPostId = null;
+    closeEditor();
+    await fetchPosts();
+  }
+
+  async function deleteCurrent() {
+    if (!currentPostId || !confirm('Delete this quote?')) return;
+    await fetch(`/api/blog/posts/${currentPostId}`, { method: 'DELETE' });
+    currentPostId = null;
+    closeOverlay();
+    await fetchPosts();
+  }
+
+  // ─── Helpers ───
+
+  function escapeHtml(str) {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function stripHtml(html) {
+    return html.replace(/<br\s*\/?>/gi, '\n').replace(/<\/?[^>]+(>|$)/g, '')
+      .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim();
+  }
+
+  function formatDate(dateStr) {
+    const d = new Date(dateStr + 'Z');
+    return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  }
+
+  // ─── Render ───
+
+  function render() {
+    const wrap = document.getElementById('scroll-wrap');
+    const empty = document.getElementById('empty-state');
+
+    if (posts.length === 0) {
+      wrap.innerHTML = '';
+      empty.classList.remove('view-hidden');
+      return;
+    }
+
+    empty.classList.add('view-hidden');
+    wrap.innerHTML = posts.map(p => {
+      const text = stripHtml(p.excerpt || '');
+      return `<div class="quote" data-id="${p.id}" onclick="openPost(${p.id})">
+        <div class="quote-text">${escapeHtml(text)}</div>
+        <div class="quote-date">${formatDate(p.created_at)}</div>
+      </div>`;
+    }).join('');
+
+    updateBlur();
+  }
+
+  // ─── Scroll blur effect ───
+
+  function updateBlur() {
+    const quotes = document.querySelectorAll('.quote');
+    const center = window.innerHeight / 2;
+    const arcMaxShift = 220; // px shift to the right at edges
+
+    quotes.forEach(q => {
+      const rect = q.getBoundingClientRect();
+      const qCenter = rect.top + rect.height / 2;
+      const dist = Math.abs(qCenter - center);
+      const maxDist = window.innerHeight * 0.6;
+      const t = Math.min(dist / maxDist, 1);
+
+      const blur = t * 6;
+      const opacity = 1 - t * 0.65;
+      const xShift = t * t * arcMaxShift; // quadratic for a smooth arc
+
+      q.style.filter = `blur(${blur}px)`;
+      q.style.opacity = opacity;
+      q.style.transform = `translateX(${xShift}px)`;
+    });
+  }
+
+  // ─── Smooth snap scroll ───
+
+  let targetIndex = 0;
+  let animId = null;
+  let scrollFrom = 0;
+  let scrollTo = 0;
+  let scrollStart = 0;
+  let scrollDuration = 2400;
+
+  function easeOut(t) {
+    return 1 - Math.pow(1 - t, 4);
+  }
+
+  function getQuoteTarget(index) {
+    const quotes = document.querySelectorAll('.quote');
+    if (quotes.length === 0) return 0;
+    const el = quotes[index];
+    const rect = el.getBoundingClientRect();
+    return window.scrollY + rect.top + rect.height / 2 - window.innerHeight / 2;
+  }
+
+  function snapTo(index, fast) {
+    const quotes = document.querySelectorAll('.quote');
+    if (quotes.length === 0) return;
+    index = Math.max(0, Math.min(index, quotes.length - 1));
+    targetIndex = index;
+
+    scrollFrom = window.scrollY;
+    scrollTo = getQuoteTarget(index);
+    scrollStart = performance.now();
+    scrollDuration = fast ? 800 : 2400;
+
+    if (!animId) tick();
+  }
+
+  function tick() {
+    const now = performance.now();
+    const elapsed = now - scrollStart;
+    const t = Math.min(elapsed / scrollDuration, 1);
+    const pos = scrollFrom + (scrollTo - scrollFrom) * easeOut(t);
+
+    window.scrollTo(0, pos);
+    updateBlur();
+
+    if (t < 1) {
+      animId = requestAnimationFrame(tick);
+    } else {
+      animId = null;
+    }
+  }
+
+  let wheelCooldown = false;
+  window.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    if (wheelCooldown) return;
+    wheelCooldown = true;
+    setTimeout(() => { wheelCooldown = false; }, 150);
+
+    const quotes = document.querySelectorAll('.quote');
+    if (quotes.length === 0) return;
+
+    const isMoving = animId !== null;
+    const next = e.deltaY > 0 ? targetIndex + 1 : targetIndex - 1;
+    snapTo(next, isMoving);
+  }, { passive: false });
+
+  window.addEventListener('resize', updateBlur);
+
+  // ─── Overlays ───
+
+  async function openPost(id) {
+    const post = await fetchPost(id);
+    if (!post) return;
+    currentPostId = id;
+    document.getElementById('overlay-text').innerHTML = post.content;
+    document.getElementById('overlay-date').textContent = formatDate(post.created_at);
+    document.getElementById('overlay').classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeOverlay() {
+    document.getElementById('overlay').classList.remove('open');
+    document.body.style.overflow = '';
+    currentPostId = null;
+  }
+
+  function openEditor(postId) {
+    editingPostId = postId || null;
+    document.getElementById('editor-content').value = '';
+
+    if (editingPostId) {
+      fetchPost(editingPostId).then(post => {
+        if (post) document.getElementById('editor-content').value = stripHtml(post.content);
+      });
+    }
+
+    document.getElementById('editor').classList.add('open');
+    document.body.style.overflow = 'hidden';
+    document.getElementById('editor-content').focus();
+  }
+
+  function closeEditor() {
+    document.getElementById('editor').classList.remove('open');
+    if (!document.getElementById('overlay').classList.contains('open')) {
+      document.body.style.overflow = '';
+    }
+  }
+
+  function editCurrent() {
+    closeOverlay();
+    openEditor(currentPostId);
+  }
+
+  // ─── Init ───
+  fetchPosts();
+</script>
+</body>
+</html>

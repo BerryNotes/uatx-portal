@@ -39,6 +39,11 @@ const {
   updateEvent,
   deleteEvent,
   seedEvents,
+  getAllBlogPosts,
+  getBlogPostById,
+  createBlogPost,
+  updateBlogPost,
+  deleteBlogPost,
 } = require("./db");
 const { sendWelcomeEmail, sendOpportunityNotification, sendClubEmail, sendClubSubmissionNotification } = require("./email");
 
@@ -601,6 +606,50 @@ app.put("/api/admin/student/:email/preferences", requireAdmin, (req, res) => {
   res.json({ ok: true, preferences: prefs });
 });
 
+// ─── BLOG (secret path, no auth) ───
+
+app.get("/blog", (req, res) => res.sendFile(path.join(DIR, "blog.html")));
+app.get("/blog-bg.jpg", (req, res) => res.sendFile(path.join(DIR, "blog-bg.jpg")));
+
+app.get("/api/blog/posts", (req, res) => {
+  const posts = getAllBlogPosts().map(p => ({
+    id: p.id,
+    title: p.title,
+    excerpt: p.content.replace(/<[^>]*>/g, "").substring(0, 200),
+    created_at: p.created_at,
+  }));
+  res.json({ posts });
+});
+
+app.get("/api/blog/posts/:id", (req, res) => {
+  const post = getBlogPostById(req.params.id);
+  if (!post) return res.status(404).json({ error: "Post not found" });
+  res.json({ post });
+});
+
+app.post("/api/blog/posts", (req, res) => {
+  const { title, content } = req.body;
+  const t = title || (content || "").replace(/<[^>]*>/g, "").substring(0, 120) || "Untitled";
+  const id = createBlogPost(t, content || "");
+  res.json({ ok: true, id });
+});
+
+app.put("/api/blog/posts/:id", (req, res) => {
+  const { title, content } = req.body;
+  const existing = getBlogPostById(req.params.id);
+  if (!existing) return res.status(404).json({ error: "Post not found" });
+  const t = title || (content || "").replace(/<[^>]*>/g, "").substring(0, 120) || "Untitled";
+  updateBlogPost(req.params.id, t, content || "");
+  res.json({ ok: true });
+});
+
+app.delete("/api/blog/posts/:id", (req, res) => {
+  const existing = getBlogPostById(req.params.id);
+  if (!existing) return res.status(404).json({ error: "Post not found" });
+  deleteBlogPost(req.params.id);
+  res.json({ ok: true });
+});
+
 // ─── START ───
 
 app.listen(PORT, () => {
@@ -608,5 +657,6 @@ app.listen(PORT, () => {
   console.log(`──────────────────────────────`);
   console.log(`  Home:   http://localhost:${PORT}`);
   console.log(`  Admin:  http://localhost:${PORT}/admin`);
+  console.log(`  Blog:   http://localhost:${PORT}/blog`);
   console.log(`──────────────────────────────`);
 });

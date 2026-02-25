@@ -102,6 +102,13 @@ db.exec(`
     sub_page TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS blog_posts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
 `);
 
 // ─── MIGRATIONS (add columns to existing tables) ───
@@ -549,6 +556,41 @@ function seedOpportunities(opps) {
   insert(opps);
 }
 
+// ─── BLOG POSTS ───
+
+const blogPostsAll = db.prepare(
+  "SELECT id, title, content, created_at FROM blog_posts ORDER BY created_at DESC"
+);
+const blogPostById = db.prepare("SELECT * FROM blog_posts WHERE id = ?");
+const blogPostInsert = db.prepare(
+  "INSERT INTO blog_posts (title, content) VALUES (?, ?)"
+);
+const blogPostUpdate = db.prepare(
+  "UPDATE blog_posts SET title = ?, content = ? WHERE id = ?"
+);
+const blogPostDelete = db.prepare("DELETE FROM blog_posts WHERE id = ?");
+
+function getAllBlogPosts() {
+  return blogPostsAll.all();
+}
+
+function getBlogPostById(id) {
+  return blogPostById.get(id);
+}
+
+function createBlogPost(title, content) {
+  const info = blogPostInsert.run(title, content);
+  return info.lastInsertRowid;
+}
+
+function updateBlogPost(id, title, content) {
+  return blogPostUpdate.run(title, content, id);
+}
+
+function deleteBlogPost(id) {
+  return blogPostDelete.run(id);
+}
+
 module.exports = {
   db,
   SQLiteStore,
@@ -585,4 +627,9 @@ module.exports = {
   updateEvent,
   deleteEvent,
   seedEvents,
+  getAllBlogPosts,
+  getBlogPostById,
+  createBlogPost,
+  updateBlogPost,
+  deleteBlogPost,
 };
