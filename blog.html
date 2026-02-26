@@ -512,61 +512,33 @@
     }
   }
 
-  let accDelta = 0;
-  let accResetTimer = null;
-  let snapCount = 0;
-  let pendingSnap = false;
-
-  function trySnap() {
-    if (animId || Math.abs(accDelta) < 50) return;
-
-    const dir = accDelta > 0 ? 1 : -1;
-    accDelta = 0;
-    pendingSnap = false;
-
-    snapCount++;
-    const speed = Math.max(200, 500 - snapCount * 50);
-    snapTo(targetIndex + dir, speed);
-  }
-
-  // Override tick to check for pending snap when animation ends
-  const origTick = tick;
-  tick = function() {
-    const now = performance.now();
-    const elapsed = now - scrollStart;
-    const t = Math.min(elapsed / scrollDuration, 1);
-    const pos = scrollFrom + (scrollTo - scrollFrom) * easeOut(t);
-
-    window.scrollTo(0, pos);
-    updateBlur();
-
-    if (t < 1) {
-      animId = requestAnimationFrame(tick);
-    } else {
-      animId = null;
-      if (pendingSnap) trySnap();
-    }
-  };
+  let wheelCooldown = false;
+  let rapidCount = 0;
+  let rapidTimer = null;
 
   window.addEventListener('wheel', (e) => {
     e.preventDefault();
+    if (animId) return;
+    if (wheelCooldown) return;
+    wheelCooldown = true;
+    setTimeout(() => { wheelCooldown = false; }, 120);
 
     const quotes = document.querySelectorAll('.quote');
     if (quotes.length === 0) return;
 
-    // Always accumulate, even during animation
-    accDelta += e.deltaY;
+    // Track rapid scrolling
+    rapidCount++;
+    clearTimeout(rapidTimer);
+    rapidTimer = setTimeout(() => { rapidCount = 0; }, 400);
 
-    clearTimeout(accResetTimer);
-    accResetTimer = setTimeout(() => { accDelta = 0; }, 80);
+    // Skip more quotes when scrolling rapidly
+    const skip = rapidCount >= 5 ? 3 : rapidCount >= 3 ? 2 : 1;
+    const dir = e.deltaY > 0 ? 1 : -1;
+    const isMoving = animId !== null;
+    const speed = rapidCount >= 3 ? 400 : (isMoving ? 800 : 2400);
 
-    if (animId) {
-      // Mark that we want to snap as soon as current animation ends
-      if (Math.abs(accDelta) >= 50) pendingSnap = true;
-      return;
-    }
-
-    trySnap();
+    const next = targetIndex + dir * skip;
+    snapTo(next, speed);
   }, { passive: false });
 
 
