@@ -18,11 +18,7 @@
   html { scrollbar-width: none; }
   body::-webkit-scrollbar { display: none; }
   [data-lenis-prevent] { scrollbar-width: none; }
-  [data-lenis-prevent]::-webkit-scrollbar { width: 0; }
-  [data-lenis-prevent].scrolling { scrollbar-width: thin; scrollbar-color: #c9a84c44 transparent; }
-  [data-lenis-prevent].scrolling::-webkit-scrollbar { width: 4px; }
-  [data-lenis-prevent].scrolling::-webkit-scrollbar-track { background: transparent; }
-  [data-lenis-prevent].scrolling::-webkit-scrollbar-thumb { background: #c9a84c44; border-radius: 2px; }
+  [data-lenis-prevent]::-webkit-scrollbar { display: none; }
   select:focus, input:focus, textarea:focus { outline: 2px solid #c9a84c; outline-offset: -1px; }
   button:hover { opacity: 0.88; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -1844,14 +1840,7 @@ const ClubPresidentCard = ({club, showToast, onEventUpdated}) => {
   const [showEvents, setShowEvents] = useState(false);
   const labelSt = {fontSize:11,fontWeight:600,color:C.textLight,textTransform:"uppercase",letterSpacing:"0.5px",display:"block",marginBottom:4};
 
-  // 15-min time options
-  const timeOpts = [];
-  for (let h=0;h<24;h++) for (let m=0;m<60;m+=15) {
-    const val = String(h).padStart(2,"0")+":"+String(m).padStart(2,"0");
-    const lbl = new Date(2000,0,1,h,m).toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"});
-    timeOpts.push({val,lbl});
-  }
-  const splitDT = (dt) => { if (!dt) return {d:"",t:""}; const p=dt.split("T"); return {d:p[0]||"",t:p[1]?p[1].substring(0,5):""}; };
+  const splitDT = (dt) => { if (!dt) return {d:"",t:""}; const p=(dt||"").split("T"); return {d:p[0]||"",t:p[1]?p[1].substring(0,5):""}; };
   const joinDT = (d,t) => d && t ? d+"T"+t : d || "";
 
   return (
@@ -1893,10 +1882,7 @@ const ClubPresidentCard = ({club, showToast, onEventUpdated}) => {
                   <input type="text" value={editEvt.title} onChange={e=>setEditEvt({...editEvt,title:e.target.value})} placeholder="Event name" style={inputStyle}/>
                   <div style={{display:"flex",gap:8}}>
                     <input type="date" value={splitDT(editEvt.date).d} onChange={e=>setEditEvt({...editEvt,date:joinDT(e.target.value,splitDT(editEvt.date).t)})} style={{...inputStyle,flex:1}}/>
-                    <select value={splitDT(editEvt.date).t} onChange={e=>setEditEvt({...editEvt,date:joinDT(splitDT(editEvt.date).d,e.target.value)})} style={{...inputStyle,flex:1}}>
-                      <option value="">Time</option>
-                      {timeOpts.map(o => <option key={o.val} value={o.val}>{o.lbl}</option>)}
-                    </select>
+                    <input type="time" value={splitDT(editEvt.date).t} onChange={e=>setEditEvt({...editEvt,date:joinDT(splitDT(editEvt.date).d,e.target.value)})} style={{...inputStyle,flex:1}}/>
                     <input type="text" value={editEvt.location} onChange={e=>setEditEvt({...editEvt,location:e.target.value})} placeholder="Location" style={{...inputStyle,flex:1}}/>
                   </div>
                   <div style={{display:"flex",gap:6}}>
@@ -1925,10 +1911,7 @@ const ClubPresidentCard = ({club, showToast, onEventUpdated}) => {
             <input type="text" value={newEvt.title} onChange={e=>setNewEvt({...newEvt,title:e.target.value})} placeholder="Event name" style={inputStyle}/>
             <div style={{display:"flex",gap:8}}>
               <input type="date" value={splitDT(newEvt.date).d} onChange={e=>setNewEvt({...newEvt,date:joinDT(e.target.value,splitDT(newEvt.date).t)})} style={{...inputStyle,flex:1}}/>
-              <select value={splitDT(newEvt.date).t} onChange={e=>setNewEvt({...newEvt,date:joinDT(splitDT(newEvt.date).d,e.target.value)})} style={{...inputStyle,flex:1}}>
-                <option value="">Time</option>
-                {timeOpts.map(o => <option key={o.val} value={o.val}>{o.lbl}</option>)}
-              </select>
+              <input type="time" value={splitDT(newEvt.date).t} onChange={e=>setNewEvt({...newEvt,date:joinDT(splitDT(newEvt.date).d,e.target.value)})} style={{...inputStyle,flex:1}}/>
               <input type="text" value={newEvt.location} onChange={e=>setNewEvt({...newEvt,location:e.target.value})} placeholder="Location" style={{...inputStyle,flex:1}}/>
             </div>
             <Btn size="sm" onClick={addEvent}>Add Event</Btn>
@@ -2222,9 +2205,9 @@ const CommunityPage = ({joinedClubs, setJoinedClubs, showToast, serverActivities
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:16}}>
         {allActivities.map(club => (
-          <div key={club.id} style={{backgroundColor:C.white,border:"1px solid "+C.border,overflow:"hidden"}}>
-            <div style={{height:8,backgroundColor:isJoined(club.id)?C.gold:C.navy}}/>
-            <div style={{padding:20}}>
+          <div key={club.id} style={{backgroundColor:C.white,border:"1px solid "+C.border,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+            <div style={{height:8,backgroundColor:isJoined(club.id)?C.gold:C.navy,flexShrink:0}}/>
+            <div style={{padding:20,display:"flex",flexDirection:"column",flex:1}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
                 <h3 style={{fontFamily:"Georgia, serif",fontSize:16,color:C.navy,margin:0}}>{club.title}</h3>
                 <Badge>{club.category}</Badge>
@@ -2236,7 +2219,7 @@ const CommunityPage = ({joinedClubs, setJoinedClubs, showToast, serverActivities
                 </div>
               )}
               {allClubEvents.filter(e => e.activity_id === (club.serverId || club.id)).length > 0 && (
-                <div style={{marginTop:8,display:"flex",flexDirection:"column",gap:4}}>
+                <div style={{marginTop:4,display:"flex",flexDirection:"column",gap:4}}>
                   {allClubEvents.filter(e => e.activity_id === (club.serverId || club.id)).slice(0,3).map(ev => (
                     <div key={ev.id} style={{padding:"6px 10px",backgroundColor:C.gold+"12",border:"1px solid "+C.gold+"30"}}>
                       <div style={{fontSize:11,fontWeight:600,color:C.navy}}>{ev.title}</div>
@@ -2245,7 +2228,7 @@ const CommunityPage = ({joinedClubs, setJoinedClubs, showToast, serverActivities
                   ))}
                 </div>
               )}
-              <div style={{display:"flex",justifyContent:"flex-end",alignItems:"center",paddingTop:12,borderTop:"1px solid "+C.border,marginTop:10}}>
+              <div style={{display:"flex",justifyContent:"flex-end",alignItems:"center",paddingTop:12,borderTop:"1px solid "+C.border,marginTop:"auto"}}>
                 <Btn size="sm" variant={isJoined(club.id)?"primary":"secondary"} onClick={()=>toggleJoin(club)}>{isJoined(club.id)?"Joined":"Join Email"}</Btn>
               </div>
             </div>
@@ -2657,15 +2640,6 @@ const lenis = new Lenis({ duration: 0.7, easing: t => Math.min(1, 1.001 - Math.p
 function raf(time) { lenis.raf(time); requestAnimationFrame(raf); }
 requestAnimationFrame(raf);
 
-// Auto-hide scrollbars on [data-lenis-prevent] elements
-document.addEventListener('scroll', function(e) {
-  const el = e.target;
-  if (el.nodeType === 1 && el.hasAttribute('data-lenis-prevent')) {
-    el.classList.add('scrolling');
-    clearTimeout(el._scrollTimer);
-    el._scrollTimer = setTimeout(() => el.classList.remove('scrolling'), 1500);
-  }
-}, true);
 </script>
 </body>
 </html>
