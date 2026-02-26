@@ -1932,7 +1932,7 @@ const ProfilePage = ({showToast, selectedIndustries, setSelectedIndustries, sele
                         <div style={{fontSize:11,color:C.textLight}}>{club.category}{club.meet_day ? " \u00B7 "+club.meet_day : ""}</div>
                         {club.next_event_title && (
                           <div style={{fontSize:11,color:C.goldMuted,marginTop:3}}>
-                            {"\uD83D\uDCC5"} {club.next_event_title}{club.next_event_date ? " \u2014 "+new Date(club.next_event_date+"T00:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"}) : ""}
+                            Next: {club.next_event_title}{club.next_event_date ? " \u2014 "+new Date(club.next_event_date+"T00:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"}) : ""}
                           </div>
                         )}
                       </div>
@@ -2106,19 +2106,18 @@ const CommunityPage = ({joinedClubs, setJoinedClubs, showToast, serverActivities
                     President: <a href={"mailto:"+club.presidentEmail} style={{color:C.goldMuted,fontWeight:500}}>{club.presidentEmail}</a>
                   </div>
                 )}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:12,borderTop:"1px solid "+C.border}}>
+                  <span style={{fontSize:11,color:C.textLight}}>{club.meetDay||""}</span>
+                  <Btn size="sm" variant={isJoined(club.id)?"primary":"secondary"} onClick={()=>toggleJoin(club)}>{isJoined(club.id)?"On Email List":"Join Email List"}</Btn>
+                </div>
                 {club.next_event_title && (
-                  <div style={{marginBottom:8,padding:"8px 10px",backgroundColor:C.gold+"12",border:"1px solid "+C.gold+"30",display:"flex",alignItems:"center",gap:6}}>
-                    <span style={{fontSize:12}}>{"\uD83D\uDCC5"}</span>
+                  <div style={{marginTop:10,padding:"8px 10px",backgroundColor:C.gold+"12",border:"1px solid "+C.gold+"30",display:"flex",alignItems:"center",gap:6}}>
                     <div>
                       <div style={{fontSize:11,fontWeight:600,color:C.navy}}>{club.next_event_title}</div>
                       {club.next_event_date && <div style={{fontSize:10,color:C.textLight}}>{new Date(club.next_event_date+"T00:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"})}</div>}
                     </div>
                   </div>
                 )}
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:12,borderTop:"1px solid "+C.border}}>
-                  <span style={{fontSize:11,color:C.textLight}}>{club.meetDay||""}</span>
-                  <Btn size="sm" variant={isJoined(club.id)?"primary":"secondary"} onClick={()=>toggleJoin(club)}>{isJoined(club.id)?"On Email List":"Join Email List"}</Btn>
-                </div>
               </div>
             </div>
           ))}
@@ -2458,6 +2457,16 @@ const App = () => {
   useEffect(() => { save("areas", selectedAreas); syncToServer(); }, [selectedAreas]);
   useEffect(() => { save("emailAlerts", emailAlerts); syncToServer(); }, [emailAlerts]);
   useEffect(() => { save("history", internshipHistory); syncToServer(); }, [internshipHistory]);
+
+  // Auto-add president as member of their clubs
+  useEffect(() => {
+    if (!currentUser || serverActivities.length === 0) return;
+    const presidentOf = serverActivities.filter(a => (a.president_email||"").toLowerCase() === currentUser.email.toLowerCase()).map(a => a.id);
+    const missing = presidentOf.filter(id => !joinedClubs.includes(id));
+    if (missing.length > 0) {
+      setJoinedClubs(prev => [...prev, ...missing.filter(id => !prev.includes(id))]);
+    }
+  }, [currentUser, serverActivities]);
 
   // Handle sign-in callback
   const handleSignIn = (user) => {

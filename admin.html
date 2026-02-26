@@ -640,8 +640,12 @@ async function loadStudentDetail(rosterId, email) {
           </p>
         </div>
         <div class="detail-section">
-          <h4>Clubs Joined</h4>
-          ${clubNames.length ? '<div>' + clubNames.map(c => '<span class="tag">' + esc(c) + '</span>').join('') + '</div>' : '<p class="empty-note">No clubs joined</p>'}
+          <h4>Clubs</h4>
+          ${(() => {
+            const presidentOf = lastActivities.filter(a => a.president_email && a.president_email.toLowerCase() === email.toLowerCase()).map(a => a.title);
+            return presidentOf.length ? '<div style="margin-bottom:6px"><span style="font-size:10px;font-weight:700;color:#c9a84c;text-transform:uppercase;letter-spacing:0.05em">President of:</span><br>' + presidentOf.map(c => '<span class="tag" style="background:rgba(201,168,76,0.2);color:#c9a84c">' + esc(c) + '</span>').join('') + '</div>' : '';
+          })()}
+          ${clubNames.length ? '<div><span style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em">Member of:</span><br>' + clubNames.map(c => '<span class="tag">' + esc(c) + '</span>').join('') + '</div>' : '<p class="empty-note">No clubs joined</p>'}
         </div>
         <div class="detail-section">
           <h4>Internship History (${history.length})</h4>
@@ -1076,7 +1080,7 @@ function renderActivities(activities) {
           <div class="opp-card-meta">
             ${a.category ? '<span>' + esc(a.category) + '</span>' : ''}
             ${a.meet_day ? '<span>' + esc(a.meet_day) + '</span>' : ''}
-            ${a.president_email ? '<span>' + esc(a.president_email) + '</span>' : ''}
+            ${a.president_email ? '<span style="color:#c9a84c;font-weight:500">President: ' + esc(a.president_email) + '</span>' : '<span style="color:#6b7280;font-style:italic">No president assigned</span>'}
             ${a.submitted_by ? '<span>Submitted by ' + esc(a.submitted_by) + '</span>' : ''}
           </div>
           ${a.description ? '<div class="opp-card-desc">' + esc(a.description) + '</div>' : ''}
