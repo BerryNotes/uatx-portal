@@ -1084,15 +1084,15 @@ const SUBPAGE_CONTENT = {
     render: () => {
       const inputStyle = {width:"100%",padding:"10px 12px",border:"1px solid "+C.border,fontSize:13,boxSizing:"border-box",fontFamily:"'Libre Franklin', sans-serif",backgroundColor:C.white};
       const labelStyle = {fontSize:11,fontWeight:600,color:C.textLight,textTransform:"uppercase",letterSpacing:"0.5px",display:"block",marginBottom:6};
-      const [form, setForm] = React.useState({title:"",category:"Academic",meetDay:"",desc:"",presidentEmail:""});
+      const [form, setForm] = React.useState({title:"",category:"Academic",desc:"",presidentEmail:""});
       const [submitted, setSubmitted] = React.useState(false);
-      const allFilled = form.title && form.category && form.meetDay && form.desc && form.presidentEmail;
+      const allFilled = form.title && form.category && form.desc && form.presidentEmail;
       const handleSubmit = async () => {
         if (!allFilled) return;
         try {
           await fetch("/api/activities", {
             method:"POST", headers:{"Content-Type":"application/json"},
-            body: JSON.stringify({ activity: { title:form.title, category:form.category, meet_day:form.meetDay, description:form.desc, president_email:form.presidentEmail, members:0 }})
+            body: JSON.stringify({ activity: { title:form.title, category:form.category, meet_day:"", description:form.desc, president_email:form.presidentEmail, members:0 }})
           });
         } catch(e) {}
         setSubmitted(true);
@@ -1116,10 +1116,6 @@ const SUBPAGE_CONTENT = {
             React.createElement("select", {value:form.category,onChange:e=>setForm({...form,category:e.target.value}),style:{...inputStyle,cursor:"pointer"}},
               ["Academic","Social","Sports","Arts","Service","Professional","Religious","Cultural","Political","Media"].map(c => React.createElement("option", {key:c,value:c}, c))
             )
-          ),
-          React.createElement("div", null,
-            React.createElement("label", {style:labelStyle}, "Meeting Day / Time"),
-            React.createElement("input", {type:"text",placeholder:"e.g. Wednesdays at 6pm",value:form.meetDay,onChange:e=>setForm({...form,meetDay:e.target.value}),style:inputStyle})
           ),
           React.createElement("div", null,
             React.createElement("label", {style:labelStyle}, "Description"),
@@ -1714,35 +1710,23 @@ const CalendarPage = ({allInternships, navigate, serverActivities=[], allClubEve
         </div>
       </div>
 
-      {/* Club Events & Schedules */}
-      {(serverActivities.filter(a => a.meet_day).length > 0 || allClubEvents.length > 0) && (
+      {/* Club Events */}
+      {allClubEvents.length > 0 && (
         <div style={{marginTop:24}}>
-          <h3 style={{fontFamily:"Georgia, serif",fontSize:18,color:C.navy,margin:"0 0 12px"}}>Club Events & Schedules</h3>
-          {allClubEvents.length > 0 && (
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:12,marginBottom:16}}>
-              {allClubEvents.sort((a,b) => new Date(a.date||"9999") - new Date(b.date||"9999")).map(ce => {
-                const club = serverActivities.find(a => a.id === ce.activity_id);
-                return (
-                  <div key={ce.id} style={{backgroundColor:C.white,border:"1px solid "+C.gold+"30",padding:14}}>
-                    <div style={{fontSize:13,fontWeight:600,color:C.navy}}>{ce.title}</div>
-                    <div style={{fontSize:11,color:C.textLight,marginTop:2}}>
-                      {club ? club.title : "Club"}{ce.date ? " \u00B7 " + new Date(ce.date).toLocaleString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}) : ""}{ce.location ? " \u00B7 " + ce.location : ""}
-                    </div>
+          <h3 style={{fontFamily:"Georgia, serif",fontSize:18,color:C.navy,margin:"0 0 12px"}}>Upcoming Club Events</h3>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:12}}>
+            {allClubEvents.sort((a,b) => new Date(a.date||"9999") - new Date(b.date||"9999")).map(ce => {
+              const club = serverActivities.find(a => a.id === ce.activity_id);
+              return (
+                <div key={ce.id} style={{backgroundColor:C.white,border:"1px solid "+C.gold+"30",padding:14}}>
+                  <div style={{fontSize:13,fontWeight:600,color:C.navy}}>{ce.title}</div>
+                  <div style={{fontSize:11,color:C.textLight,marginTop:2}}>
+                    {club ? club.title : "Club"}{ce.date ? " \u00B7 " + new Date(ce.date).toLocaleString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}) : ""}{ce.location ? " \u00B7 " + ce.location : ""}
                   </div>
-                );
-              })}
-            </div>
-          )}
-          {serverActivities.filter(a => a.meet_day).length > 0 && (
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:12}}>
-              {serverActivities.filter(a => a.meet_day).map(a => (
-                <div key={a.id} style={{backgroundColor:C.white,border:"1px solid "+C.border,padding:14}}>
-                  <div style={{fontSize:14,fontWeight:600,color:C.navy,marginBottom:4}}>{a.title}</div>
-                  <div style={{fontSize:12,color:C.text}}>{a.meet_day}</div>
                 </div>
-              ))}
-            </div>
-          )}
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
@@ -1860,33 +1844,59 @@ const ClubPresidentCard = ({club, showToast, onEventUpdated}) => {
   const [showEvents, setShowEvents] = useState(false);
   const labelSt = {fontSize:11,fontWeight:600,color:C.textLight,textTransform:"uppercase",letterSpacing:"0.5px",display:"block",marginBottom:4};
 
+  // 15-min time options
+  const timeOpts = [];
+  for (let h=0;h<24;h++) for (let m=0;m<60;m+=15) {
+    const val = String(h).padStart(2,"0")+":"+String(m).padStart(2,"0");
+    const lbl = new Date(2000,0,1,h,m).toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"});
+    timeOpts.push({val,lbl});
+  }
+  const splitDT = (dt) => { if (!dt) return {d:"",t:""}; const p=dt.split("T"); return {d:p[0]||"",t:p[1]?p[1].substring(0,5):""}; };
+  const joinDT = (d,t) => d && t ? d+"T"+t : d || "";
+
   return (
     <div style={{border:"1px solid "+C.border,padding:16,marginBottom:12}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
         <div>
           <div style={{fontSize:14,fontWeight:600,color:C.navy}}>{club.title}</div>
-          <div style={{fontSize:11,color:C.textLight}}>{club.category}{club.meet_day || club.meetDay ? " \u00B7 " + (club.meet_day || club.meetDay) : ""}</div>
+          <div style={{fontSize:11,color:C.textLight}}>{club.category}</div>
         </div>
         <Badge color={C.gold}>President</Badge>
       </div>
+      {clubEvents.length > 0 && (
+        <div style={{marginBottom:10,display:"flex",flexDirection:"column",gap:4}}>
+          {clubEvents.map(ev => (
+            <div key={ev.id} style={{padding:"6px 10px",backgroundColor:C.gold+"12",border:"1px solid "+C.gold+"30"}}>
+              <div style={{fontSize:12,fontWeight:600,color:C.navy}}>{ev.title}</div>
+              <div style={{fontSize:11,color:C.textLight}}>
+                {ev.date ? new Date(ev.date).toLocaleString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}) : ""}{ev.location ? " \u2014 " + ev.location : ""}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
         <Btn size="sm" variant={showCompose?"ghost":"secondary"} onClick={()=>{setShowCompose(!showCompose);setShowEvents(false);}}>
           {showCompose ? "Cancel" : "Email Members"}
         </Btn>
         <Btn size="sm" variant="ghost" onClick={copyMemberEmails}>Copy Member Emails</Btn>
         <Btn size="sm" variant={showEvents?"ghost":"secondary"} onClick={()=>{setShowEvents(!showEvents);setShowCompose(false);}}>
-          {showEvents ? "Hide Events" : "Manage Events (" + clubEvents.length + ")"}
+          {showEvents ? "Hide" : "Manage Events"}
         </Btn>
       </div>
       {showEvents && (
         <div style={{marginTop:12,padding:12,backgroundColor:C.cream,border:"1px solid "+C.border}}>
           {clubEvents.length > 0 && (
             <div style={{marginBottom:12,display:"flex",flexDirection:"column",gap:8}}>
-              {clubEvents.map(ev => editingEvtId === ev.id ? (
+              {clubEvents.map(ev => {const {d,t}=splitDT(ev.date); return editingEvtId === ev.id ? (
                 <div key={ev.id} style={{padding:10,border:"1px solid "+C.gold,backgroundColor:C.white,display:"flex",flexDirection:"column",gap:6}}>
                   <input type="text" value={editEvt.title} onChange={e=>setEditEvt({...editEvt,title:e.target.value})} placeholder="Event name" style={inputStyle}/>
                   <div style={{display:"flex",gap:8}}>
-                    <input type="datetime-local" step="900" value={editEvt.date} onChange={e=>setEditEvt({...editEvt,date:e.target.value})} style={{...inputStyle,flex:1}}/>
+                    <input type="date" value={splitDT(editEvt.date).d} onChange={e=>setEditEvt({...editEvt,date:joinDT(e.target.value,splitDT(editEvt.date).t)})} style={{...inputStyle,flex:1}}/>
+                    <select value={splitDT(editEvt.date).t} onChange={e=>setEditEvt({...editEvt,date:joinDT(splitDT(editEvt.date).d,e.target.value)})} style={{...inputStyle,flex:1}}>
+                      <option value="">Time</option>
+                      {timeOpts.map(o => <option key={o.val} value={o.val}>{o.lbl}</option>)}
+                    </select>
                     <input type="text" value={editEvt.location} onChange={e=>setEditEvt({...editEvt,location:e.target.value})} placeholder="Location" style={{...inputStyle,flex:1}}/>
                   </div>
                   <div style={{display:"flex",gap:6}}>
@@ -1907,14 +1917,18 @@ const ClubPresidentCard = ({club, showToast, onEventUpdated}) => {
                     <span onClick={()=>removeEvent(ev.id)} style={{cursor:"pointer",fontSize:11,color:C.alert,fontWeight:500}}>Delete</span>
                   </div>
                 </div>
-              ))}
+              );})}
             </div>
           )}
           <div style={{display:"flex",flexDirection:"column",gap:6}}>
             <label style={labelSt}>Add Event</label>
             <input type="text" value={newEvt.title} onChange={e=>setNewEvt({...newEvt,title:e.target.value})} placeholder="Event name" style={inputStyle}/>
             <div style={{display:"flex",gap:8}}>
-              <input type="datetime-local" step="900" value={newEvt.date} onChange={e=>setNewEvt({...newEvt,date:e.target.value})} style={{...inputStyle,flex:1}}/>
+              <input type="date" value={splitDT(newEvt.date).d} onChange={e=>setNewEvt({...newEvt,date:joinDT(e.target.value,splitDT(newEvt.date).t)})} style={{...inputStyle,flex:1}}/>
+              <select value={splitDT(newEvt.date).t} onChange={e=>setNewEvt({...newEvt,date:joinDT(splitDT(newEvt.date).d,e.target.value)})} style={{...inputStyle,flex:1}}>
+                <option value="">Time</option>
+                {timeOpts.map(o => <option key={o.val} value={o.val}>{o.lbl}</option>)}
+              </select>
               <input type="text" value={newEvt.location} onChange={e=>setNewEvt({...newEvt,location:e.target.value})} placeholder="Location" style={{...inputStyle,flex:1}}/>
             </div>
             <Btn size="sm" onClick={addEvent}>Add Event</Btn>
@@ -2033,7 +2047,7 @@ const ProfilePage = ({showToast, selectedIndustries, setSelectedIndustries, sele
                     return <div key={clubId} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 14px",border:"1px solid "+C.border}}>
                       <div>
                         <div style={{fontSize:14,fontWeight:600,color:C.navy}}>{club.title}</div>
-                        <div style={{fontSize:11,color:C.textLight}}>{club.category}{club.meet_day ? " \u00B7 "+club.meet_day : ""}</div>
+                        <div style={{fontSize:11,color:C.textLight}}>{club.category}</div>
                         {allClubEvents.filter(e => e.activity_id === clubId).length > 0 && (
                           <div style={{fontSize:11,color:C.goldMuted,marginTop:3}}>
                             {allClubEvents.filter(e => e.activity_id === clubId).slice(0,2).map(ev => (
@@ -2221,12 +2235,8 @@ const CommunityPage = ({joinedClubs, setJoinedClubs, showToast, serverActivities
                   President: <a href={"mailto:"+club.presidentEmail} style={{color:C.goldMuted,fontWeight:500}}>{club.presidentEmail}</a>
                 </div>
               )}
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:12,borderTop:"1px solid "+C.border}}>
-                <span style={{fontSize:11,color:C.textLight}}>{club.meetDay||""}</span>
-                <Btn size="sm" variant={isJoined(club.id)?"primary":"secondary"} onClick={()=>toggleJoin(club)}>{isJoined(club.id)?"On Email List":"Join Email List"}</Btn>
-              </div>
               {allClubEvents.filter(e => e.activity_id === (club.serverId || club.id)).length > 0 && (
-                <div style={{marginTop:10,display:"flex",flexDirection:"column",gap:4}}>
+                <div style={{marginTop:8,display:"flex",flexDirection:"column",gap:4}}>
                   {allClubEvents.filter(e => e.activity_id === (club.serverId || club.id)).slice(0,3).map(ev => (
                     <div key={ev.id} style={{padding:"6px 10px",backgroundColor:C.gold+"12",border:"1px solid "+C.gold+"30"}}>
                       <div style={{fontSize:11,fontWeight:600,color:C.navy}}>{ev.title}</div>
@@ -2235,6 +2245,9 @@ const CommunityPage = ({joinedClubs, setJoinedClubs, showToast, serverActivities
                   ))}
                 </div>
               )}
+              <div style={{display:"flex",justifyContent:"flex-end",alignItems:"center",paddingTop:12,borderTop:"1px solid "+C.border,marginTop:10}}>
+                <Btn size="sm" variant={isJoined(club.id)?"primary":"secondary"} onClick={()=>toggleJoin(club)}>{isJoined(club.id)?"On Email List":"Join Email List"}</Btn>
+              </div>
             </div>
           </div>
         ))}
