@@ -19,7 +19,10 @@
   body::-webkit-scrollbar { display: none; }
   [data-lenis-prevent]::-webkit-scrollbar { width: 4px; }
   [data-lenis-prevent]::-webkit-scrollbar-track { background: transparent; }
-  [data-lenis-prevent]::-webkit-scrollbar-thumb { background: #c9a84c44; border-radius: 2px; }
+  [data-lenis-prevent]::-webkit-scrollbar-thumb { background: transparent; border-radius: 2px; transition: background 0.3s; }
+  [data-lenis-prevent].scrolling::-webkit-scrollbar-thumb { background: #c9a84c44; }
+  [data-lenis-prevent] { scrollbar-width: none; }
+  [data-lenis-prevent].scrolling { scrollbar-width: thin; scrollbar-color: #c9a84c44 transparent; }
   select:focus, input:focus, textarea:focus { outline: 2px solid #c9a84c; outline-offset: -1px; }
   button:hover { opacity: 0.88; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -2018,11 +2021,11 @@ const ProfilePage = ({showToast, selectedIndustries, setSelectedIndustries, sele
             </div>
           )}
 
-            {/* Clubs Joined */}
+            {/* Email Lists */}
             {joinedClubs.length > 0 && (
               <div style={{backgroundColor:C.white,border:"1px solid "+C.border,padding:24}}>
-                <h3 style={{fontFamily:"Georgia, serif",fontSize:18,color:C.navy,margin:"0 0 4px"}}>Clubs Joined</h3>
-                <p style={{fontSize:12,color:C.textLight,margin:"0 0 16px"}}>Email lists you've joined</p>
+                <h3 style={{fontFamily:"Georgia, serif",fontSize:18,color:C.navy,margin:"0 0 4px"}}>Email Lists</h3>
+                <p style={{fontSize:12,color:C.textLight,margin:"0 0 16px"}}>Club and activity email lists you're subscribed to</p>
                 <div style={{display:"flex",flexDirection:"column",gap:8}}>
                   {joinedClubs.map(clubId => {
                     const club = serverActivities.find(a => a.id === clubId);
@@ -2041,7 +2044,7 @@ const ProfilePage = ({showToast, selectedIndustries, setSelectedIndustries, sele
                           </div>
                         )}
                       </div>
-                      <div onClick={()=>{setJoinedClubs(prev=>prev.filter(x=>x!==clubId));showToast("Left "+club.title);}} style={{cursor:"pointer",fontSize:11,color:C.alert,fontWeight:500}}>Leave</div>
+                      <div onClick={()=>{setJoinedClubs(prev=>prev.filter(x=>x!==clubId));showToast("Unsubscribed from "+club.title);}} style={{cursor:"pointer",fontSize:11,color:C.alert,fontWeight:500}}>Unsubscribe</div>
                     </div>;
                   }).filter(Boolean)}
                 </div>
@@ -2294,12 +2297,11 @@ const EventsPage = ({navigate, serverEvents=[]}) => {
 const Footer = () => (
   <footer style={{backgroundColor:"#0e162a",padding:"40px 40px 32px",marginTop:0}}>
     <div style={{display:"flex",justifyContent:"space-between",gap:40,marginBottom:32}}>
-      <div style={{flex:1}}>
-        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
-          <img src="/images/Home/logo.png" alt="UATX" style={{width:32,height:32,objectFit:"contain"}}/>
-          <span style={{color:C.cream,fontFamily:"Georgia, serif",fontSize:15,fontWeight:700}}>UATX Student Portal</span>
+      <div style={{flex:1,display:"flex",alignItems:"center"}}>
+        <div style={{display:"flex",alignItems:"center",gap:14}}>
+          <img src="/images/Home/logo.png" alt="UATX" style={{width:48,height:48,objectFit:"contain"}}/>
+          <span style={{color:C.cream,fontFamily:"Georgia, serif",fontSize:22,fontWeight:700,lineHeight:1.2}}>UATX Student Portal</span>
         </div>
-
       </div>
       <div>
         <div style={{fontSize:11,fontWeight:700,color:C.gold,textTransform:"uppercase",letterSpacing:"1px",marginBottom:12}}>Contact</div>
@@ -2317,9 +2319,8 @@ const Footer = () => (
         </div>
       </div>
     </div>
-    <div style={{borderTop:"1px solid "+C.cream+"22",paddingTop:16,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+    <div style={{borderTop:"1px solid "+C.cream+"22",paddingTop:16}}>
       <span style={{fontSize:11,color:C.cream+"55"}}>&copy; {new Date().getFullYear()} University of Austin. All rights reserved.</span>
-      <span style={{fontSize:11,color:C.cream+"44"}}>Student Opportunity Portal v1.0</span>
     </div>
   </footer>
 );
@@ -2644,6 +2645,16 @@ ReactDOM.render(<App/>, document.getElementById("root"));
 const lenis = new Lenis({ duration: 0.7, easing: t => Math.min(1, 1.001 - Math.pow(2, -10 * t)) });
 function raf(time) { lenis.raf(time); requestAnimationFrame(raf); }
 requestAnimationFrame(raf);
+
+// Auto-hide scrollbars on [data-lenis-prevent] elements
+document.addEventListener('scroll', function(e) {
+  const el = e.target;
+  if (el.nodeType === 1 && el.hasAttribute('data-lenis-prevent')) {
+    el.classList.add('scrolling');
+    clearTimeout(el._scrollTimer);
+    el._scrollTimer = setTimeout(() => el.classList.remove('scrolling'), 1500);
+  }
+}, true);
 </script>
 </body>
 </html>
