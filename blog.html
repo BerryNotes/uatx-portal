@@ -514,8 +514,6 @@
 
   let accDelta = 0;
   let accResetTimer = null;
-  let snapCount = 0; // how many snaps in current burst — controls momentum ramp
-  let snapCountTimer = null;
 
   window.addEventListener('wheel', (e) => {
     e.preventDefault();
@@ -525,28 +523,15 @@
 
     accDelta += e.deltaY;
 
-    // Reset accumulator if no events for 80ms
     clearTimeout(accResetTimer);
     accResetTimer = setTimeout(() => { accDelta = 0; }, 80);
 
-    // High threshold — needs real intentional scroll, not a light brush
     if (Math.abs(accDelta) < 150) return;
 
     const dir = accDelta > 0 ? 1 : -1;
     accDelta = 0;
 
-    // Momentum ramp: starts very slow, builds with continued scrolling
-    snapCount++;
-    clearTimeout(snapCountTimer);
-    snapCountTimer = setTimeout(() => { snapCount = 0; }, 1200);
-
-    // Duration: first snap is slow (2400ms), ramps down with momentum
-    const duration = snapCount <= 1 ? 2400 : snapCount <= 3 ? 1600 : snapCount <= 6 ? 800 : 400;
-
-    // Only start skipping quotes after significant momentum
-    const skip = snapCount <= 4 ? 1 : snapCount <= 8 ? 2 : 3;
-
-    snapTo(targetIndex + dir * skip, duration);
+    snapTo(targetIndex + dir, 2400);
   }, { passive: false });
 
 
