@@ -133,6 +133,7 @@ try { db.exec("ALTER TABLE opportunities ADD COLUMN apply_url TEXT NOT NULL DEFA
 try { db.exec("ALTER TABLE activities ADD COLUMN next_event_title TEXT NOT NULL DEFAULT ''"); } catch (e) {}
 try { db.exec("ALTER TABLE activities ADD COLUMN next_event_date TEXT NOT NULL DEFAULT ''"); } catch (e) {}
 try { db.exec("ALTER TABLE events ADD COLUMN is_community INTEGER NOT NULL DEFAULT 0"); } catch (e) {}
+try { db.exec("ALTER TABLE activities ADD COLUMN next_event_location TEXT NOT NULL DEFAULT ''"); } catch (e) {}
 
 // ─── ROSTER ───
 
@@ -378,11 +379,11 @@ function deleteActivity(id) {
 }
 
 const activityUpdateNextEvent = db.prepare(
-  "UPDATE activities SET next_event_title=?, next_event_date=? WHERE id=?"
+  "UPDATE activities SET next_event_title=?, next_event_date=?, next_event_location=? WHERE id=?"
 );
 
-function updateActivityNextEvent(id, title, date) {
-  return activityUpdateNextEvent.run(title || "", date || "", id);
+function updateActivityNextEvent(id, title, date, location) {
+  return activityUpdateNextEvent.run(title || "", date || "", location || "", id);
 }
 
 // ─── SEED ACTIVITIES ───

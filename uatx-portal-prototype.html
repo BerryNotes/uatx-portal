@@ -1573,7 +1573,7 @@ const OpportunitiesPage = ({navigate, showToast, savedOpps, setSavedOpps, select
 };
 
 // ─── CALENDAR ───
-const CalendarPage = ({allInternships, navigate}) => {
+const CalendarPage = ({allInternships, navigate, serverActivities=[]}) => {
   const [calMonth, setCalMonth] = useState(() => new Date().getMonth());
   const [calYear, setCalYear] = useState(() => new Date().getFullYear());
 
@@ -1699,6 +1699,26 @@ const CalendarPage = ({allInternships, navigate}) => {
           </div>
         </div>
       </div>
+
+      {/* Club Meeting Schedules */}
+      {serverActivities.filter(a => a.meet_day || a.next_event_title).length > 0 && (
+        <div style={{marginTop:24}}>
+          <h3 style={{fontFamily:"Georgia, serif",fontSize:18,color:C.navy,margin:"0 0 12px"}}>Club Meeting Schedules</h3>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:12}}>
+            {serverActivities.filter(a => a.meet_day || a.next_event_title).map(a => (
+              <div key={a.id} style={{backgroundColor:C.white,border:"1px solid "+C.border,padding:14}}>
+                <div style={{fontSize:14,fontWeight:600,color:C.navy,marginBottom:4}}>{a.title}</div>
+                {a.meet_day && <div style={{fontSize:12,color:C.text}}>{a.meet_day}</div>}
+                {a.next_event_title && (
+                  <div style={{fontSize:11,color:C.goldMuted,marginTop:4}}>
+                    Next: {a.next_event_title}{a.next_event_location ? " \u2014 " + a.next_event_location : ""}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -1708,7 +1728,7 @@ const ClubPresidentCard = ({club, showToast, onEventUpdated}) => {
   const [showCompose, setShowCompose] = useState(false);
   const [showEventForm, setShowEventForm] = useState(false);
   const [eventTitle, setEventTitle] = useState(club.next_event_title || "");
-  const [eventDate, setEventDate] = useState(club.next_event_date || "");
+  const [eventLocation, setEventLocation] = useState(club.next_event_location || "");
   const [savingEvent, setSavingEvent] = useState(false);
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
@@ -1721,7 +1741,7 @@ const ClubPresidentCard = ({club, showToast, onEventUpdated}) => {
     try {
       const res = await fetch("/api/activities/" + club.id + "/next-event", {
         method:"PUT", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ title: eventTitle, date: eventDate })
+        body: JSON.stringify({ title: eventTitle, date: "", location: eventLocation })
       });
       if (res.ok) {
         showToast(eventTitle ? "Next event updated" : "Next event cleared");
@@ -1783,13 +1803,10 @@ const ClubPresidentCard = ({club, showToast, onEventUpdated}) => {
         </div>
         <Badge color={C.gold}>President</Badge>
       </div>
-      {(club.next_event_title || club.next_event_date) && !showEventForm && (
-        <div style={{marginBottom:8,padding:"8px 12px",backgroundColor:C.gold+"15",border:"1px solid "+C.gold+"40",display:"flex",alignItems:"center",gap:8}}>
-          <span style={{fontSize:14}}>{"\uD83D\uDCC5"}</span>
-          <div style={{flex:1}}>
-            <div style={{fontSize:12,fontWeight:600,color:C.navy}}>{club.next_event_title}</div>
-            {club.next_event_date && <div style={{fontSize:11,color:C.textLight}}>{new Date(club.next_event_date+"T00:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"})}</div>}
-          </div>
+      {club.next_event_title && !showEventForm && (
+        <div style={{marginBottom:8,padding:"8px 12px",backgroundColor:C.gold+"15",border:"1px solid "+C.gold+"40"}}>
+          <div style={{fontSize:12,fontWeight:600,color:C.navy}}>{club.next_event_title}</div>
+          {club.next_event_location && <div style={{fontSize:11,color:C.textLight}}>{club.next_event_location}</div>}
         </div>
       )}
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
@@ -1808,12 +1825,12 @@ const ClubPresidentCard = ({club, showToast, onEventUpdated}) => {
             <input type="text" placeholder="e.g. Weekly Meeting" value={eventTitle} onChange={e=>setEventTitle(e.target.value)} style={inputStyle}/>
           </div>
           <div>
-            <label style={{fontSize:11,fontWeight:600,color:C.textLight,textTransform:"uppercase",letterSpacing:"0.5px",display:"block",marginBottom:4}}>Date</label>
-            <input type="date" value={eventDate} onChange={e=>setEventDate(e.target.value)} style={inputStyle}/>
+            <label style={{fontSize:11,fontWeight:600,color:C.textLight,textTransform:"uppercase",letterSpacing:"0.5px",display:"block",marginBottom:4}}>Location</label>
+            <input type="text" placeholder="e.g. Room 204, Main Building" value={eventLocation} onChange={e=>setEventLocation(e.target.value)} style={inputStyle}/>
           </div>
           <div style={{display:"flex",gap:8}}>
             <Btn size="sm" onClick={saveNextEvent}>{savingEvent ? "Saving..." : "Save"}</Btn>
-            {(club.next_event_title || club.next_event_date) && <Btn size="sm" variant="ghost" onClick={()=>{setEventTitle("");setEventDate("");saveNextEvent();}}>Clear Event</Btn>}
+            {club.next_event_title && <Btn size="sm" variant="ghost" onClick={()=>{setEventTitle("");setEventLocation("");saveNextEvent();}}>Clear Event</Btn>}
           </div>
         </div>
       )}
@@ -1932,7 +1949,7 @@ const ProfilePage = ({showToast, selectedIndustries, setSelectedIndustries, sele
                         <div style={{fontSize:11,color:C.textLight}}>{club.category}{club.meet_day ? " \u00B7 "+club.meet_day : ""}</div>
                         {club.next_event_title && (
                           <div style={{fontSize:11,color:C.goldMuted,marginTop:3}}>
-                            Next: {club.next_event_title}{club.next_event_date ? " \u2014 "+new Date(club.next_event_date+"T00:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"}) : ""}
+                            Next: {club.next_event_title}{club.next_event_location ? " \u2014 "+club.next_event_location : ""}
                           </div>
                         )}
                       </div>
@@ -2059,8 +2076,6 @@ const CommunityPage = ({joinedClubs, setJoinedClubs, showToast, serverActivities
   // Community events (admin-created, is_community flag)
   const communityEvents = serverEvents.filter(e => e.is_community).map(e => ({...e, desc: e.description || e.desc})).filter(e => e.date && new Date(e.date) >= new Date(new Date().toDateString())).sort((a,b) => new Date(a.date) - new Date(b.date));
 
-  // Upcoming club events from next_event fields
-  const upcomingClubEvents = allActivities.filter(c => c.next_event_title && c.next_event_date && new Date(c.next_event_date) >= new Date(new Date().toDateString())).sort((a,b) => new Date(a.next_event_date) - new Date(b.next_event_date));
 
   return (
     <div style={{padding:"32px 40px",animation:"fadeIn 0.3s ease"}}>
@@ -2068,9 +2083,9 @@ const CommunityPage = ({joinedClubs, setJoinedClubs, showToast, serverActivities
         <h1 style={{fontFamily:"Georgia, serif",fontSize:26,color:C.navy,margin:0}}>Community</h1>
       </div>
       <p style={{color:C.textLight,fontSize:13,margin:"0 0 16px"}}>Student activities, clubs, and campus life</p>
-      <div style={{display:"inline-flex",marginBottom:24,border:"1px solid "+C.border,borderRadius:6,overflow:"hidden"}}>
+      <div style={{display:"flex",gap:0,marginBottom:24,backgroundColor:C.cream,border:"1px solid "+C.border,borderRadius:8,padding:4,width:"fit-content"}}>
         {[{id:"clubs",label:"Clubs & Activities"},{id:"events",label:"Community Events"}].map(t => (
-          <div key={t.id} onClick={()=>setCommunityTab(t.id)} style={{padding:"8px 20px",fontSize:13,fontWeight:600,cursor:"pointer",color:communityTab===t.id?C.white:C.textLight,backgroundColor:communityTab===t.id?C.navy:"transparent",transition:"all 0.15s"}}>{t.label}</div>
+          <div key={t.id} onClick={()=>setCommunityTab(t.id)} style={{padding:"10px 24px",fontSize:14,fontWeight:600,cursor:"pointer",color:communityTab===t.id?C.white:C.navy,backgroundColor:communityTab===t.id?C.navy:"transparent",borderRadius:6,transition:"all 0.2s",boxShadow:communityTab===t.id?"0 2px 6px rgba(0,0,0,0.15)":"none"}}>{t.label}</div>
         ))}
       </div>
 
@@ -2105,11 +2120,9 @@ const CommunityPage = ({joinedClubs, setJoinedClubs, showToast, serverActivities
                   <Btn size="sm" variant={isJoined(club.id)?"primary":"secondary"} onClick={()=>toggleJoin(club)}>{isJoined(club.id)?"On Email List":"Join Email List"}</Btn>
                 </div>
                 {club.next_event_title && (
-                  <div style={{marginTop:10,padding:"8px 10px",backgroundColor:C.gold+"12",border:"1px solid "+C.gold+"30",display:"flex",alignItems:"center",gap:6}}>
-                    <div>
-                      <div style={{fontSize:11,fontWeight:600,color:C.navy}}>{club.next_event_title}</div>
-                      {club.next_event_date && <div style={{fontSize:10,color:C.textLight}}>{new Date(club.next_event_date+"T00:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"})}</div>}
-                    </div>
+                  <div style={{marginTop:10,padding:"8px 10px",backgroundColor:C.gold+"12",border:"1px solid "+C.gold+"30"}}>
+                    <div style={{fontSize:11,fontWeight:600,color:C.navy}}>{club.next_event_title}</div>
+                    {club.next_event_location && <div style={{fontSize:10,color:C.textLight}}>{club.next_event_location}</div>}
                   </div>
                 )}
               </div>
@@ -2119,28 +2132,8 @@ const CommunityPage = ({joinedClubs, setJoinedClubs, showToast, serverActivities
       </>}
 
       {communityTab === "events" && <>
-        {upcomingClubEvents.length > 0 && (
-          <div style={{marginBottom:24}}>
-            <h3 style={{fontFamily:"Georgia, serif",fontSize:18,color:C.navy,margin:"0 0 12px"}}>Club Meetings</h3>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:12}}>
-              {upcomingClubEvents.map(club => (
-                <div key={club.id} style={{backgroundColor:C.white,border:"1px solid "+C.border,padding:16,display:"flex",alignItems:"center",gap:12}}>
-                  <div style={{width:48,height:48,backgroundColor:C.gold+"18",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                    <div style={{fontSize:10,fontWeight:700,color:C.goldMuted,textTransform:"uppercase"}}>{new Date(club.next_event_date+"T00:00:00").toLocaleDateString("en-US",{month:"short"})}</div>
-                    <div style={{fontSize:18,fontWeight:700,color:C.navy,lineHeight:1}}>{new Date(club.next_event_date+"T00:00:00").getDate()}</div>
-                  </div>
-                  <div>
-                    <div style={{fontSize:13,fontWeight:600,color:C.navy}}>{club.next_event_title}</div>
-                    <div style={{fontSize:11,color:C.textLight}}>{club.title}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
         {communityEvents.length > 0 && (
           <div>
-            <h3 style={{fontFamily:"Georgia, serif",fontSize:18,color:C.navy,margin:"0 0 12px"}}>Upcoming Community Events</h3>
             <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:16}}>
               {communityEvents.map(event => (
                 <div key={event.id} style={{backgroundColor:C.white,border:"1px solid "+C.border,overflow:"hidden",display:"flex",flexDirection:"column"}}>
@@ -2164,7 +2157,7 @@ const CommunityPage = ({joinedClubs, setJoinedClubs, showToast, serverActivities
             </div>
           </div>
         )}
-        {upcomingClubEvents.length === 0 && communityEvents.length === 0 && <p style={{fontSize:13,color:C.textLight}}>No upcoming community events.</p>}
+        {communityEvents.length === 0 && <p style={{fontSize:13,color:C.textLight}}>No upcoming community events.</p>}
       </>}
 
     </div>
@@ -2531,7 +2524,7 @@ const App = () => {
   const pages = {
     home: <HomePage navigate={navigate}/>,
     opportunities: <OpportunitiesPage navigate={navigate} showToast={showToast} savedOpps={savedOpps} setSavedOpps={setSavedOpps} selectedIndustries={selectedIndustries} serverOpps={serverOpps}/>,
-    calendar: <CalendarPage allInternships={allInternships} navigate={navigate}/>,
+    calendar: <CalendarPage allInternships={allInternships} navigate={navigate} serverActivities={serverActivities}/>,
     profile: <ProfilePage showToast={showToast} selectedIndustries={selectedIndustries} setSelectedIndustries={setSelectedIndustries} selectedAreas={selectedAreas} setSelectedAreas={setSelectedAreas} emailAlerts={emailAlerts} setEmailAlerts={setEmailAlerts} internshipHistory={internshipHistory} setInternshipHistory={setInternshipHistory} currentUser={currentUser} serverActivities={serverActivities} joinedClubs={joinedClubs} setJoinedClubs={setJoinedClubs} refreshActivities={loadServerActivities}/>,
     community: <CommunityPage joinedClubs={joinedClubs} setJoinedClubs={setJoinedClubs} showToast={showToast} serverActivities={serverActivities} serverEvents={serverEvents} navigate={navigate} refreshActivities={loadServerActivities}/>,
     events: <EventsPage navigate={navigate} serverEvents={serverEvents}/>,

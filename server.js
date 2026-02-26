@@ -187,6 +187,7 @@ function icsEscape(str) {
 app.get("/calendar/uatx-events.ics", (req, res) => {
   const events = getAllEvents();
   const opps = getAllOpportunities();
+  const activities = getApprovedActivities();
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
@@ -204,8 +205,23 @@ app.get("/calendar/uatx-events.ics", (req, res) => {
     lines.push("UID:event-" + (ev.id || i) + "@uaustinportal.org");
     lines.push("DTSTART:" + dt);
     lines.push("SUMMARY:" + icsEscape(ev.title));
-    if (ev.desc) lines.push("DESCRIPTION:" + icsEscape(ev.desc));
+    if (ev.description) lines.push("DESCRIPTION:" + icsEscape(ev.description));
     if (ev.org) lines.push('ORGANIZER;CN="' + icsEscape(ev.org) + '":mailto:noreply@uaustinportal.org');
+    lines.push("END:VEVENT");
+  });
+
+  // Club meetings with next_event_date
+  activities.forEach((a, i) => {
+    if (!a.next_event_title || !a.next_event_date) return;
+    const dt = icsDate(a.next_event_date);
+    if (!dt) return;
+    lines.push("BEGIN:VEVENT");
+    lines.push("UID:club-" + (a.id || i) + "@uaustinportal.org");
+    lines.push("DTSTART:" + dt);
+    lines.push("SUMMARY:[Club] " + icsEscape(a.title + " — " + a.next_event_title));
+    const desc = [a.meet_day ? "Regular schedule: " + a.meet_day : "", a.description].filter(Boolean).join("\\n");
+    if (desc) lines.push("DESCRIPTION:" + icsEscape(desc));
+    if (a.next_event_location) lines.push("LOCATION:" + icsEscape(a.next_event_location));
     lines.push("END:VEVENT");
   });
 
@@ -420,8 +436,8 @@ app.put("/api/activities/:id/next-event", requireAuth, (req, res) => {
   const activities = getActivitiesByPresidentEmail(user.email);
   const club = activities.find(a => a.id === parseInt(req.params.id));
   if (!club) return res.status(403).json({ error: "You are not the president of this club" });
-  const { title, date } = req.body;
-  updateActivityNextEvent(club.id, title, date);
+  const { title, date, location } = req.body;
+  updateActivityNextEvent(club.id, title, date, location);
   res.json({ ok: true });
 });
 
