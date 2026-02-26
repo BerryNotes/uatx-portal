@@ -494,14 +494,14 @@
 
     const from = window.scrollY;
     const start = performance.now();
-    const duration = Math.min(400, Math.max(150, dist * 0.6));
+    const duration = Math.min(700, Math.max(250, dist * 1.2));
 
     if (settleAnim) cancelAnimationFrame(settleAnim);
 
     let settling = true;
     function animate() {
       const t = Math.min((performance.now() - start) / duration, 1);
-      const ease = 1 - Math.pow(1 - t, 3);
+      const ease = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
       window.scrollTo(0, from + (target - from) * ease);
       updateBlur();
       if (t < 1) settleAnim = requestAnimationFrame(animate);
@@ -520,7 +520,7 @@
 
     // User is scrolling — cancel any pending settle
     clearTimeout(settleTimer);
-    settleTimer = setTimeout(settleToNearest, 50);
+    settleTimer = setTimeout(settleToNearest, 120);
   });
 
 
