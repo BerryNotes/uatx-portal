@@ -468,10 +468,10 @@
   let scrollFrom = 0;
   let scrollTo = 0;
   let scrollStart = 0;
-  let scrollDuration = 600;
+  let scrollDuration = 900;
 
   function easeOut(t) {
-    return 1 - Math.pow(1 - t, 3);
+    return 1 - Math.pow(1 - t, 4);
   }
 
   function getQuoteTarget(index) {
@@ -491,7 +491,7 @@
     scrollFrom = window.scrollY;
     scrollTo = getQuoteTarget(index);
     scrollStart = performance.now();
-    scrollDuration = duration || 600;
+    scrollDuration = duration || 900;
 
     if (!animId) tick();
   }
@@ -512,11 +512,8 @@
     }
   }
 
-  let gestureDelta = 0;
-  let gestureTimer = null;
-  let snapLockedUntil = 0; // hard cooldown — ignore everything (including inertia) until this time
-  let rapidCount = 0;
-  let rapidTimer = null;
+  let accDelta = 0;
+  let snapLockedUntil = 0;
 
   window.addEventListener('wheel', (e) => {
     e.preventDefault();
@@ -526,42 +523,18 @@
 
     const now = performance.now();
 
-    // Hard cooldown after a snap — swallow all inertia events
-    if (now < snapLockedUntil) return;
+    // After a snap, swallow everything for 1s (eats all inertia/momentum)
+    if (now < snapLockedUntil) { accDelta = 0; return; }
 
-    gestureDelta += e.deltaY;
+    accDelta += e.deltaY;
 
-    // Detect mouse vs touchpad: mice send large discrete deltas (deltaMode=1 or |deltaY|>=50)
-    const isMouse = e.deltaMode === 1 || Math.abs(e.deltaY) >= 50;
+    // Snap as soon as accumulated delta crosses threshold
+    if (Math.abs(accDelta) < 30) return;
 
-    if (isMouse) {
-      const dir = e.deltaY > 0 ? 1 : -1;
-      gestureDelta = 0;
-      snapLockedUntil = now + 250;
-      snapTo(targetIndex + dir, 600);
-    } else {
-      // Touchpad: wait for gesture to fully end, then snap once
-      clearTimeout(gestureTimer);
-      gestureTimer = setTimeout(() => {
-        if (Math.abs(gestureDelta) < 10) { gestureDelta = 0; return; }
-
-        const dir = gestureDelta > 0 ? 1 : -1;
-        gestureDelta = 0;
-
-        // Lock out for 800ms to eat all inertia/momentum events
-        snapLockedUntil = performance.now() + 800;
-
-        // Track rapid gestures
-        rapidCount++;
-        clearTimeout(rapidTimer);
-        rapidTimer = setTimeout(() => { rapidCount = 0; }, 1000);
-
-        const skip = rapidCount >= 5 ? 3 : rapidCount >= 3 ? 2 : 1;
-        const speed = rapidCount >= 3 ? 300 : 600;
-
-        snapTo(targetIndex + dir * skip, speed);
-      }, 100); // 100ms of silence = gesture ended
-    }
+    const dir = accDelta > 0 ? 1 : -1;
+    accDelta = 0;
+    snapLockedUntil = now + 1000;
+    snapTo(targetIndex + dir, 900);
   }, { passive: false });
 
 
