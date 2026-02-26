@@ -1588,6 +1588,11 @@ const CalendarPage = ({allInternships, navigate, serverActivities=[], allClubEve
   const deadlines = allInternships.map(i=>({...i,dateObj:new Date(i.deadline)}));
   const events = EVENTS.map(e=>({...e,dateObj:new Date(e.date)}));
 
+  const clubEvtsParsed = allClubEvents.filter(ce => ce.date).map(ce => {
+    const club = serverActivities.find(a => a.id === ce.activity_id);
+    return {...ce, dateObj: new Date(ce.date), clubName: club ? club.title : "Club"};
+  });
+
   const getItems = (day) => {
     if (!day) return [];
     const items = [];
@@ -1598,6 +1603,10 @@ const CalendarPage = ({allInternships, navigate, serverActivities=[], allClubEve
     events.forEach(ev => {
       if (ev.dateObj.getFullYear()===calYear && ev.dateObj.getMonth()===calMonth && ev.dateObj.getDate()===day)
         items.push({type:"event",label:ev.title,subPage:ev.subPage});
+    });
+    clubEvtsParsed.forEach(ce => {
+      if (ce.dateObj.getFullYear()===calYear && ce.dateObj.getMonth()===calMonth && ce.dateObj.getDate()===day)
+        items.push({type:"club",label:ce.title});
     });
     return items;
   };
@@ -1611,6 +1620,7 @@ const CalendarPage = ({allInternships, navigate, serverActivities=[], allClubEve
   const allUpcoming = [
     ...deadlines.filter(d=>d.dateObj>now).map(d=>({...d,itemType:"deadline"})),
     ...events.filter(e=>e.dateObj>now).map(e=>({...e,itemType:"event",title:e.title,org:e.org})),
+    ...clubEvtsParsed.filter(ce=>ce.dateObj>now).map(ce=>({...ce,itemType:"club",title:ce.title,org:ce.clubName})),
   ].sort((a,b) => a.dateObj - b.dateObj);
 
   // Next 7 days deadlines
@@ -1648,7 +1658,7 @@ const CalendarPage = ({allInternships, navigate, serverActivities=[], allClubEve
                 <div style={{fontSize:11,fontWeight:700,color:C.gold,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:6}}>{dateStr}</div>
                 {items.map((item,j) => (
                   <div key={j} style={{display:"flex",alignItems:"flex-start",gap:8,marginBottom:j<items.length-1?8:0}}>
-                    <div style={{width:3,minHeight:14,borderRadius:2,backgroundColor:item.itemType==="deadline"?C.alert:C.success,marginTop:3,flexShrink:0}}/>
+                    <div style={{width:3,minHeight:14,borderRadius:2,backgroundColor:item.itemType==="deadline"?C.alert:item.itemType==="club"?C.gold:C.success,marginTop:3,flexShrink:0}}/>
                     <div>
                       <div style={{fontSize:12,fontWeight:600,lineHeight:1.3}}>{item.itemType==="deadline"?item.title:item.title}</div>
                       <div style={{fontSize:10,color:"#8899aa",marginTop:1}}>{item.org}</div>
@@ -1674,6 +1684,7 @@ const CalendarPage = ({allInternships, navigate, serverActivities=[], allClubEve
             <div style={{display:"flex",alignItems:"center",gap:16}}>
               <span style={{fontSize:11,color:C.alert,fontWeight:600}}>{"\u25CF"} Deadlines</span>
               <span style={{fontSize:11,color:C.success,fontWeight:600}}>{"\u25CF"} Events</span>
+              <span style={{fontSize:11,color:C.gold,fontWeight:600}}>{"\u25CF"} Clubs</span>
               <Btn size="sm" variant="ghost" onClick={goToday}>Today</Btn>
             </div>
           </div>
@@ -1689,7 +1700,7 @@ const CalendarPage = ({allInternships, navigate, serverActivities=[], allClubEve
                   {day && <>
                     <div style={{fontSize:12,fontWeight:isToday?700:400,color:isToday?C.gold:items.length?C.navy:C.textLight,marginBottom:4,textAlign:"right"}}>{isToday ? <span style={{backgroundColor:C.gold,color:C.white,borderRadius:"50%",width:24,height:24,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:11}}>{day}</span> : day}</div>
                     {items.slice(0,3).map((item,j) => (
-                      <div key={j} onClick={item.subPage?()=>navigate(item.subPage):undefined} style={{fontSize:10,padding:"3px 6px",marginTop:2,borderRadius:4,borderLeft:"3px solid "+(item.type==="deadline"?C.alert:C.success),backgroundColor:item.type==="deadline"?C.alert+"10":C.success+"10",color:item.type==="deadline"?C.alert:C.success,fontWeight:600,lineHeight:1.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",cursor:item.subPage?"pointer":"default"}}>{item.label}</div>
+                      <div key={j} onClick={item.subPage?()=>navigate(item.subPage):undefined} style={{fontSize:10,padding:"3px 6px",marginTop:2,borderRadius:4,borderLeft:"3px solid "+(item.type==="deadline"?C.alert:item.type==="club"?C.gold:C.success),backgroundColor:(item.type==="deadline"?C.alert:item.type==="club"?C.gold:C.success)+"10",color:item.type==="deadline"?C.alert:item.type==="club"?C.gold:C.success,fontWeight:600,lineHeight:1.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",cursor:item.subPage?"pointer":"default"}}>{item.label}</div>
                     ))}
                     {items.length>3 && <div style={{fontSize:9,color:C.textLight,marginTop:2,textAlign:"center"}}>+{items.length-3} more</div>}
                   </>}
@@ -1872,7 +1883,7 @@ const ClubPresidentCard = ({club, showToast, onEventUpdated}) => {
                 <div key={ev.id} style={{padding:10,border:"1px solid "+C.gold,backgroundColor:C.white,display:"flex",flexDirection:"column",gap:6}}>
                   <input type="text" value={editEvt.title} onChange={e=>setEditEvt({...editEvt,title:e.target.value})} placeholder="Event name" style={inputStyle}/>
                   <div style={{display:"flex",gap:8}}>
-                    <input type="datetime-local" value={editEvt.date} onChange={e=>setEditEvt({...editEvt,date:e.target.value})} style={{...inputStyle,flex:1}}/>
+                    <input type="datetime-local" step="900" value={editEvt.date} onChange={e=>setEditEvt({...editEvt,date:e.target.value})} style={{...inputStyle,flex:1}}/>
                     <input type="text" value={editEvt.location} onChange={e=>setEditEvt({...editEvt,location:e.target.value})} placeholder="Location" style={{...inputStyle,flex:1}}/>
                   </div>
                   <div style={{display:"flex",gap:6}}>
@@ -1900,7 +1911,7 @@ const ClubPresidentCard = ({club, showToast, onEventUpdated}) => {
             <label style={labelSt}>Add Event</label>
             <input type="text" value={newEvt.title} onChange={e=>setNewEvt({...newEvt,title:e.target.value})} placeholder="Event name" style={inputStyle}/>
             <div style={{display:"flex",gap:8}}>
-              <input type="datetime-local" value={newEvt.date} onChange={e=>setNewEvt({...newEvt,date:e.target.value})} style={{...inputStyle,flex:1}}/>
+              <input type="datetime-local" step="900" value={newEvt.date} onChange={e=>setNewEvt({...newEvt,date:e.target.value})} style={{...inputStyle,flex:1}}/>
               <input type="text" value={newEvt.location} onChange={e=>setNewEvt({...newEvt,location:e.target.value})} placeholder="Location" style={{...inputStyle,flex:1}}/>
             </div>
             <Btn size="sm" onClick={addEvent}>Add Event</Btn>
@@ -2120,7 +2131,6 @@ const ProfilePage = ({showToast, selectedIndustries, setSelectedIndustries, sele
 
 // ─── COMMUNITY ───
 const CommunityPage = ({joinedClubs, setJoinedClubs, showToast, serverActivities, navigate, refreshActivities, serverEvents=[], allClubEvents=[]}) => {
-  const [communityTab, setCommunityTab] = useState("clubs");
   useEffect(() => { refreshActivities(); }, []);
   const isJoined = (id) => joinedClubs.includes(id);
   const toggleJoin = (club) => {
@@ -2153,96 +2163,79 @@ const CommunityPage = ({joinedClubs, setJoinedClubs, showToast, serverActivities
   // Community events (admin-created, is_community flag)
   const communityEvents = serverEvents.filter(e => e.is_community).map(e => ({...e, desc: e.description || e.desc})).filter(e => e.date && new Date(e.date) >= new Date(new Date().toDateString())).sort((a,b) => new Date(a.date) - new Date(b.date));
 
-
   return (
     <div style={{padding:"32px 40px",animation:"fadeIn 0.3s ease"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-        <div style={{display:"flex",alignItems:"center",gap:20}}>
-          <h1 style={{fontFamily:"Georgia, serif",fontSize:26,color:C.navy,margin:0}}>Community</h1>
-          <div style={{display:"flex",gap:0,backgroundColor:C.cream,border:"1px solid "+C.border,borderRadius:8,padding:3}}>
-            {[{id:"clubs",label:"Clubs & Activities"},{id:"events",label:"Community Events"}].map(t => (
-              <div key={t.id} onClick={()=>setCommunityTab(t.id)} style={{padding:"7px 18px",fontSize:13,fontWeight:600,cursor:"pointer",color:communityTab===t.id?C.white:C.navy,backgroundColor:communityTab===t.id?C.navy:"transparent",borderRadius:6,transition:"all 0.2s",boxShadow:communityTab===t.id?"0 2px 6px rgba(0,0,0,0.15)":"none"}}>{t.label}</div>
+      <h1 style={{fontFamily:"Georgia, serif",fontSize:26,color:C.navy,margin:"0 0 4px"}}>Community</h1>
+      <p style={{color:C.textLight,fontSize:13,margin:"0 0 20px"}}>Student activities, clubs, and campus life</p>
+
+      {communityEvents.length > 0 && (
+        <div style={{marginBottom:28}}>
+          <h2 style={{fontFamily:"Georgia, serif",fontSize:18,color:C.navy,margin:"0 0 12px"}}>Upcoming Community Events</h2>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:16}}>
+            {communityEvents.map(event => (
+              <div key={event.id} style={{backgroundColor:C.white,border:"1px solid "+C.border,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+                <div style={{height:72,background:"linear-gradient(135deg, "+C.navy+" 0%, "+C.navyLight+" 100%)",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",overflow:"hidden"}}>
+                  {event.img && <img src={event.img} alt={event.org} style={{position:"absolute",top:8,right:8,width:28,height:28,objectFit:"contain",borderRadius:4,backgroundColor:C.white+"dd",padding:3}} onError={e=>{e.target.style.display="none"}}/>}
+                  <span style={{color:C.gold,fontFamily:"Georgia, serif",fontSize:14,fontWeight:700,textAlign:"center",padding:"0 14px",lineHeight:1.3}}>{event.title}</span>
+                </div>
+                <div style={{padding:14,display:"flex",flexDirection:"column",flex:1}}>
+                  <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",marginBottom:6}}>
+                    {event.type && <Badge>{event.type}</Badge>}
+                    {event.org && <span style={{fontSize:11,color:C.textLight}}>{event.org}</span>}
+                  </div>
+                  <p style={{fontSize:12,color:C.textLight,lineHeight:1.5,margin:"0 0 8px",flex:1}}>{event.desc}</p>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:8,borderTop:"1px solid "+C.border}}>
+                    <span style={{fontSize:12,color:C.text,fontWeight:600}}>{new Date(event.date).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"})}</span>
+                    {event.url && <a href={event.url} target="_blank" rel="noopener noreferrer" style={{fontSize:11,color:C.goldMuted,textDecoration:"none",fontWeight:500}}>Website</a>}
+                  </div>
+                </div>
+              </div>
             ))}
           </div>
         </div>
+      )}
+
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+        <h2 style={{fontFamily:"Georgia, serif",fontSize:18,color:C.navy,margin:0}}>Clubs & Activities</h2>
+        <Btn size="sm" onClick={()=>navigate("submit-activity")}>List Your Club</Btn>
       </div>
-      <p style={{color:C.textLight,fontSize:13,margin:"0 0 20px"}}>Student activities, clubs, and campus life</p>
-
-      {communityTab === "clubs" && <>
-        <div style={{backgroundColor:C.gold+"15",border:"1px solid "+C.gold+"40",padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,marginBottom:24}}>
-          <div style={{display:"flex",alignItems:"center",gap:12}}>
-            <span style={{fontSize:20,flexShrink:0}}>{"\u2709"}</span>
-            <div>
-              <div style={{fontSize:14,fontWeight:600,color:C.navy,marginBottom:2}}>Run a club or activity?</div>
-              <p style={{fontSize:13,color:C.text,margin:0,lineHeight:1.5}}>List it here so other students can find and join.</p>
-            </div>
-          </div>
-          <Btn size="sm" onClick={()=>navigate("submit-activity")}>List Your Club</Btn>
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:16,marginBottom:24}}>
-          {allActivities.map(club => (
-            <div key={club.id} style={{backgroundColor:C.white,border:"1px solid "+C.border,overflow:"hidden"}}>
-              <div style={{height:8,backgroundColor:isJoined(club.id)?C.gold:C.navy}}/>
-              <div style={{padding:20}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
-                  <h3 style={{fontFamily:"Georgia, serif",fontSize:16,color:C.navy,margin:0}}>{club.title}</h3>
-                  <Badge>{club.category}</Badge>
-                </div>
-                <p style={{fontSize:13,color:C.textLight,lineHeight:1.5,margin:"0 0 8px"}}>{club.desc}</p>
-                {club.presidentEmail && (
-                  <div style={{fontSize:11,color:C.textLight,marginBottom:8}}>
-                    President: <a href={"mailto:"+club.presidentEmail} style={{color:C.goldMuted,fontWeight:500}}>{club.presidentEmail}</a>
-                  </div>
-                )}
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:12,borderTop:"1px solid "+C.border}}>
-                  <span style={{fontSize:11,color:C.textLight}}>{club.meetDay||""}</span>
-                  <Btn size="sm" variant={isJoined(club.id)?"primary":"secondary"} onClick={()=>toggleJoin(club)}>{isJoined(club.id)?"On Email List":"Join Email List"}</Btn>
-                </div>
-                {allClubEvents.filter(e => e.activity_id === (club.serverId || club.id)).length > 0 && (
-                  <div style={{marginTop:10,display:"flex",flexDirection:"column",gap:4}}>
-                    {allClubEvents.filter(e => e.activity_id === (club.serverId || club.id)).slice(0,3).map(ev => (
-                      <div key={ev.id} style={{padding:"6px 10px",backgroundColor:C.gold+"12",border:"1px solid "+C.gold+"30"}}>
-                        <div style={{fontSize:11,fontWeight:600,color:C.navy}}>{ev.title}</div>
-                        <div style={{fontSize:10,color:C.textLight}}>{ev.date ? new Date(ev.date).toLocaleString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}) : ""}{ev.location ? " \u2014 " + ev.location : ""}</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+      <div style={{backgroundColor:C.gold+"15",border:"1px solid "+C.gold+"40",padding:"12px 18px",display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
+        <span style={{fontSize:18,flexShrink:0}}>{"\u2709"}</span>
+        <p style={{fontSize:13,color:C.text,margin:0,lineHeight:1.5}}>Run a club or activity? List it here so other students can find and join.</p>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:16}}>
+        {allActivities.map(club => (
+          <div key={club.id} style={{backgroundColor:C.white,border:"1px solid "+C.border,overflow:"hidden"}}>
+            <div style={{height:8,backgroundColor:isJoined(club.id)?C.gold:C.navy}}/>
+            <div style={{padding:20}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                <h3 style={{fontFamily:"Georgia, serif",fontSize:16,color:C.navy,margin:0}}>{club.title}</h3>
+                <Badge>{club.category}</Badge>
               </div>
-            </div>
-          ))}
-        </div>
-      </>}
-
-      {communityTab === "events" && <>
-        {communityEvents.length > 0 && (
-          <div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:16}}>
-              {communityEvents.map(event => (
-                <div key={event.id} style={{backgroundColor:C.white,border:"1px solid "+C.border,overflow:"hidden",display:"flex",flexDirection:"column"}}>
-                  <div style={{height:80,background:"linear-gradient(135deg, "+C.navy+" 0%, "+C.navyLight+" 100%)",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",overflow:"hidden"}}>
-                    {event.img && <img src={event.img} alt={event.org} style={{position:"absolute",top:8,right:8,width:32,height:32,objectFit:"contain",borderRadius:4,backgroundColor:C.white+"dd",padding:3}} onError={e=>{e.target.style.display="none"}}/>}
-                    <span style={{color:C.gold,fontFamily:"Georgia, serif",fontSize:14,fontWeight:700,textAlign:"center",padding:"0 14px",lineHeight:1.3}}>{event.title}</span>
-                  </div>
-                  <div style={{padding:16,display:"flex",flexDirection:"column",flex:1}}>
-                    <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",marginBottom:8}}>
-                      {event.type && <Badge>{event.type}</Badge>}
-                      {event.org && <span style={{fontSize:11,color:C.textLight}}>{event.org}</span>}
-                    </div>
-                    <p style={{fontSize:12,color:C.textLight,lineHeight:1.5,margin:"0 0 10px",flex:1}}>{event.desc}</p>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:10,borderTop:"1px solid "+C.border}}>
-                      <span style={{fontSize:12,color:C.text,fontWeight:600}}>{new Date(event.date).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"})}</span>
-                      {event.url && <a href={event.url} target="_blank" rel="noopener noreferrer" style={{fontSize:11,color:C.goldMuted,textDecoration:"none",fontWeight:500}}>Website</a>}
-                    </div>
-                  </div>
+              <p style={{fontSize:13,color:C.textLight,lineHeight:1.5,margin:"0 0 8px"}}>{club.desc}</p>
+              {club.presidentEmail && (
+                <div style={{fontSize:11,color:C.textLight,marginBottom:8}}>
+                  President: <a href={"mailto:"+club.presidentEmail} style={{color:C.goldMuted,fontWeight:500}}>{club.presidentEmail}</a>
                 </div>
-              ))}
+              )}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:12,borderTop:"1px solid "+C.border}}>
+                <span style={{fontSize:11,color:C.textLight}}>{club.meetDay||""}</span>
+                <Btn size="sm" variant={isJoined(club.id)?"primary":"secondary"} onClick={()=>toggleJoin(club)}>{isJoined(club.id)?"On Email List":"Join Email List"}</Btn>
+              </div>
+              {allClubEvents.filter(e => e.activity_id === (club.serverId || club.id)).length > 0 && (
+                <div style={{marginTop:10,display:"flex",flexDirection:"column",gap:4}}>
+                  {allClubEvents.filter(e => e.activity_id === (club.serverId || club.id)).slice(0,3).map(ev => (
+                    <div key={ev.id} style={{padding:"6px 10px",backgroundColor:C.gold+"12",border:"1px solid "+C.gold+"30"}}>
+                      <div style={{fontSize:11,fontWeight:600,color:C.navy}}>{ev.title}</div>
+                      <div style={{fontSize:10,color:C.textLight}}>{ev.date ? new Date(ev.date).toLocaleString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}) : ""}{ev.location ? " \u2014 " + ev.location : ""}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
-        )}
-        {communityEvents.length === 0 && <p style={{fontSize:13,color:C.textLight}}>No upcoming community events.</p>}
-      </>}
-
+        ))}
+      </div>
     </div>
   );
 };
