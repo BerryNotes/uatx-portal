@@ -514,8 +514,7 @@
 
   let gestureDelta = 0;
   let gestureTimer = null;
-  let gestureSnapped = false; // only one snap per gesture
-  let lastGestureTime = 0;
+  let snapLockedUntil = 0; // hard cooldown — ignore everything (including inertia) until this time
   let rapidCount = 0;
   let rapidTimer = null;
 
@@ -527,12 +526,8 @@
 
     const now = performance.now();
 
-    // Detect if this is a new gesture (gap > 200ms since last event)
-    if (now - lastGestureTime > 200) {
-      gestureDelta = 0;
-      gestureSnapped = false;
-    }
-    lastGestureTime = now;
+    // Hard cooldown after a snap — swallow all inertia events
+    if (now < snapLockedUntil) return;
 
     gestureDelta += e.deltaY;
 
@@ -540,39 +535,32 @@
     const isMouse = e.deltaMode === 1 || Math.abs(e.deltaY) >= 50;
 
     if (isMouse) {
-      // Mouse: snap immediately on each click of the wheel
-      if (gestureSnapped) return;
-      gestureSnapped = true;
-
       const dir = e.deltaY > 0 ? 1 : -1;
+      gestureDelta = 0;
+      snapLockedUntil = now + 250;
       snapTo(targetIndex + dir, 2400);
-
-      // Reset after a short delay so next wheel click works
-      clearTimeout(gestureTimer);
-      gestureTimer = setTimeout(() => { gestureSnapped = false; gestureDelta = 0; }, 200);
     } else {
-      // Touchpad: wait for gesture to end, then snap once
-      if (gestureSnapped) return;
-
+      // Touchpad: wait for gesture to fully end, then snap once
       clearTimeout(gestureTimer);
       gestureTimer = setTimeout(() => {
-        if (gestureSnapped) return;
-        if (Math.abs(gestureDelta) < 10) { gestureDelta = 0; return; } // ignore tiny accidental touches
+        if (Math.abs(gestureDelta) < 10) { gestureDelta = 0; return; }
 
-        gestureSnapped = true;
         const dir = gestureDelta > 0 ? 1 : -1;
+        gestureDelta = 0;
+
+        // Lock out for 800ms to eat all inertia/momentum events
+        snapLockedUntil = performance.now() + 800;
 
         // Track rapid gestures
         rapidCount++;
         clearTimeout(rapidTimer);
-        rapidTimer = setTimeout(() => { rapidCount = 0; }, 800);
+        rapidTimer = setTimeout(() => { rapidCount = 0; }, 1000);
 
         const skip = rapidCount >= 5 ? 3 : rapidCount >= 3 ? 2 : 1;
         const speed = rapidCount >= 3 ? 400 : 2400;
 
         snapTo(targetIndex + dir * skip, speed);
-        gestureDelta = 0;
-      }, 120); // wait 120ms of silence = gesture ended
+      }, 100); // 100ms of silence = gesture ended
     }
   }, { passive: false });
 
