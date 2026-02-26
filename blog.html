@@ -515,7 +515,38 @@
   let accDelta = 0;
   let accResetTimer = null;
   let snapCount = 0;
-  let snapCountTimer = null;
+  let pendingSnap = false;
+
+  function trySnap() {
+    if (animId || Math.abs(accDelta) < 50) return;
+
+    const dir = accDelta > 0 ? 1 : -1;
+    accDelta = 0;
+    pendingSnap = false;
+
+    snapCount++;
+    const speed = Math.max(200, 500 - snapCount * 50);
+    snapTo(targetIndex + dir, speed);
+  }
+
+  // Override tick to check for pending snap when animation ends
+  const origTick = tick;
+  tick = function() {
+    const now = performance.now();
+    const elapsed = now - scrollStart;
+    const t = Math.min(elapsed / scrollDuration, 1);
+    const pos = scrollFrom + (scrollTo - scrollFrom) * easeOut(t);
+
+    window.scrollTo(0, pos);
+    updateBlur();
+
+    if (t < 1) {
+      animId = requestAnimationFrame(tick);
+    } else {
+      animId = null;
+      if (pendingSnap) trySnap();
+    }
+  };
 
   window.addEventListener('wheel', (e) => {
     e.preventDefault();
@@ -523,24 +554,19 @@
     const quotes = document.querySelectorAll('.quote');
     if (quotes.length === 0) return;
 
-    // If already animating, ignore — prevents inertia from stacking snaps
-    if (animId) return;
-
+    // Always accumulate, even during animation
     accDelta += e.deltaY;
 
     clearTimeout(accResetTimer);
     accResetTimer = setTimeout(() => { accDelta = 0; }, 80);
 
-    if (Math.abs(accDelta) < 50) return;
+    if (animId) {
+      // Mark that we want to snap as soon as current animation ends
+      if (Math.abs(accDelta) >= 50) pendingSnap = true;
+      return;
+    }
 
-    const dir = accDelta > 0 ? 1 : -1;
-    accDelta = 0;
-
-    // Build momentum — never resets
-    snapCount++;
-    const speed = Math.max(200, 500 - snapCount * 50);
-
-    snapTo(targetIndex + dir, speed);
+    trySnap();
   }, { passive: false });
 
 
