@@ -374,7 +374,7 @@
 <div class="bg-orb bg-orb-3"></div>
 <div class="grain"></div>
 
-<div class="controls" id="controls">
+<div class="controls view-hidden" id="controls">
   <button class="ctrl-btn" onclick="openEditor()">+</button>
 </div>
 
@@ -392,7 +392,7 @@
   <div class="overlay-inner">
     <div class="overlay-text" id="overlay-text"></div>
     <div class="overlay-date" id="overlay-date"></div>
-    <div class="overlay-actions" id="overlay-actions">
+    <div class="overlay-actions view-hidden" id="overlay-actions">
       <button class="ctrl-btn" onclick="editCurrent()">Edit</button>
       <button class="ctrl-btn ctrl-btn-danger" onclick="deleteCurrent()">Delete</button>
     </div>
@@ -617,6 +617,7 @@
   // ─── Overlays ───
 
   async function openPost(id) {
+    if (!isAdmin) return;
     openEditor(id);
   }
 
@@ -660,6 +661,22 @@
   }
 
   // ─── Init ───
+  let isAdmin = false;
+
+  async function checkAdmin() {
+    try {
+      const res = await fetch('/api/auth/me');
+      const data = await res.json();
+      isAdmin = !!(data.user && data.user.is_admin);
+    } catch { isAdmin = false; }
+
+    if (isAdmin) {
+      document.getElementById('controls').classList.remove('view-hidden');
+      document.getElementById('overlay-actions').classList.remove('view-hidden');
+    }
+  }
+
+  checkAdmin();
   fetchPosts();
 </script>
 </body>
