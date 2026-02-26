@@ -536,11 +536,8 @@
     const dir = accDelta > 0 ? 1 : -1;
     accDelta = 0;
 
-    // Build momentum with consecutive snaps
+    // Build momentum — never resets
     snapCount++;
-    clearTimeout(snapCountTimer);
-    snapCountTimer = setTimeout(() => { snapCount = 0; }, 1000);
-
     const speed = Math.max(200, 500 - snapCount * 50);
 
     snapTo(targetIndex + dir, speed);
