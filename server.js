@@ -627,14 +627,14 @@ app.get("/api/blog/posts/:id", (req, res) => {
   res.json({ post });
 });
 
-app.post("/api/blog/posts", (req, res) => {
+app.post("/api/blog/posts", requireAdmin, (req, res) => {
   const { title, content } = req.body;
   const t = title || (content || "").replace(/<[^>]*>/g, "").substring(0, 120) || "Untitled";
   const id = createBlogPost(t, content || "");
   res.json({ ok: true, id });
 });
 
-app.put("/api/blog/posts/:id", (req, res) => {
+app.put("/api/blog/posts/:id", requireAdmin, (req, res) => {
   const { title, content } = req.body;
   const existing = getBlogPostById(req.params.id);
   if (!existing) return res.status(404).json({ error: "Post not found" });
@@ -643,7 +643,7 @@ app.put("/api/blog/posts/:id", (req, res) => {
   res.json({ ok: true });
 });
 
-app.delete("/api/blog/posts/:id", (req, res) => {
+app.delete("/api/blog/posts/:id", requireAdmin, (req, res) => {
   const existing = getBlogPostById(req.params.id);
   if (!existing) return res.status(404).json({ error: "Post not found" });
   deleteBlogPost(req.params.id);
