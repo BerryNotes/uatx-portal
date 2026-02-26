@@ -518,7 +518,6 @@
 
   window.addEventListener('wheel', (e) => {
     e.preventDefault();
-    if (animId) return;
     if (wheelCooldown) return;
     wheelCooldown = true;
     setTimeout(() => { wheelCooldown = false; }, 120);
