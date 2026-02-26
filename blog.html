@@ -494,7 +494,7 @@
 
     const from = window.scrollY;
     const start = performance.now();
-    const duration = Math.min(800, Math.max(300, dist * 1.5));
+    const duration = Math.min(400, Math.max(150, dist * 0.6));
 
     if (settleAnim) cancelAnimationFrame(settleAnim);
 
@@ -516,7 +516,7 @@
 
     // When scrolling stops, gently settle to nearest quote
     clearTimeout(settleTimer);
-    settleTimer = setTimeout(settleToNearest, 150);
+    settleTimer = setTimeout(settleToNearest, 50);
   });
 
 
