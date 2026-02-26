@@ -36,6 +36,12 @@ const {
   getClubMembers,
   getAllMemberCounts,
   getActivitiesByPresidentEmail,
+  getAllClubEvents,
+  getClubEventsByActivity,
+  getClubEventById,
+  createClubEvent,
+  updateClubEvent,
+  deleteClubEvent,
   getAllEvents,
   createEvent,
   updateEvent,
@@ -188,6 +194,7 @@ app.get("/calendar/uatx-events.ics", (req, res) => {
   const events = getAllEvents();
   const opps = getAllOpportunities();
   const activities = getApprovedActivities();
+  const clubEvents = getAllClubEvents();
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
@@ -210,18 +217,19 @@ app.get("/calendar/uatx-events.ics", (req, res) => {
     lines.push("END:VEVENT");
   });
 
-  // Club meetings with next_event_date
-  activities.forEach((a, i) => {
-    if (!a.next_event_title || !a.next_event_date) return;
-    const dt = icsDate(a.next_event_date);
+  // Club events
+  clubEvents.forEach((ce) => {
+    if (!ce.date) return;
+    const dt = icsDate(ce.date);
     if (!dt) return;
+    const club = activities.find(a => a.id === ce.activity_id);
+    const clubName = club ? club.title : "Club";
     lines.push("BEGIN:VEVENT");
-    lines.push("UID:club-" + (a.id || i) + "@uaustinportal.org");
+    lines.push("UID:clubevent-" + ce.id + "@uaustinportal.org");
     lines.push("DTSTART:" + dt);
-    lines.push("SUMMARY:[Club] " + icsEscape(a.title + " — " + a.next_event_title));
-    const desc = [a.meet_day ? "Regular schedule: " + a.meet_day : "", a.description].filter(Boolean).join("\\n");
-    if (desc) lines.push("DESCRIPTION:" + icsEscape(desc));
-    if (a.next_event_location) lines.push("LOCATION:" + icsEscape(a.next_event_location));
+    lines.push("SUMMARY:[Club] " + icsEscape(clubName + " — " + ce.title));
+    if (club && club.description) lines.push("DESCRIPTION:" + icsEscape(club.description));
+    if (ce.location) lines.push("LOCATION:" + icsEscape(ce.location));
     lines.push("END:VEVENT");
   });
 
@@ -439,6 +447,49 @@ app.put("/api/activities/:id/next-event", requireAuth, (req, res) => {
   const { title, date, location } = req.body;
   updateActivityNextEvent(club.id, title, date, location);
   res.json({ ok: true });
+});
+
+// ─── CLUB EVENTS (president-managed) ───
+
+app.get("/api/club-events", requireAuth, (req, res) => {
+  res.json({ club_events: getAllClubEvents() });
+});
+
+app.get("/api/activities/:id/events", requireAuth, (req, res) => {
+  res.json({ events: getClubEventsByActivity(parseInt(req.params.id)) });
+});
+
+app.post("/api/activities/:id/events", requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  const activities = getActivitiesByPresidentEmail(user.email);
+  const club = activities.find(a => a.id === parseInt(req.params.id));
+  if (!club) return res.status(403).json({ error: "You are not the president of this club" });
+  const { title, date, location } = req.body;
+  if (!title) return res.status(400).json({ error: "Title is required" });
+  createClubEvent(club.id, title, date, location);
+  res.json({ ok: true, events: getClubEventsByActivity(club.id) });
+});
+
+app.put("/api/club-events/:id", requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  const evt = getClubEventById(parseInt(req.params.id));
+  if (!evt) return res.status(404).json({ error: "Event not found" });
+  const activities = getActivitiesByPresidentEmail(user.email);
+  if (!activities.find(a => a.id === evt.activity_id)) return res.status(403).json({ error: "You are not the president of this club" });
+  const { title, date, location } = req.body;
+  if (!title) return res.status(400).json({ error: "Title is required" });
+  updateClubEvent(evt.id, title, date, location);
+  res.json({ ok: true, events: getClubEventsByActivity(evt.activity_id) });
+});
+
+app.delete("/api/club-events/:id", requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  const evt = getClubEventById(parseInt(req.params.id));
+  if (!evt) return res.status(404).json({ error: "Event not found" });
+  const activities = getActivitiesByPresidentEmail(user.email);
+  if (!activities.find(a => a.id === evt.activity_id)) return res.status(403).json({ error: "You are not the president of this club" });
+  deleteClubEvent(evt.id);
+  res.json({ ok: true, events: getClubEventsByActivity(evt.activity_id) });
 });
 
 // ─── ADMIN ROUTES ───

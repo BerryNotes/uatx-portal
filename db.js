@@ -103,6 +103,15 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS club_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    activity_id INTEGER NOT NULL REFERENCES activities(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    date TEXT NOT NULL DEFAULT '',
+    location TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
   CREATE TABLE IF NOT EXISTS blog_posts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
@@ -385,6 +394,27 @@ const activityUpdateNextEvent = db.prepare(
 function updateActivityNextEvent(id, title, date, location) {
   return activityUpdateNextEvent.run(title || "", date || "", location || "", id);
 }
+
+// ─── CLUB EVENTS ───
+
+const clubEventsAll = db.prepare("SELECT * FROM club_events ORDER BY date ASC, created_at ASC");
+const clubEventsByActivity = db.prepare("SELECT * FROM club_events WHERE activity_id = ? ORDER BY date ASC");
+const clubEventInsert = db.prepare("INSERT INTO club_events (activity_id, title, date, location) VALUES (?, ?, ?, ?)");
+const clubEventUpdate = db.prepare("UPDATE club_events SET title=?, date=?, location=? WHERE id=?");
+const clubEventDelete = db.prepare("DELETE FROM club_events WHERE id = ?");
+const clubEventById = db.prepare("SELECT * FROM club_events WHERE id = ?");
+
+function getAllClubEvents() { return clubEventsAll.all(); }
+function getClubEventsByActivity(activityId) { return clubEventsByActivity.all(activityId); }
+function getClubEventById(id) { return clubEventById.get(id); }
+function createClubEvent(activityId, title, date, location) {
+  const info = clubEventInsert.run(activityId, title, date || "", location || "");
+  return info.lastInsertRowid;
+}
+function updateClubEvent(id, title, date, location) {
+  return clubEventUpdate.run(title, date || "", location || "", id);
+}
+function deleteClubEvent(id) { return clubEventDelete.run(id); }
 
 // ─── SEED ACTIVITIES ───
 
@@ -692,6 +722,12 @@ module.exports = {
   getClubMembers,
   getAllMemberCounts,
   getActivitiesByPresidentEmail,
+  getAllClubEvents,
+  getClubEventsByActivity,
+  getClubEventById,
+  createClubEvent,
+  updateClubEvent,
+  deleteClubEvent,
   getAllEvents,
   createEvent,
   updateEvent,

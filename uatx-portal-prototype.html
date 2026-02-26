@@ -1573,7 +1573,7 @@ const OpportunitiesPage = ({navigate, showToast, savedOpps, setSavedOpps, select
 };
 
 // ─── CALENDAR ───
-const CalendarPage = ({allInternships, navigate, serverActivities=[]}) => {
+const CalendarPage = ({allInternships, navigate, serverActivities=[], allClubEvents=[]}) => {
   const [calMonth, setCalMonth] = useState(() => new Date().getMonth());
   const [calYear, setCalYear] = useState(() => new Date().getFullYear());
 
@@ -1700,23 +1700,35 @@ const CalendarPage = ({allInternships, navigate, serverActivities=[]}) => {
         </div>
       </div>
 
-      {/* Club Meeting Schedules */}
-      {serverActivities.filter(a => a.meet_day || a.next_event_title).length > 0 && (
+      {/* Club Events & Schedules */}
+      {(serverActivities.filter(a => a.meet_day).length > 0 || allClubEvents.length > 0) && (
         <div style={{marginTop:24}}>
-          <h3 style={{fontFamily:"Georgia, serif",fontSize:18,color:C.navy,margin:"0 0 12px"}}>Club Meeting Schedules</h3>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:12}}>
-            {serverActivities.filter(a => a.meet_day || a.next_event_title).map(a => (
-              <div key={a.id} style={{backgroundColor:C.white,border:"1px solid "+C.border,padding:14}}>
-                <div style={{fontSize:14,fontWeight:600,color:C.navy,marginBottom:4}}>{a.title}</div>
-                {a.meet_day && <div style={{fontSize:12,color:C.text}}>{a.meet_day}</div>}
-                {a.next_event_title && (
-                  <div style={{fontSize:11,color:C.goldMuted,marginTop:4}}>
-                    Next: {a.next_event_title}{a.next_event_location ? " \u2014 " + a.next_event_location : ""}
+          <h3 style={{fontFamily:"Georgia, serif",fontSize:18,color:C.navy,margin:"0 0 12px"}}>Club Events & Schedules</h3>
+          {allClubEvents.length > 0 && (
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:12,marginBottom:16}}>
+              {allClubEvents.sort((a,b) => new Date(a.date||"9999") - new Date(b.date||"9999")).map(ce => {
+                const club = serverActivities.find(a => a.id === ce.activity_id);
+                return (
+                  <div key={ce.id} style={{backgroundColor:C.white,border:"1px solid "+C.gold+"30",padding:14}}>
+                    <div style={{fontSize:13,fontWeight:600,color:C.navy}}>{ce.title}</div>
+                    <div style={{fontSize:11,color:C.textLight,marginTop:2}}>
+                      {club ? club.title : "Club"}{ce.date ? " \u00B7 " + new Date(ce.date).toLocaleString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}) : ""}{ce.location ? " \u00B7 " + ce.location : ""}
+                    </div>
                   </div>
-                )}
-              </div>
-            ))}
-          </div>
+                );
+              })}
+            </div>
+          )}
+          {serverActivities.filter(a => a.meet_day).length > 0 && (
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:12}}>
+              {serverActivities.filter(a => a.meet_day).map(a => (
+                <div key={a.id} style={{backgroundColor:C.white,border:"1px solid "+C.border,padding:14}}>
+                  <div style={{fontSize:14,fontWeight:600,color:C.navy,marginBottom:4}}>{a.title}</div>
+                  <div style={{fontSize:12,color:C.text}}>{a.meet_day}</div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -1726,32 +1738,69 @@ const CalendarPage = ({allInternships, navigate, serverActivities=[]}) => {
 // ─── CLUB PRESIDENT CARD ───
 const ClubPresidentCard = ({club, showToast, onEventUpdated}) => {
   const [showCompose, setShowCompose] = useState(false);
-  const [showEventForm, setShowEventForm] = useState(false);
-  const [eventTitle, setEventTitle] = useState(club.next_event_title || "");
-  const [eventLocation, setEventLocation] = useState(club.next_event_location || "");
-  const [savingEvent, setSavingEvent] = useState(false);
+  const [clubEvents, setClubEvents] = useState([]);
+  const [newEvt, setNewEvt] = useState({title:"",date:"",location:""});
+  const [editingEvtId, setEditingEvtId] = useState(null);
+  const [editEvt, setEditEvt] = useState({title:"",date:"",location:""});
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [memberEmails, setMemberEmails] = useState(null);
   const inputStyle = {width:"100%",padding:8,border:"1px solid "+C.border,fontSize:13,boxSizing:"border-box",fontFamily:"'Libre Franklin', sans-serif"};
 
-  const saveNextEvent = async () => {
-    setSavingEvent(true);
+  const loadEvents = async () => {
     try {
-      const res = await fetch("/api/activities/" + club.id + "/next-event", {
-        method:"PUT", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ title: eventTitle, date: "", location: eventLocation })
+      const res = await fetch("/api/activities/" + club.id + "/events");
+      const data = await res.json();
+      if (data.events) setClubEvents(data.events.filter(e => !e.date || new Date(e.date+"T23:59:59") >= new Date()));
+    } catch(e) {}
+  };
+  useEffect(() => { loadEvents(); }, [club.id]);
+
+  const addEvent = async () => {
+    if (!newEvt.title) return;
+    try {
+      const res = await fetch("/api/activities/" + club.id + "/events", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify(newEvt)
       });
       if (res.ok) {
-        showToast(eventTitle ? "Next event updated" : "Next event cleared");
-        setShowEventForm(false);
+        const data = await res.json();
+        setClubEvents(data.events.filter(e => !e.date || new Date(e.date+"T23:59:59") >= new Date()));
+        setNewEvt({title:"",date:"",location:""});
+        showToast("Event added");
         if (onEventUpdated) onEventUpdated();
-      } else {
-        showToast("Failed to save");
       }
-    } catch(e) { showToast("Failed to save"); }
-    setSavingEvent(false);
+    } catch(e) { showToast("Failed to add event"); }
+  };
+
+  const saveEdit = async (id) => {
+    if (!editEvt.title) return;
+    try {
+      const res = await fetch("/api/club-events/" + id, {
+        method:"PUT", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify(editEvt)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setClubEvents(data.events.filter(e => !e.date || new Date(e.date+"T23:59:59") >= new Date()));
+        setEditingEvtId(null);
+        showToast("Event updated");
+        if (onEventUpdated) onEventUpdated();
+      }
+    } catch(e) { showToast("Failed to update"); }
+  };
+
+  const removeEvent = async (id) => {
+    try {
+      const res = await fetch("/api/club-events/" + id, { method:"DELETE" });
+      if (res.ok) {
+        const data = await res.json();
+        setClubEvents(data.events.filter(e => !e.date || new Date(e.date+"T23:59:59") >= new Date()));
+        showToast("Event removed");
+        if (onEventUpdated) onEventUpdated();
+      }
+    } catch(e) { showToast("Failed to remove"); }
   };
 
   const sendEmail = async () => {
@@ -1794,6 +1843,9 @@ const ClubPresidentCard = ({club, showToast, onEventUpdated}) => {
     }
   };
 
+  const [showEvents, setShowEvents] = useState(false);
+  const labelSt = {fontSize:11,fontWeight:600,color:C.textLight,textTransform:"uppercase",letterSpacing:"0.5px",display:"block",marginBottom:4};
+
   return (
     <div style={{border:"1px solid "+C.border,padding:16,marginBottom:12}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
@@ -1803,34 +1855,55 @@ const ClubPresidentCard = ({club, showToast, onEventUpdated}) => {
         </div>
         <Badge color={C.gold}>President</Badge>
       </div>
-      {club.next_event_title && !showEventForm && (
-        <div style={{marginBottom:8,padding:"8px 12px",backgroundColor:C.gold+"15",border:"1px solid "+C.gold+"40"}}>
-          <div style={{fontSize:12,fontWeight:600,color:C.navy}}>{club.next_event_title}</div>
-          {club.next_event_location && <div style={{fontSize:11,color:C.textLight}}>{club.next_event_location}</div>}
-        </div>
-      )}
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-        <Btn size="sm" variant={showCompose?"ghost":"secondary"} onClick={()=>{setShowCompose(!showCompose);setShowEventForm(false);}}>
+        <Btn size="sm" variant={showCompose?"ghost":"secondary"} onClick={()=>{setShowCompose(!showCompose);setShowEvents(false);}}>
           {showCompose ? "Cancel" : "Email Members"}
         </Btn>
         <Btn size="sm" variant="ghost" onClick={copyMemberEmails}>Copy Member Emails</Btn>
-        <Btn size="sm" variant={showEventForm?"ghost":"secondary"} onClick={()=>{setShowEventForm(!showEventForm);setShowCompose(false);}}>
-          {showEventForm ? "Cancel" : (club.next_event_title ? "Edit Next Event" : "Set Next Event")}
+        <Btn size="sm" variant={showEvents?"ghost":"secondary"} onClick={()=>{setShowEvents(!showEvents);setShowCompose(false);}}>
+          {showEvents ? "Hide Events" : "Manage Events (" + clubEvents.length + ")"}
         </Btn>
       </div>
-      {showEventForm && (
-        <div style={{marginTop:12,display:"flex",flexDirection:"column",gap:10,padding:12,backgroundColor:C.cream,border:"1px solid "+C.border}}>
-          <div>
-            <label style={{fontSize:11,fontWeight:600,color:C.textLight,textTransform:"uppercase",letterSpacing:"0.5px",display:"block",marginBottom:4}}>Event Name</label>
-            <input type="text" placeholder="e.g. Weekly Meeting" value={eventTitle} onChange={e=>setEventTitle(e.target.value)} style={inputStyle}/>
-          </div>
-          <div>
-            <label style={{fontSize:11,fontWeight:600,color:C.textLight,textTransform:"uppercase",letterSpacing:"0.5px",display:"block",marginBottom:4}}>Location</label>
-            <input type="text" placeholder="e.g. Room 204, Main Building" value={eventLocation} onChange={e=>setEventLocation(e.target.value)} style={inputStyle}/>
-          </div>
-          <div style={{display:"flex",gap:8}}>
-            <Btn size="sm" onClick={saveNextEvent}>{savingEvent ? "Saving..." : "Save"}</Btn>
-            {club.next_event_title && <Btn size="sm" variant="ghost" onClick={()=>{setEventTitle("");setEventLocation("");saveNextEvent();}}>Clear Event</Btn>}
+      {showEvents && (
+        <div style={{marginTop:12,padding:12,backgroundColor:C.cream,border:"1px solid "+C.border}}>
+          {clubEvents.length > 0 && (
+            <div style={{marginBottom:12,display:"flex",flexDirection:"column",gap:8}}>
+              {clubEvents.map(ev => editingEvtId === ev.id ? (
+                <div key={ev.id} style={{padding:10,border:"1px solid "+C.gold,backgroundColor:C.white,display:"flex",flexDirection:"column",gap:6}}>
+                  <input type="text" value={editEvt.title} onChange={e=>setEditEvt({...editEvt,title:e.target.value})} placeholder="Event name" style={inputStyle}/>
+                  <div style={{display:"flex",gap:8}}>
+                    <input type="datetime-local" value={editEvt.date} onChange={e=>setEditEvt({...editEvt,date:e.target.value})} style={{...inputStyle,flex:1}}/>
+                    <input type="text" value={editEvt.location} onChange={e=>setEditEvt({...editEvt,location:e.target.value})} placeholder="Location" style={{...inputStyle,flex:1}}/>
+                  </div>
+                  <div style={{display:"flex",gap:6}}>
+                    <Btn size="sm" onClick={()=>saveEdit(ev.id)}>Save</Btn>
+                    <Btn size="sm" variant="ghost" onClick={()=>setEditingEvtId(null)}>Cancel</Btn>
+                  </div>
+                </div>
+              ) : (
+                <div key={ev.id} style={{padding:"8px 10px",border:"1px solid "+C.border,backgroundColor:C.white,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div>
+                    <div style={{fontSize:13,fontWeight:600,color:C.navy}}>{ev.title}</div>
+                    <div style={{fontSize:11,color:C.textLight}}>
+                      {ev.date ? new Date(ev.date).toLocaleString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}) : "No date"}{ev.location ? " \u2014 " + ev.location : ""}
+                    </div>
+                  </div>
+                  <div style={{display:"flex",gap:6}}>
+                    <span onClick={()=>{setEditingEvtId(ev.id);setEditEvt({title:ev.title,date:ev.date||"",location:ev.location||""});}} style={{cursor:"pointer",fontSize:11,color:C.goldMuted,fontWeight:500}}>Edit</span>
+                    <span onClick={()=>removeEvent(ev.id)} style={{cursor:"pointer",fontSize:11,color:C.alert,fontWeight:500}}>Delete</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            <label style={labelSt}>Add Event</label>
+            <input type="text" value={newEvt.title} onChange={e=>setNewEvt({...newEvt,title:e.target.value})} placeholder="Event name" style={inputStyle}/>
+            <div style={{display:"flex",gap:8}}>
+              <input type="datetime-local" value={newEvt.date} onChange={e=>setNewEvt({...newEvt,date:e.target.value})} style={{...inputStyle,flex:1}}/>
+              <input type="text" value={newEvt.location} onChange={e=>setNewEvt({...newEvt,location:e.target.value})} placeholder="Location" style={{...inputStyle,flex:1}}/>
+            </div>
+            <Btn size="sm" onClick={addEvent}>Add Event</Btn>
           </div>
         </div>
       )}
@@ -1860,7 +1933,7 @@ const ClubPresidentCard = ({club, showToast, onEventUpdated}) => {
 };
 
 // ─── PROFILE ───
-const ProfilePage = ({showToast, selectedIndustries, setSelectedIndustries, selectedAreas, setSelectedAreas, emailAlerts, setEmailAlerts, internshipHistory, setInternshipHistory, currentUser, serverActivities, joinedClubs, setJoinedClubs, refreshActivities}) => {
+const ProfilePage = ({showToast, selectedIndustries, setSelectedIndustries, selectedAreas, setSelectedAreas, emailAlerts, setEmailAlerts, internshipHistory, setInternshipHistory, currentUser, serverActivities, joinedClubs, setJoinedClubs, refreshActivities, allClubEvents=[], refreshClubEvents}) => {
   const [showForm, setShowForm] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -1929,7 +2002,7 @@ const ProfilePage = ({showToast, selectedIndustries, setSelectedIndustries, sele
               <h3 style={{fontFamily:"Georgia, serif",fontSize:18,color:C.navy,margin:"0 0 4px"}}>My Clubs</h3>
               <p style={{fontSize:12,color:C.textLight,margin:"0 0 16px"}}>Clubs you manage as president</p>
               {serverActivities.filter(a => (a.president_email||"").toLowerCase() === currentUser.email.toLowerCase() && a.status !== "pending").map(club => (
-                <ClubPresidentCard key={club.id} club={club} showToast={showToast} onEventUpdated={refreshActivities}/>
+                <ClubPresidentCard key={club.id} club={club} showToast={showToast} onEventUpdated={()=>{refreshActivities();if(refreshClubEvents)refreshClubEvents();}}/>
               ))}
             </div>
           )}
@@ -1947,9 +2020,13 @@ const ProfilePage = ({showToast, selectedIndustries, setSelectedIndustries, sele
                       <div>
                         <div style={{fontSize:14,fontWeight:600,color:C.navy}}>{club.title}</div>
                         <div style={{fontSize:11,color:C.textLight}}>{club.category}{club.meet_day ? " \u00B7 "+club.meet_day : ""}</div>
-                        {club.next_event_title && (
+                        {allClubEvents.filter(e => e.activity_id === clubId).length > 0 && (
                           <div style={{fontSize:11,color:C.goldMuted,marginTop:3}}>
-                            Next: {club.next_event_title}{club.next_event_location ? " \u2014 "+club.next_event_location : ""}
+                            {allClubEvents.filter(e => e.activity_id === clubId).slice(0,2).map(ev => (
+                              <div key={ev.id}>
+                                {ev.title}{ev.date ? " \u2014 " + new Date(ev.date).toLocaleString("en-US",{month:"short",day:"numeric"}) : ""}{ev.location ? " @ " + ev.location : ""}
+                              </div>
+                            ))}
                           </div>
                         )}
                       </div>
@@ -2042,7 +2119,7 @@ const ProfilePage = ({showToast, selectedIndustries, setSelectedIndustries, sele
 };
 
 // ─── COMMUNITY ───
-const CommunityPage = ({joinedClubs, setJoinedClubs, showToast, serverActivities, navigate, refreshActivities, serverEvents=[]}) => {
+const CommunityPage = ({joinedClubs, setJoinedClubs, showToast, serverActivities, navigate, refreshActivities, serverEvents=[], allClubEvents=[]}) => {
   const [communityTab, setCommunityTab] = useState("clubs");
   useEffect(() => { refreshActivities(); }, []);
   const isJoined = (id) => joinedClubs.includes(id);
@@ -2080,14 +2157,16 @@ const CommunityPage = ({joinedClubs, setJoinedClubs, showToast, serverActivities
   return (
     <div style={{padding:"32px 40px",animation:"fadeIn 0.3s ease"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-        <h1 style={{fontFamily:"Georgia, serif",fontSize:26,color:C.navy,margin:0}}>Community</h1>
+        <div style={{display:"flex",alignItems:"center",gap:20}}>
+          <h1 style={{fontFamily:"Georgia, serif",fontSize:26,color:C.navy,margin:0}}>Community</h1>
+          <div style={{display:"flex",gap:0,backgroundColor:C.cream,border:"1px solid "+C.border,borderRadius:8,padding:3}}>
+            {[{id:"clubs",label:"Clubs & Activities"},{id:"events",label:"Community Events"}].map(t => (
+              <div key={t.id} onClick={()=>setCommunityTab(t.id)} style={{padding:"7px 18px",fontSize:13,fontWeight:600,cursor:"pointer",color:communityTab===t.id?C.white:C.navy,backgroundColor:communityTab===t.id?C.navy:"transparent",borderRadius:6,transition:"all 0.2s",boxShadow:communityTab===t.id?"0 2px 6px rgba(0,0,0,0.15)":"none"}}>{t.label}</div>
+            ))}
+          </div>
+        </div>
       </div>
-      <p style={{color:C.textLight,fontSize:13,margin:"0 0 16px"}}>Student activities, clubs, and campus life</p>
-      <div style={{display:"flex",gap:0,marginBottom:24,backgroundColor:C.cream,border:"1px solid "+C.border,borderRadius:8,padding:4,width:"fit-content"}}>
-        {[{id:"clubs",label:"Clubs & Activities"},{id:"events",label:"Community Events"}].map(t => (
-          <div key={t.id} onClick={()=>setCommunityTab(t.id)} style={{padding:"10px 24px",fontSize:14,fontWeight:600,cursor:"pointer",color:communityTab===t.id?C.white:C.navy,backgroundColor:communityTab===t.id?C.navy:"transparent",borderRadius:6,transition:"all 0.2s",boxShadow:communityTab===t.id?"0 2px 6px rgba(0,0,0,0.15)":"none"}}>{t.label}</div>
-        ))}
-      </div>
+      <p style={{color:C.textLight,fontSize:13,margin:"0 0 20px"}}>Student activities, clubs, and campus life</p>
 
       {communityTab === "clubs" && <>
         <div style={{backgroundColor:C.gold+"15",border:"1px solid "+C.gold+"40",padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,marginBottom:24}}>
@@ -2119,10 +2198,14 @@ const CommunityPage = ({joinedClubs, setJoinedClubs, showToast, serverActivities
                   <span style={{fontSize:11,color:C.textLight}}>{club.meetDay||""}</span>
                   <Btn size="sm" variant={isJoined(club.id)?"primary":"secondary"} onClick={()=>toggleJoin(club)}>{isJoined(club.id)?"On Email List":"Join Email List"}</Btn>
                 </div>
-                {club.next_event_title && (
-                  <div style={{marginTop:10,padding:"8px 10px",backgroundColor:C.gold+"12",border:"1px solid "+C.gold+"30"}}>
-                    <div style={{fontSize:11,fontWeight:600,color:C.navy}}>{club.next_event_title}</div>
-                    {club.next_event_location && <div style={{fontSize:10,color:C.textLight}}>{club.next_event_location}</div>}
+                {allClubEvents.filter(e => e.activity_id === (club.serverId || club.id)).length > 0 && (
+                  <div style={{marginTop:10,display:"flex",flexDirection:"column",gap:4}}>
+                    {allClubEvents.filter(e => e.activity_id === (club.serverId || club.id)).slice(0,3).map(ev => (
+                      <div key={ev.id} style={{padding:"6px 10px",backgroundColor:C.gold+"12",border:"1px solid "+C.gold+"30"}}>
+                        <div style={{fontSize:11,fontWeight:600,color:C.navy}}>{ev.title}</div>
+                        <div style={{fontSize:10,color:C.textLight}}>{ev.date ? new Date(ev.date).toLocaleString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}) : ""}{ev.location ? " \u2014 " + ev.location : ""}</div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -2331,6 +2414,7 @@ const App = () => {
   const [serverOpps, setServerOpps] = useState([]);
   const [serverActivities, setServerActivities] = useState([]);
   const [serverEvents, setServerEvents] = useState([]);
+  const [allClubEvents, setAllClubEvents] = useState([]);
 
   // Toast state
   const [toasts, setToasts] = useState([]);
@@ -2350,6 +2434,7 @@ const App = () => {
         loadServerOpps();
         loadServerActivities();
         loadServerEvents();
+        loadClubEvents();
       }
       setAuthChecked(true);
     }).catch(() => setAuthChecked(true));
@@ -2421,6 +2506,13 @@ const App = () => {
   const loadServerEvents = () => {
     api("/api/events").then(data => {
       if (data.events) setServerEvents(data.events);
+    }).catch(() => {});
+  };
+
+  const loadClubEvents = () => {
+    api("/api/club-events").then(data => {
+      const evts = data.club_events || data.events || [];
+      setAllClubEvents(evts.filter(e => !e.date || new Date(e.date) >= new Date(new Date().toDateString())));
     }).catch(() => {});
   };
 
@@ -2524,9 +2616,9 @@ const App = () => {
   const pages = {
     home: <HomePage navigate={navigate}/>,
     opportunities: <OpportunitiesPage navigate={navigate} showToast={showToast} savedOpps={savedOpps} setSavedOpps={setSavedOpps} selectedIndustries={selectedIndustries} serverOpps={serverOpps}/>,
-    calendar: <CalendarPage allInternships={allInternships} navigate={navigate} serverActivities={serverActivities}/>,
-    profile: <ProfilePage showToast={showToast} selectedIndustries={selectedIndustries} setSelectedIndustries={setSelectedIndustries} selectedAreas={selectedAreas} setSelectedAreas={setSelectedAreas} emailAlerts={emailAlerts} setEmailAlerts={setEmailAlerts} internshipHistory={internshipHistory} setInternshipHistory={setInternshipHistory} currentUser={currentUser} serverActivities={serverActivities} joinedClubs={joinedClubs} setJoinedClubs={setJoinedClubs} refreshActivities={loadServerActivities}/>,
-    community: <CommunityPage joinedClubs={joinedClubs} setJoinedClubs={setJoinedClubs} showToast={showToast} serverActivities={serverActivities} serverEvents={serverEvents} navigate={navigate} refreshActivities={loadServerActivities}/>,
+    calendar: <CalendarPage allInternships={allInternships} navigate={navigate} serverActivities={serverActivities} allClubEvents={allClubEvents}/>,
+    profile: <ProfilePage showToast={showToast} selectedIndustries={selectedIndustries} setSelectedIndustries={setSelectedIndustries} selectedAreas={selectedAreas} setSelectedAreas={setSelectedAreas} emailAlerts={emailAlerts} setEmailAlerts={setEmailAlerts} internshipHistory={internshipHistory} setInternshipHistory={setInternshipHistory} currentUser={currentUser} serverActivities={serverActivities} joinedClubs={joinedClubs} setJoinedClubs={setJoinedClubs} refreshActivities={loadServerActivities} allClubEvents={allClubEvents} refreshClubEvents={loadClubEvents}/>,
+    community: <CommunityPage joinedClubs={joinedClubs} setJoinedClubs={setJoinedClubs} showToast={showToast} serverActivities={serverActivities} serverEvents={serverEvents} navigate={navigate} refreshActivities={loadServerActivities} allClubEvents={allClubEvents}/>,
     events: <EventsPage navigate={navigate} serverEvents={serverEvents}/>,
   };
 
