@@ -1970,9 +1970,20 @@ const ProfilePage = ({showToast, selectedIndustries, setSelectedIndustries, sele
 };
 
 // ─── COMMUNITY ───
-const CommunityPage = ({joinedClubs, setJoinedClubs, showToast, serverActivities, navigate, refreshActivities}) => {
+const CommunityPage = ({joinedClubs, setJoinedClubs, showToast, serverActivities, memberCounts={}, navigate, refreshActivities}) => {
+  // Snapshot which clubs the user had joined when counts were loaded
+  const countsSnapshot = useRef(null);
   useEffect(() => { refreshActivities(); }, []);
+  useEffect(() => { if (Object.keys(memberCounts).length > 0 && !countsSnapshot.current) countsSnapshot.current = [...joinedClubs]; }, [memberCounts]);
   const isJoined = (id) => joinedClubs.includes(id);
+  const getMemberCount = (id) => {
+    const base = memberCounts[id] || 0;
+    const wasJoined = countsSnapshot.current ? countsSnapshot.current.includes(id) : joinedClubs.includes(id);
+    const nowJoined = joinedClubs.includes(id);
+    if (nowJoined && !wasJoined) return base + 1;
+    if (!nowJoined && wasJoined) return Math.max(0, base - 1);
+    return base;
+  };
   const toggleJoin = (club) => {
     if (isJoined(club.id)) {
       setJoinedClubs(prev => prev.filter(x=>x!==club.id));
@@ -2032,7 +2043,7 @@ const CommunityPage = ({joinedClubs, setJoinedClubs, showToast, serverActivities
                 </div>
               )}
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:12,borderTop:"1px solid "+C.border}}>
-                <span style={{fontSize:11,color:C.textLight}}>{club.members} member{club.members!==1?"s":""} {club.meetDay?"\u00B7 "+club.meetDay:""}</span>
+                <span style={{fontSize:11,color:C.textLight}}>{getMemberCount(club.id)} member{getMemberCount(club.id)!==1?"s":""} {club.meetDay?"\u00B7 "+club.meetDay:""}</span>
                 <Btn size="sm" variant={isJoined(club.id)?"primary":"secondary"} onClick={()=>toggleJoin(club)}>{isJoined(club.id)?"On Email List":"Join Email List"}</Btn>
               </div>
             </div>
@@ -2210,6 +2221,7 @@ const App = () => {
   const [internshipHistory, setInternshipHistory] = useState(() => load("history", []));
   const [serverOpps, setServerOpps] = useState([]);
   const [serverActivities, setServerActivities] = useState([]);
+  const [memberCounts, setMemberCounts] = useState({});
   const [serverEvents, setServerEvents] = useState([]);
 
   // Toast state
@@ -2294,6 +2306,9 @@ const App = () => {
   const loadServerActivities = () => {
     api("/api/activities").then(data => {
       if (data.activities) setServerActivities(data.activities);
+    }).catch(() => {});
+    api("/api/activities/member-counts").then(data => {
+      if (data.counts) setMemberCounts(data.counts);
     }).catch(() => {});
   };
 
@@ -2396,7 +2411,7 @@ const App = () => {
     opportunities: <OpportunitiesPage navigate={navigate} showToast={showToast} savedOpps={savedOpps} setSavedOpps={setSavedOpps} selectedIndustries={selectedIndustries} serverOpps={serverOpps}/>,
     calendar: <CalendarPage allInternships={allInternships} navigate={navigate}/>,
     profile: <ProfilePage showToast={showToast} selectedIndustries={selectedIndustries} setSelectedIndustries={setSelectedIndustries} selectedAreas={selectedAreas} setSelectedAreas={setSelectedAreas} emailAlerts={emailAlerts} setEmailAlerts={setEmailAlerts} internshipHistory={internshipHistory} setInternshipHistory={setInternshipHistory} currentUser={currentUser} serverActivities={serverActivities} joinedClubs={joinedClubs} setJoinedClubs={setJoinedClubs}/>,
-    community: <CommunityPage joinedClubs={joinedClubs} setJoinedClubs={setJoinedClubs} showToast={showToast} serverActivities={serverActivities} navigate={navigate} refreshActivities={loadServerActivities}/>,
+    community: <CommunityPage joinedClubs={joinedClubs} setJoinedClubs={setJoinedClubs} showToast={showToast} serverActivities={serverActivities} memberCounts={memberCounts} navigate={navigate} refreshActivities={loadServerActivities}/>,
     events: <EventsPage navigate={navigate} serverEvents={serverEvents}/>,
   };
 

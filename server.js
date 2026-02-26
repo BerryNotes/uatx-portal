@@ -33,6 +33,7 @@ const {
   deleteActivity,
   seedActivities,
   getClubMembers,
+  getAllMemberCounts,
   getActivitiesByPresidentEmail,
   getAllEvents,
   createEvent,
@@ -351,6 +352,10 @@ app.get("/api/events", requireAuth, (req, res) => {
 
 app.get("/api/activities", requireAuth, (req, res) => {
   res.json({ activities: getApprovedActivities() });
+});
+
+app.get("/api/activities/member-counts", requireAuth, (req, res) => {
+  res.json({ counts: getAllMemberCounts() });
 });
 
 // ─── STUDENT ACTIVITY SUBMISSION ───

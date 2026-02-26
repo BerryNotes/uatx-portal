@@ -410,6 +410,24 @@ function getClubMembers(activityId) {
   }).map(({ email, name }) => ({ email, name }));
 }
 
+function getAllMemberCounts() {
+  const allRows = db.prepare(`
+    SELECT up.joined_clubs
+    FROM user_preferences up
+    WHERE up.joined_clubs != '[]'
+  `).all();
+  const counts = {};
+  for (const row of allRows) {
+    try {
+      const clubs = JSON.parse(row.joined_clubs);
+      if (Array.isArray(clubs)) {
+        for (const id of clubs) counts[id] = (counts[id] || 0) + 1;
+      }
+    } catch {}
+  }
+  return counts;
+}
+
 function getActivitiesByPresidentEmail(email) {
   return db.prepare(
     "SELECT * FROM activities WHERE LOWER(president_email) = LOWER(?)"
@@ -659,6 +677,7 @@ module.exports = {
   deleteActivity,
   seedActivities,
   getClubMembers,
+  getAllMemberCounts,
   getActivitiesByPresidentEmail,
   getAllEvents,
   createEvent,

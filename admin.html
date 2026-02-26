@@ -448,6 +448,7 @@ function filterRoster() {
 let expandedRosterId = null;
 
 function renderRoster(roster) {
+  roster = [...roster].sort((a, b) => (b.is_admin ? 1 : 0) - (a.is_admin ? 1 : 0));
   document.getElementById("roster-count").textContent = "(" + roster.length + ")";
   const body = document.getElementById("roster-body");
   const empty = document.getElementById("roster-empty");
