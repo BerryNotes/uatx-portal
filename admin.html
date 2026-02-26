@@ -145,6 +145,7 @@
     <button class="tab-btn" data-tab="opportunities">Opportunities</button>
     <button class="tab-btn" data-tab="community">Community</button>
     <button class="tab-btn" data-tab="events">Events & Travel</button>
+    <button class="tab-btn" data-tab="expired">Expired Opps</button>
   </div>
 
   <!-- ROSTER TAB -->
@@ -192,8 +193,23 @@
         </div>
       </div>
 
-      <div style="margin-bottom:16px">
+      <div style="margin-bottom:12px">
         <input id="roster-search" placeholder="Search roster..." oninput="filterRoster()" style="width:100%;background:#111a26;color:#f5f0e8;border:1px solid #243044;padding:10px 14px;font-size:13px;font-family:inherit;border-radius:3px;outline:none">
+      </div>
+      <div style="margin-bottom:16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <select id="roster-filter-industry" onchange="filterRoster()" style="background:#111a26;color:#f5f0e8;border:1px solid #243044;padding:6px 10px;font-size:12px;font-family:inherit;border-radius:3px">
+          <option value="">All Industries</option>
+        </select>
+        <select id="roster-filter-club" onchange="filterRoster()" style="background:#111a26;color:#f5f0e8;border:1px solid #243044;padding:6px 10px;font-size:12px;font-family:inherit;border-radius:3px">
+          <option value="">All Clubs</option>
+        </select>
+        <select id="roster-filter-status" onchange="filterRoster()" style="background:#111a26;color:#f5f0e8;border:1px solid #243044;padding:6px 10px;font-size:12px;font-family:inherit;border-radius:3px">
+          <option value="">All Status</option>
+          <option value="registered">Registered</option>
+          <option value="pending">Pending</option>
+          <option value="admin">Admins Only</option>
+        </select>
+        <button class="btn btn-outline" onclick="clearRosterFilters()" style="font-size:11px;padding:5px 10px">Clear Filters</button>
       </div>
 
       <table>
@@ -383,6 +399,24 @@
     </div>
   </div>
 
+  <!-- EXPIRED OPPORTUNITIES TAB -->
+  <div class="tab-panel" id="tab-expired">
+    <div class="content">
+      <div class="section-header">
+        <div style="display:flex;align-items:center">
+          <h2>Expired Opportunities</h2>
+          <span class="count" id="expired-count"></span>
+        </div>
+      </div>
+      <p style="font-size:12px;color:#6b7280;margin-bottom:16px">Opportunities with past deadlines. Not visible to students — for admin record-keeping only.</p>
+      <div style="margin-bottom:12px">
+        <input id="expired-search" placeholder="Search expired opportunities..." oninput="filterExpired()" style="width:100%;background:#111a26;color:#f5f0e8;border:1px solid #243044;padding:10px 14px;font-size:13px;font-family:inherit;border-radius:3px;outline:none">
+      </div>
+      <div id="expired-body"></div>
+      <div class="empty" id="expired-empty" style="display:none">No expired opportunities.</div>
+    </div>
+  </div>
+
 </div>
 
 <div id="toast-container"></div>
@@ -429,19 +463,85 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
 });
 
 // ─── ROSTER ───
+let lastStudents = [];
+
 async function loadRoster() {
   const res = await fetch("/api/admin/roster");
   const data = await res.json();
   lastRoster = data.roster;
+  // Load students for filter data
+  try {
+    const sRes = await fetch("/api/admin/students");
+    const sData = await sRes.json();
+    lastStudents = sData.students || [];
+    populateRosterFilters();
+  } catch(e) {}
+  filterRoster();
+}
+
+function populateRosterFilters() {
+  const indSet = new Set();
+  const clubSet = new Set();
+  lastStudents.forEach(s => {
+    try { const inds = JSON.parse(s.selected_industries || '[]'); inds.forEach(i => indSet.add(i)); } catch(e) {}
+  });
+  lastActivities.forEach(a => clubSet.add(a.title));
+  const indSel = document.getElementById("roster-filter-industry");
+  const clubSel = document.getElementById("roster-filter-club");
+  const curInd = indSel.value;
+  const curClub = clubSel.value;
+  indSel.innerHTML = '<option value="">All Industries</option>' + Array.from(indSet).sort().map(i => '<option value="' + esc(i) + '">' + esc(i) + '</option>').join('');
+  clubSel.innerHTML = '<option value="">All Clubs</option>' + Array.from(clubSet).sort().map(c => '<option value="' + esc(c) + '">' + esc(c) + '</option>').join('');
+  indSel.value = curInd;
+  clubSel.value = curClub;
+}
+
+function clearRosterFilters() {
+  document.getElementById("roster-search").value = "";
+  document.getElementById("roster-filter-industry").value = "";
+  document.getElementById("roster-filter-club").value = "";
+  document.getElementById("roster-filter-status").value = "";
   filterRoster();
 }
 
 function filterRoster() {
   const q = (document.getElementById("roster-search").value || "").toLowerCase();
-  if (!q) { renderRoster(lastRoster); return; }
-  const filtered = lastRoster.filter(r =>
-    (r.name + " " + r.email).toLowerCase().includes(q)
-  );
+  const indFilter = document.getElementById("roster-filter-industry").value;
+  const clubFilter = document.getElementById("roster-filter-club").value;
+  const statusFilter = document.getElementById("roster-filter-status").value;
+
+  // Build a lookup from students
+  const studentByEmail = {};
+  lastStudents.forEach(s => {
+    studentByEmail[s.email.toLowerCase()] = s;
+  });
+
+  let filtered = lastRoster;
+  if (q) {
+    filtered = filtered.filter(r => (r.name + " " + r.email).toLowerCase().includes(q));
+  }
+  if (statusFilter === "registered") filtered = filtered.filter(r => r.registered);
+  else if (statusFilter === "pending") filtered = filtered.filter(r => !r.registered);
+  else if (statusFilter === "admin") filtered = filtered.filter(r => r.is_admin);
+
+  if (indFilter) {
+    filtered = filtered.filter(r => {
+      const s = studentByEmail[r.email.toLowerCase()];
+      if (!s) return false;
+      try { return JSON.parse(s.selected_industries || '[]').includes(indFilter); } catch(e) { return false; }
+    });
+  }
+  if (clubFilter) {
+    filtered = filtered.filter(r => {
+      const s = studentByEmail[r.email.toLowerCase()];
+      if (!s) return false;
+      try {
+        const clubIds = JSON.parse(s.joined_clubs || '[]');
+        const club = lastActivities.find(a => a.title === clubFilter);
+        return club && Array.isArray(clubIds) && clubIds.includes(club.id);
+      } catch(e) { return false; }
+    });
+  }
   renderRoster(filtered);
 }
 
@@ -520,33 +620,47 @@ async function loadStudentDetail(rosterId, email) {
 
     el.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <span style="font-size:11px;color:#4b5563">Joined: ${formatDate(data.student.created_at)}</span>
+        <div style="display:flex;align-items:center;gap:12px">
+          ${data.student.avatar_url ? '<img src="' + esc(data.student.avatar_url) + '" style="width:32px;height:32px;border-radius:50%;border:1px solid #243044">' : ''}
+          <div>
+            <div style="font-size:14px;font-weight:600;color:#f5f0e8">${esc(data.student.name)}</div>
+            <span style="font-size:11px;color:#4b5563">Joined ${formatDate(data.student.created_at)} &middot; ${esc(data.student.email)}</span>
+          </div>
+        </div>
         <button class="btn btn-gold" onclick="openProfileEdit('${esc(email)}', ${rosterId})">Edit Profile</button>
       </div>
-      <div class="detail-grid">
+      <div class="detail-grid" style="grid-template-columns:1fr 1fr 1fr;gap:16px">
         <div class="detail-section">
-          <h4>Interests</h4>
+          <h4>Industry Interests</h4>
           ${industries.length ? '<div>' + industries.map(i => '<span class="tag">' + esc(i) + '</span>').join('') + '</div>' : '<p class="empty-note">No industries selected</p>'}
-          ${areas.length ? '<div style="margin-top:8px">' + areas.map(a => '<span class="tag">' + esc(a) + '</span>').join('') + '</div>' : ''}
+          ${areas.length ? '<div style="margin-top:8px"><h4 style="margin-bottom:6px">Areas of Interest</h4>' + areas.map(a => '<span class="tag">' + esc(a) + '</span>').join('') + '</div>' : ''}
           <p style="margin-top:10px;font-size:12px;color:#6b7280">
             Email alerts: <strong style="color:${alerts === 'On' ? '#4a7c59' : '#6b7280'}">${alerts}</strong>
-            &nbsp;&middot;&nbsp; Saved: <strong>${savedCount}</strong>
+            &nbsp;&middot;&nbsp; Saved opps: <strong>${savedCount}</strong>
           </p>
         </div>
         <div class="detail-section">
           <h4>Clubs Joined</h4>
           ${clubNames.length ? '<div>' + clubNames.map(c => '<span class="tag">' + esc(c) + '</span>').join('') + '</div>' : '<p class="empty-note">No clubs joined</p>'}
         </div>
-      </div>
-      <div class="detail-section" style="margin-top:16px">
-        <h4>Internship History</h4>
-        ${history.length ? history.map(h => `
-          <div class="history-item">
-            <div class="history-org">${esc(h.org)}</div>
-            <div class="history-role">${esc(h.role || '')}</div>
-            <div class="history-dates">${esc(h.dates || '')}${h.industry ? ' &middot; ' + esc(h.industry) : ''}</div>
-          </div>
-        `).join('') : '<p class="empty-note">No history recorded</p>'}
+        <div class="detail-section">
+          <h4>Internship History (${history.length})</h4>
+          ${history.length ? history.map(h => `
+            <div class="history-item">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start">
+                <div>
+                  <div class="history-org">${esc(h.role || h.org)}</div>
+                  <div class="history-role">${h.role ? esc(h.org) : ''}</div>
+                </div>
+                ${h.industry ? '<span class="tag" style="flex-shrink:0">' + esc(h.industry) + '</span>' : ''}
+              </div>
+              <div class="history-dates">${esc(h.dates || '')}</div>
+              ${h.description ? '<div style="font-size:11px;color:#8b8ba0;margin-top:4px;line-height:1.4">' + esc(h.description) + '</div>' : ''}
+              ${h.summary ? '<div style="font-size:11px;color:#6b7280;margin-top:3px;font-style:italic">' + esc(h.summary) + '</div>' : ''}
+              ${h.careerNotes ? '<div style="font-size:11px;color:#4b5563;margin-top:3px">' + esc(h.careerNotes) + '</div>' : ''}
+            </div>
+          `).join('') : '<p class="empty-note">No history recorded</p>'}
+        </div>
       </div>
     `;
   } catch (e) {
@@ -727,6 +841,7 @@ async function loadOpportunities() {
   const data = await res.json();
   lastCustomOpps = data.opportunities;
   renderOpportunities(data.opportunities);
+  renderExpired(getExpiredOpps());
 }
 
 function filterOpps() {
@@ -852,6 +967,7 @@ async function saveOppEdit(id) {
   editingOppId = null;
   lastCustomOpps = data.opportunities;
   renderOpportunities(data.opportunities);
+  renderExpired(getExpiredOpps());
   toast("Opportunity updated");
 }
 
@@ -884,6 +1000,7 @@ async function createOpp(notify) {
   document.getElementById("opp-featured").checked = false;
   lastCustomOpps = data.opportunities;
   renderOpportunities(data.opportunities);
+  renderExpired(getExpiredOpps());
   toast(notify ? `Opportunity created, ${data.notified} student(s) notified` : "Opportunity created");
 }
 
@@ -893,6 +1010,7 @@ async function deleteOpp(id) {
   const data = await res.json();
   lastCustomOpps = data.opportunities;
   renderOpportunities(data.opportunities);
+  renderExpired(getExpiredOpps());
   toast("Opportunity deleted");
 }
 
@@ -1177,6 +1295,56 @@ async function deleteEventAdmin(id) {
   lastEvents = data.events;
   renderEvents(data.events);
   toast("Event deleted");
+}
+
+// ─── EXPIRED OPPORTUNITIES ───
+
+function getExpiredOpps() {
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  return lastCustomOpps.filter(o => o.deadline && new Date(o.deadline) < now);
+}
+
+function filterExpired() {
+  const q = (document.getElementById("expired-search").value || "").toLowerCase();
+  let expired = getExpiredOpps();
+  if (q) {
+    expired = expired.filter(o =>
+      (o.org + " " + o.title + " " + o.industry + " " + o.type + " " + o.location + " " + o.description).toLowerCase().includes(q)
+    );
+  }
+  renderExpired(expired);
+}
+
+function renderExpired(opps) {
+  document.getElementById("expired-count").textContent = "(" + opps.length + ")";
+  const body = document.getElementById("expired-body");
+  const empty = document.getElementById("expired-empty");
+  if (opps.length === 0) { body.innerHTML = ""; empty.style.display = "block"; return; }
+  empty.style.display = "none";
+  body.innerHTML = opps.map(o => `<div class="opp-card" style="opacity:0.75">
+    <div class="opp-card-header">
+      <div class="opp-card-info">
+        <div class="opp-card-title">${esc(o.title)}</div>
+        <div class="opp-card-org">${esc(o.org)}</div>
+        <div class="opp-card-meta">
+          ${o.industry ? '<span>' + esc(o.industry) + '</span>' : ''}
+          ${o.type ? '<span>' + esc(o.type) + '</span>' : ''}
+          ${o.location ? '<span>' + esc(o.location) + '</span>' : ''}
+          <span style="color:#c75c3a">Expired ${formatDate(o.deadline)}</span>
+        </div>
+        <div class="opp-card-badges">
+          ${o.paid ? '<span class="badge-paid">Paid</span>' : ''}
+          ${o.featured ? '<span class="badge-featured">Featured</span>' : ''}
+        </div>
+        ${o.description ? '<div class="opp-card-desc">' + esc(o.description).substring(0, 200) + (o.description.length > 200 ? '...' : '') + '</div>' : ''}
+      </div>
+    </div>
+    <div class="opp-card-actions">
+      <button class="btn btn-outline" onclick="startOppEdit(${o.id});document.querySelector('[data-tab=opportunities]').click()">Edit</button>
+      <button class="btn btn-danger" onclick="deleteOpp(${o.id})">Delete</button>
+    </div>
+  </div>`).join("");
 }
 
 // ─── HELPERS ───

@@ -195,7 +195,7 @@ const userMarkWelcomeEmailSent = db.prepare(
   "UPDATE users SET welcome_email_sent = 1 WHERE id = ?"
 );
 const usersAll = db.prepare(`
-  SELECT u.*, up.selected_industries, up.selected_areas, up.email_alerts
+  SELECT u.*, up.selected_industries, up.selected_areas, up.email_alerts, up.joined_clubs
   FROM users u
   LEFT JOIN user_preferences up ON up.user_id = u.id
   ORDER BY u.created_at DESC
