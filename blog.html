@@ -529,13 +529,7 @@
   // ─── Overlays ───
 
   async function openPost(id) {
-    const post = await fetchPost(id);
-    if (!post) return;
-    currentPostId = id;
-    document.getElementById('overlay-text').innerHTML = post.content;
-    document.getElementById('overlay-date').textContent = formatDate(post.created_at);
-    document.getElementById('overlay').classList.add('open');
-    document.body.style.overflow = 'hidden';
+    openEditor(id);
   }
 
   function closeOverlay() {
@@ -544,19 +538,25 @@
     currentPostId = null;
   }
 
-  function openEditor(postId) {
+  async function openEditor(postId) {
     editingPostId = postId || null;
-    document.getElementById('editor-content').value = '';
+    const textarea = document.getElementById('editor-content');
 
+    // Pre-fill from cached excerpt so there's no blank flash
     if (editingPostId) {
-      fetchPost(editingPostId).then(post => {
-        if (post) document.getElementById('editor-content').value = stripHtml(post.content);
-      });
+      const cached = posts.find(p => p.id === editingPostId);
+      if (cached) textarea.value = stripHtml(cached.excerpt || '');
+
+      // Then fetch full content and update
+      const post = await fetchPost(editingPostId);
+      if (post) textarea.value = stripHtml(post.content);
+    } else {
+      textarea.value = '';
     }
 
     document.getElementById('editor').classList.add('open');
     document.body.style.overflow = 'hidden';
-    document.getElementById('editor-content').focus();
+    textarea.focus();
   }
 
   function closeEditor() {
