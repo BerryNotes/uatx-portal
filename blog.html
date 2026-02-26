@@ -512,27 +512,44 @@
     }
   }
 
-  let wheelCooldown = false;
+  let accumulatedDelta = 0;
+  let deltaResetTimer = null;
+  const SNAP_THRESHOLD = 80; // touchpads send small deltas (~1-4), mice send large (~100+)
+  let snapCooldown = false;
   let rapidCount = 0;
   let rapidTimer = null;
 
   window.addEventListener('wheel', (e) => {
     e.preventDefault();
-    if (wheelCooldown) return;
-    wheelCooldown = true;
-    setTimeout(() => { wheelCooldown = false; }, 120);
 
     const quotes = document.querySelectorAll('.quote');
     if (quotes.length === 0) return;
 
+    // Accumulate delta — touchpads send many small events, mice send few large ones
+    accumulatedDelta += e.deltaY;
+
+    // Reset accumulator if no scroll events for 150ms (gesture ended)
+    clearTimeout(deltaResetTimer);
+    deltaResetTimer = setTimeout(() => { accumulatedDelta = 0; }, 150);
+
+    // Only snap once threshold is reached
+    if (Math.abs(accumulatedDelta) < SNAP_THRESHOLD) return;
+    if (snapCooldown) return;
+
+    const dir = accumulatedDelta > 0 ? 1 : -1;
+    accumulatedDelta = 0; // reset after triggering
+
+    // Brief cooldown to prevent double-snaps
+    snapCooldown = true;
+    setTimeout(() => { snapCooldown = false; }, 300);
+
     // Track rapid scrolling
     rapidCount++;
     clearTimeout(rapidTimer);
-    rapidTimer = setTimeout(() => { rapidCount = 0; }, 400);
+    rapidTimer = setTimeout(() => { rapidCount = 0; }, 600);
 
     // Skip more quotes when scrolling rapidly
     const skip = rapidCount >= 5 ? 3 : rapidCount >= 3 ? 2 : 1;
-    const dir = e.deltaY > 0 ? 1 : -1;
     const isMoving = animId !== null;
     const speed = rapidCount >= 3 ? 400 : (isMoving ? 800 : 2400);
 
