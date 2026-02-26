@@ -130,6 +130,8 @@ try { db.exec("ALTER TABLE activities ADD COLUMN status TEXT NOT NULL DEFAULT 'a
 try { db.exec("ALTER TABLE activities ADD COLUMN submitted_by TEXT NOT NULL DEFAULT ''"); } catch (e) {}
 try { db.exec("ALTER TABLE opportunities ADD COLUMN detail_content TEXT NOT NULL DEFAULT ''"); } catch (e) {}
 try { db.exec("ALTER TABLE opportunities ADD COLUMN apply_url TEXT NOT NULL DEFAULT ''"); } catch (e) {}
+try { db.exec("ALTER TABLE activities ADD COLUMN next_event_title TEXT NOT NULL DEFAULT ''"); } catch (e) {}
+try { db.exec("ALTER TABLE activities ADD COLUMN next_event_date TEXT NOT NULL DEFAULT ''"); } catch (e) {}
 
 // ─── ROSTER ───
 
@@ -372,6 +374,14 @@ function updateActivity(id, a) {
 
 function deleteActivity(id) {
   return activityDelete.run(id);
+}
+
+const activityUpdateNextEvent = db.prepare(
+  "UPDATE activities SET next_event_title=?, next_event_date=? WHERE id=?"
+);
+
+function updateActivityNextEvent(id, title, date) {
+  return activityUpdateNextEvent.run(title || "", date || "", id);
 }
 
 // ─── SEED ACTIVITIES ───
@@ -675,6 +685,7 @@ module.exports = {
   createActivity,
   updateActivity,
   deleteActivity,
+  updateActivityNextEvent,
   seedActivities,
   getClubMembers,
   getAllMemberCounts,

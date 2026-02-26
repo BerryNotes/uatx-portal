@@ -1704,13 +1704,35 @@ const CalendarPage = ({allInternships, navigate}) => {
 };
 
 // ─── CLUB PRESIDENT CARD ───
-const ClubPresidentCard = ({club, showToast}) => {
+const ClubPresidentCard = ({club, showToast, onEventUpdated}) => {
   const [showCompose, setShowCompose] = useState(false);
+  const [showEventForm, setShowEventForm] = useState(false);
+  const [eventTitle, setEventTitle] = useState(club.next_event_title || "");
+  const [eventDate, setEventDate] = useState(club.next_event_date || "");
+  const [savingEvent, setSavingEvent] = useState(false);
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [memberEmails, setMemberEmails] = useState(null);
   const inputStyle = {width:"100%",padding:8,border:"1px solid "+C.border,fontSize:13,boxSizing:"border-box",fontFamily:"'Libre Franklin', sans-serif"};
+
+  const saveNextEvent = async () => {
+    setSavingEvent(true);
+    try {
+      const res = await fetch("/api/activities/" + club.id + "/next-event", {
+        method:"PUT", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ title: eventTitle, date: eventDate })
+      });
+      if (res.ok) {
+        showToast(eventTitle ? "Next event updated" : "Next event cleared");
+        setShowEventForm(false);
+        if (onEventUpdated) onEventUpdated();
+      } else {
+        showToast("Failed to save");
+      }
+    } catch(e) { showToast("Failed to save"); }
+    setSavingEvent(false);
+  };
 
   const sendEmail = async () => {
     if (!subject || !message) return;
@@ -1761,12 +1783,40 @@ const ClubPresidentCard = ({club, showToast}) => {
         </div>
         <Badge color={C.gold}>President</Badge>
       </div>
+      {(club.next_event_title || club.next_event_date) && !showEventForm && (
+        <div style={{marginBottom:8,padding:"8px 12px",backgroundColor:C.gold+"15",border:"1px solid "+C.gold+"40",display:"flex",alignItems:"center",gap:8}}>
+          <span style={{fontSize:14}}>{"\uD83D\uDCC5"}</span>
+          <div style={{flex:1}}>
+            <div style={{fontSize:12,fontWeight:600,color:C.navy}}>{club.next_event_title}</div>
+            {club.next_event_date && <div style={{fontSize:11,color:C.textLight}}>{new Date(club.next_event_date+"T00:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"})}</div>}
+          </div>
+        </div>
+      )}
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-        <Btn size="sm" variant={showCompose?"ghost":"secondary"} onClick={()=>setShowCompose(!showCompose)}>
+        <Btn size="sm" variant={showCompose?"ghost":"secondary"} onClick={()=>{setShowCompose(!showCompose);setShowEventForm(false);}}>
           {showCompose ? "Cancel" : "Email Members"}
         </Btn>
         <Btn size="sm" variant="ghost" onClick={copyMemberEmails}>Copy Member Emails</Btn>
+        <Btn size="sm" variant={showEventForm?"ghost":"secondary"} onClick={()=>{setShowEventForm(!showEventForm);setShowCompose(false);}}>
+          {showEventForm ? "Cancel" : (club.next_event_title ? "Edit Next Event" : "Set Next Event")}
+        </Btn>
       </div>
+      {showEventForm && (
+        <div style={{marginTop:12,display:"flex",flexDirection:"column",gap:10,padding:12,backgroundColor:C.cream,border:"1px solid "+C.border}}>
+          <div>
+            <label style={{fontSize:11,fontWeight:600,color:C.textLight,textTransform:"uppercase",letterSpacing:"0.5px",display:"block",marginBottom:4}}>Event Name</label>
+            <input type="text" placeholder="e.g. Weekly Meeting" value={eventTitle} onChange={e=>setEventTitle(e.target.value)} style={inputStyle}/>
+          </div>
+          <div>
+            <label style={{fontSize:11,fontWeight:600,color:C.textLight,textTransform:"uppercase",letterSpacing:"0.5px",display:"block",marginBottom:4}}>Date</label>
+            <input type="date" value={eventDate} onChange={e=>setEventDate(e.target.value)} style={inputStyle}/>
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <Btn size="sm" onClick={saveNextEvent}>{savingEvent ? "Saving..." : "Save"}</Btn>
+            {(club.next_event_title || club.next_event_date) && <Btn size="sm" variant="ghost" onClick={()=>{setEventTitle("");setEventDate("");saveNextEvent();}}>Clear Event</Btn>}
+          </div>
+        </div>
+      )}
       {memberEmails && !showCompose && (
         <div style={{marginTop:10,padding:10,backgroundColor:C.cream,border:"1px solid "+C.border,fontSize:12,color:C.text,fontFamily:"monospace",wordBreak:"break-all",lineHeight:1.6}}>
           {memberEmails.map(m => m.email).join(", ")}
@@ -1793,7 +1843,7 @@ const ClubPresidentCard = ({club, showToast}) => {
 };
 
 // ─── PROFILE ───
-const ProfilePage = ({showToast, selectedIndustries, setSelectedIndustries, selectedAreas, setSelectedAreas, emailAlerts, setEmailAlerts, internshipHistory, setInternshipHistory, currentUser, serverActivities, joinedClubs, setJoinedClubs}) => {
+const ProfilePage = ({showToast, selectedIndustries, setSelectedIndustries, selectedAreas, setSelectedAreas, emailAlerts, setEmailAlerts, internshipHistory, setInternshipHistory, currentUser, serverActivities, joinedClubs, setJoinedClubs, refreshActivities}) => {
   const [showForm, setShowForm] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -1862,7 +1912,7 @@ const ProfilePage = ({showToast, selectedIndustries, setSelectedIndustries, sele
               <h3 style={{fontFamily:"Georgia, serif",fontSize:18,color:C.navy,margin:"0 0 4px"}}>My Clubs</h3>
               <p style={{fontSize:12,color:C.textLight,margin:"0 0 16px"}}>Clubs you manage as president</p>
               {serverActivities.filter(a => (a.president_email||"").toLowerCase() === currentUser.email.toLowerCase()).map(club => (
-                <ClubPresidentCard key={club.id} club={club} showToast={showToast}/>
+                <ClubPresidentCard key={club.id} club={club} showToast={showToast} onEventUpdated={refreshActivities}/>
               ))}
             </div>
           )}
@@ -1880,6 +1930,11 @@ const ProfilePage = ({showToast, selectedIndustries, setSelectedIndustries, sele
                       <div>
                         <div style={{fontSize:14,fontWeight:600,color:C.navy}}>{club.title}</div>
                         <div style={{fontSize:11,color:C.textLight}}>{club.category}{club.meet_day ? " \u00B7 "+club.meet_day : ""}</div>
+                        {club.next_event_title && (
+                          <div style={{fontSize:11,color:C.goldMuted,marginTop:3}}>
+                            {"\uD83D\uDCC5"} {club.next_event_title}{club.next_event_date ? " \u2014 "+new Date(club.next_event_date+"T00:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"}) : ""}
+                          </div>
+                        )}
                       </div>
                       <div onClick={()=>{setJoinedClubs(prev=>prev.filter(x=>x!==clubId));showToast("Left "+club.title);}} style={{cursor:"pointer",fontSize:11,color:C.alert,fontWeight:500}}>Leave</div>
                     </div>;
@@ -2029,6 +2084,15 @@ const CommunityPage = ({joinedClubs, setJoinedClubs, showToast, serverActivities
               {club.presidentEmail && (
                 <div style={{fontSize:11,color:C.textLight,marginBottom:8}}>
                   President: <a href={"mailto:"+club.presidentEmail} style={{color:C.goldMuted,fontWeight:500}}>{club.presidentEmail}</a>
+                </div>
+              )}
+              {club.next_event_title && (
+                <div style={{marginBottom:8,padding:"8px 10px",backgroundColor:C.gold+"12",border:"1px solid "+C.gold+"30",display:"flex",alignItems:"center",gap:6}}>
+                  <span style={{fontSize:12}}>{"\uD83D\uDCC5"}</span>
+                  <div>
+                    <div style={{fontSize:11,fontWeight:600,color:C.navy}}>{club.next_event_title}</div>
+                    {club.next_event_date && <div style={{fontSize:10,color:C.textLight}}>{new Date(club.next_event_date+"T00:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"})}</div>}
+                  </div>
                 </div>
               )}
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:12,borderTop:"1px solid "+C.border}}>
@@ -2395,7 +2459,7 @@ const App = () => {
     home: <HomePage navigate={navigate}/>,
     opportunities: <OpportunitiesPage navigate={navigate} showToast={showToast} savedOpps={savedOpps} setSavedOpps={setSavedOpps} selectedIndustries={selectedIndustries} serverOpps={serverOpps}/>,
     calendar: <CalendarPage allInternships={allInternships} navigate={navigate}/>,
-    profile: <ProfilePage showToast={showToast} selectedIndustries={selectedIndustries} setSelectedIndustries={setSelectedIndustries} selectedAreas={selectedAreas} setSelectedAreas={setSelectedAreas} emailAlerts={emailAlerts} setEmailAlerts={setEmailAlerts} internshipHistory={internshipHistory} setInternshipHistory={setInternshipHistory} currentUser={currentUser} serverActivities={serverActivities} joinedClubs={joinedClubs} setJoinedClubs={setJoinedClubs}/>,
+    profile: <ProfilePage showToast={showToast} selectedIndustries={selectedIndustries} setSelectedIndustries={setSelectedIndustries} selectedAreas={selectedAreas} setSelectedAreas={setSelectedAreas} emailAlerts={emailAlerts} setEmailAlerts={setEmailAlerts} internshipHistory={internshipHistory} setInternshipHistory={setInternshipHistory} currentUser={currentUser} serverActivities={serverActivities} joinedClubs={joinedClubs} setJoinedClubs={setJoinedClubs} refreshActivities={loadServerActivities}/>,
     community: <CommunityPage joinedClubs={joinedClubs} setJoinedClubs={setJoinedClubs} showToast={showToast} serverActivities={serverActivities} navigate={navigate} refreshActivities={loadServerActivities}/>,
     events: <EventsPage navigate={navigate} serverEvents={serverEvents}/>,
   };

@@ -31,6 +31,7 @@ const {
   createActivity,
   updateActivity,
   deleteActivity,
+  updateActivityNextEvent,
   seedActivities,
   getClubMembers,
   getAllMemberCounts,
@@ -411,6 +412,17 @@ app.get("/api/activities/:id/members", requireAuth, (req, res) => {
   if (!club) return res.status(403).json({ error: "You are not the president of this club" });
   const members = getClubMembers(club.id);
   res.json({ members });
+});
+
+// Update next event for a club (president only)
+app.put("/api/activities/:id/next-event", requireAuth, (req, res) => {
+  const user = getUserById(req.session.userId);
+  const activities = getActivitiesByPresidentEmail(user.email);
+  const club = activities.find(a => a.id === parseInt(req.params.id));
+  if (!club) return res.status(403).json({ error: "You are not the president of this club" });
+  const { title, date } = req.body;
+  updateActivityNextEvent(club.id, title, date);
+  res.json({ ok: true });
 });
 
 // ─── ADMIN ROUTES ───
