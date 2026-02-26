@@ -453,7 +453,8 @@
     track.style.opacity = 1;
 
     const trackH = track.offsetHeight;
-    const progress = targetIndex / (quotes.length - 1);
+    const scrollMax = document.documentElement.scrollHeight - window.innerHeight;
+    const progress = scrollMax > 0 ? window.scrollY / scrollMax : 0;
     const thumbH = Math.max(12, trackH / quotes.length);
     const thumbTop = progress * (trackH - thumbH);
 
@@ -461,84 +462,62 @@
     thumb.style.top = thumbTop + 'px';
   }
 
-  // ─── Smooth snap scroll ───
+  // ─── Free scroll with gentle settle ───
 
-  let targetIndex = 0;
-  let animId = null;
-  let scrollFrom = 0;
-  let scrollTo = 0;
-  let scrollStart = 0;
-  let scrollDuration = 2400;
+  let settleTimer = null;
+  let settleAnim = null;
 
-  function easeOut(t) {
-    return 1 - Math.pow(1 - t, 4);
-  }
-
-  function getQuoteTarget(index) {
+  function getClosestIndex() {
     const quotes = document.querySelectorAll('.quote');
     if (quotes.length === 0) return 0;
-    const el = quotes[index];
-    const rect = el.getBoundingClientRect();
-    return window.scrollY + rect.top + rect.height / 2 - window.innerHeight / 2;
+    const center = window.innerHeight / 2;
+    let closest = 0;
+    let closestDist = Infinity;
+    quotes.forEach((q, i) => {
+      const rect = q.getBoundingClientRect();
+      const dist = Math.abs(rect.top + rect.height / 2 - center);
+      if (dist < closestDist) { closestDist = dist; closest = i; }
+    });
+    return closest;
   }
 
-  function snapTo(index, duration) {
+  function settleToNearest() {
     const quotes = document.querySelectorAll('.quote');
     if (quotes.length === 0) return;
-    index = Math.max(0, Math.min(index, quotes.length - 1));
-    targetIndex = index;
+    const idx = getClosestIndex();
+    const el = quotes[idx];
+    const rect = el.getBoundingClientRect();
+    const target = window.scrollY + rect.top + rect.height / 2 - window.innerHeight / 2;
+    const dist = Math.abs(target - window.scrollY);
 
-    scrollFrom = window.scrollY;
-    scrollTo = getQuoteTarget(index);
-    scrollStart = performance.now();
-    scrollDuration = duration || 2400;
+    if (dist < 2) return; // already close enough
 
-    if (!animId) tick();
+    const from = window.scrollY;
+    const start = performance.now();
+    const duration = Math.min(800, Math.max(300, dist * 1.5));
+
+    if (settleAnim) cancelAnimationFrame(settleAnim);
+
+    function animate() {
+      const t = Math.min((performance.now() - start) / duration, 1);
+      const ease = 1 - Math.pow(1 - t, 3);
+      window.scrollTo(0, from + (target - from) * ease);
+      updateBlur();
+      if (t < 1) settleAnim = requestAnimationFrame(animate);
+      else settleAnim = null;
+    }
+    animate();
   }
 
-  function tick() {
-    const now = performance.now();
-    const elapsed = now - scrollStart;
-    const t = Math.min(elapsed / scrollDuration, 1);
-    const pos = scrollFrom + (scrollTo - scrollFrom) * easeOut(t);
-
-    window.scrollTo(0, pos);
+  window.addEventListener('scroll', () => {
+    // Cancel any settle animation if user is scrolling
+    if (settleAnim) { cancelAnimationFrame(settleAnim); settleAnim = null; }
     updateBlur();
 
-    if (t < 1) {
-      animId = requestAnimationFrame(tick);
-    } else {
-      animId = null;
-    }
-  }
-
-  let wheelCooldown = false;
-  let rapidCount = 0;
-  let rapidTimer = null;
-
-  window.addEventListener('wheel', (e) => {
-    e.preventDefault();
-    if (wheelCooldown) return;
-    wheelCooldown = true;
-    setTimeout(() => { wheelCooldown = false; }, 120);
-
-    const quotes = document.querySelectorAll('.quote');
-    if (quotes.length === 0) return;
-
-    // Track rapid scrolling
-    rapidCount++;
-    clearTimeout(rapidTimer);
-    rapidTimer = setTimeout(() => { rapidCount = 0; }, 400);
-
-    // Skip more quotes when scrolling rapidly
-    const skip = rapidCount >= 5 ? 3 : rapidCount >= 3 ? 2 : 1;
-    const dir = e.deltaY > 0 ? 1 : -1;
-    const isMoving = animId !== null;
-    const speed = rapidCount >= 3 ? 400 : (isMoving ? 800 : 2400);
-
-    const next = targetIndex + dir * skip;
-    snapTo(next, speed);
-  }, { passive: false });
+    // When scrolling stops, gently settle to nearest quote
+    clearTimeout(settleTimer);
+    settleTimer = setTimeout(settleToNearest, 150);
+  });
 
 
   window.addEventListener('resize', updateBlur);
