@@ -498,23 +498,27 @@
 
     if (settleAnim) cancelAnimationFrame(settleAnim);
 
+    let settling = true;
     function animate() {
       const t = Math.min((performance.now() - start) / duration, 1);
       const ease = 1 - Math.pow(1 - t, 3);
       window.scrollTo(0, from + (target - from) * ease);
       updateBlur();
       if (t < 1) settleAnim = requestAnimationFrame(animate);
-      else settleAnim = null;
+      else { settleAnim = null; settling = false; }
     }
     animate();
   }
 
+  let isSettling = false;
+
   window.addEventListener('scroll', () => {
-    // Cancel any settle animation if user is scrolling
-    if (settleAnim) { cancelAnimationFrame(settleAnim); settleAnim = null; }
     updateBlur();
 
-    // When scrolling stops, gently settle to nearest quote
+    // Ignore scroll events caused by the settle animation
+    if (settleAnim) return;
+
+    // User is scrolling — cancel any pending settle
     clearTimeout(settleTimer);
     settleTimer = setTimeout(settleToNearest, 50);
   });
