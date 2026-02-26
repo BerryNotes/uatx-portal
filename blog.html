@@ -512,10 +512,10 @@
     }
   }
 
-  let accumulatedDelta = 0;
-  let deltaResetTimer = null;
-  const SNAP_THRESHOLD = 80; // touchpads send small deltas (~1-4), mice send large (~100+)
-  let snapCooldown = false;
+  let gestureDelta = 0;
+  let gestureTimer = null;
+  let gestureSnapped = false; // only one snap per gesture
+  let lastGestureTime = 0;
   let rapidCount = 0;
   let rapidTimer = null;
 
@@ -525,36 +525,55 @@
     const quotes = document.querySelectorAll('.quote');
     if (quotes.length === 0) return;
 
-    // Accumulate delta — touchpads send many small events, mice send few large ones
-    accumulatedDelta += e.deltaY;
+    const now = performance.now();
 
-    // Reset accumulator if no scroll events for 150ms (gesture ended)
-    clearTimeout(deltaResetTimer);
-    deltaResetTimer = setTimeout(() => { accumulatedDelta = 0; }, 150);
+    // Detect if this is a new gesture (gap > 200ms since last event)
+    if (now - lastGestureTime > 200) {
+      gestureDelta = 0;
+      gestureSnapped = false;
+    }
+    lastGestureTime = now;
 
-    // Only snap once threshold is reached
-    if (Math.abs(accumulatedDelta) < SNAP_THRESHOLD) return;
-    if (snapCooldown) return;
+    gestureDelta += e.deltaY;
 
-    const dir = accumulatedDelta > 0 ? 1 : -1;
-    accumulatedDelta = 0; // reset after triggering
+    // Detect mouse vs touchpad: mice send large discrete deltas (deltaMode=1 or |deltaY|>=50)
+    const isMouse = e.deltaMode === 1 || Math.abs(e.deltaY) >= 50;
 
-    // Brief cooldown to prevent double-snaps
-    snapCooldown = true;
-    setTimeout(() => { snapCooldown = false; }, 300);
+    if (isMouse) {
+      // Mouse: snap immediately on each click of the wheel
+      if (gestureSnapped) return;
+      gestureSnapped = true;
 
-    // Track rapid scrolling
-    rapidCount++;
-    clearTimeout(rapidTimer);
-    rapidTimer = setTimeout(() => { rapidCount = 0; }, 600);
+      const dir = e.deltaY > 0 ? 1 : -1;
+      snapTo(targetIndex + dir, 2400);
 
-    // Skip more quotes when scrolling rapidly
-    const skip = rapidCount >= 5 ? 3 : rapidCount >= 3 ? 2 : 1;
-    const isMoving = animId !== null;
-    const speed = rapidCount >= 3 ? 400 : (isMoving ? 800 : 2400);
+      // Reset after a short delay so next wheel click works
+      clearTimeout(gestureTimer);
+      gestureTimer = setTimeout(() => { gestureSnapped = false; gestureDelta = 0; }, 200);
+    } else {
+      // Touchpad: wait for gesture to end, then snap once
+      if (gestureSnapped) return;
 
-    const next = targetIndex + dir * skip;
-    snapTo(next, speed);
+      clearTimeout(gestureTimer);
+      gestureTimer = setTimeout(() => {
+        if (gestureSnapped) return;
+        if (Math.abs(gestureDelta) < 10) { gestureDelta = 0; return; } // ignore tiny accidental touches
+
+        gestureSnapped = true;
+        const dir = gestureDelta > 0 ? 1 : -1;
+
+        // Track rapid gestures
+        rapidCount++;
+        clearTimeout(rapidTimer);
+        rapidTimer = setTimeout(() => { rapidCount = 0; }, 800);
+
+        const skip = rapidCount >= 5 ? 3 : rapidCount >= 3 ? 2 : 1;
+        const speed = rapidCount >= 3 ? 400 : 2400;
+
+        snapTo(targetIndex + dir * skip, speed);
+        gestureDelta = 0;
+      }, 120); // wait 120ms of silence = gesture ended
+    }
   }, { passive: false });
 
 
