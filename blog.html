@@ -521,12 +521,15 @@
     const quotes = document.querySelectorAll('.quote');
     if (quotes.length === 0) return;
 
+    // If already animating, ignore — prevents inertia from stacking snaps
+    if (animId) return;
+
     accDelta += e.deltaY;
 
     clearTimeout(accResetTimer);
     accResetTimer = setTimeout(() => { accDelta = 0; }, 80);
 
-    if (Math.abs(accDelta) < 150) return;
+    if (Math.abs(accDelta) < 50) return;
 
     const dir = accDelta > 0 ? 1 : -1;
     accDelta = 0;
