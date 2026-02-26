@@ -387,6 +387,9 @@
           <label>Description</label>
           <textarea id="evt-desc" style="width:100%"></textarea>
         </div>
+        <div style="margin-bottom:12px">
+          <label style="font-size:12px;color:#c4c4d4;cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" id="evt-community" style="accent-color:#c9a84c"> Community Event (shows on Community page)</label>
+        </div>
         <button class="btn btn-gold" onclick="createEventAdmin()">Save</button>
       </div>
 
@@ -587,7 +590,7 @@ async function toggleRosterDetail(id, email, registered) {
   } else {
     expandedRosterId = id;
   }
-  renderRoster(lastRoster);
+  filterRoster();
 }
 
 let lastRoster = [];
@@ -786,7 +789,7 @@ async function addStudent() {
   document.getElementById("roster-name").value = "";
   document.getElementById("roster-email").value = "";
   document.getElementById("roster-admin").checked = false;
-  lastRoster = data.roster; renderRoster(data.roster);
+  lastRoster = data.roster; filterRoster();
   toast("Student added to roster");
 }
 
@@ -794,7 +797,7 @@ async function removeStudent(id) {
   if (!confirm("Remove this student from the roster?")) return;
   const res = await fetch("/api/admin/roster/" + id, { method: "DELETE" });
   const data = await res.json();
-  lastRoster = data.roster; renderRoster(data.roster);
+  lastRoster = data.roster; filterRoster();
   toast("Student removed");
 }
 
@@ -833,7 +836,7 @@ async function uploadCSV() {
   if (!res.ok) return toast(data.error, true);
   document.getElementById("csv-input").value = "";
   document.getElementById("csv-area").style.display = "none";
-  lastRoster = data.roster; renderRoster(data.roster);
+  lastRoster = data.roster; filterRoster();
   toast(`Imported ${data.added} students`);
 }
 
@@ -1214,6 +1217,9 @@ function renderEvents(events) {
           <label>Description</label>
           <textarea id="edit-evt-desc" style="min-height:60px">${esc(e.description || '')}</textarea>
         </div>
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:8px">
+          <label style="font-size:12px;color:#c4c4d4;cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" id="edit-evt-community" ${e.is_community ? 'checked' : ''} style="accent-color:#c9a84c"> Community Event (shows on Community page)</label>
+        </div>
         <div style="display:flex;gap:8px">
           <button class="btn btn-gold" onclick="saveEventEdit(${e.id})">Save</button>
           <button class="btn btn-outline" onclick="cancelEventEdit()">Cancel</button>
@@ -1228,6 +1234,7 @@ function renderEvents(events) {
           <div class="opp-card-meta">
             ${e.type ? '<span>' + esc(e.type) + '</span>' : ''}
             <span>${e.date ? formatDate(e.date) : 'No date'}</span>
+            ${e.is_community ? '<span style="color:#4a7c59;font-weight:600">Community</span>' : ''}
             ${e.url ? '<span><a href="' + attr(e.url) + '" target="_blank" style="color:#c9a84c;text-decoration:none">Link &rarr;</a></span>' : ''}
           </div>
           ${e.description ? '<div class="opp-card-desc">' + esc(e.description).substring(0, 200) + (e.description.length > 200 ? '...' : '') + '</div>' : ''}
@@ -1254,6 +1261,7 @@ async function saveEventEdit(id) {
     url: document.getElementById("edit-evt-url").value.trim(),
     img: document.getElementById("edit-evt-img").value.trim() || null,
     description: document.getElementById("edit-evt-desc").value.trim(),
+    is_community: document.getElementById("edit-evt-community").checked,
   };
   if (!event.title) return toast("Title is required", true);
   const res = await fetch("/api/admin/events/" + id, {
@@ -1277,6 +1285,7 @@ async function createEventAdmin() {
     url: document.getElementById("evt-url").value.trim(),
     img: document.getElementById("evt-img").value.trim() || null,
     description: document.getElementById("evt-desc").value.trim(),
+    is_community: document.getElementById("evt-community").checked,
   };
   if (!event.title) return toast("Title is required", true);
   const res = await fetch("/api/admin/events", {
@@ -1287,6 +1296,7 @@ async function createEventAdmin() {
   if (!res.ok) return toast(data.error, true);
   ["evt-title","evt-org","evt-date","evt-url","evt-img","evt-desc"].forEach(id => document.getElementById(id).value = "");
   document.getElementById("evt-type").selectedIndex = 0;
+  document.getElementById("evt-community").checked = false;
   lastEvents = data.events;
   renderEvents(data.events);
   toast("Event created");

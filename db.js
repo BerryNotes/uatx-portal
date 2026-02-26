@@ -132,6 +132,7 @@ try { db.exec("ALTER TABLE opportunities ADD COLUMN detail_content TEXT NOT NULL
 try { db.exec("ALTER TABLE opportunities ADD COLUMN apply_url TEXT NOT NULL DEFAULT ''"); } catch (e) {}
 try { db.exec("ALTER TABLE activities ADD COLUMN next_event_title TEXT NOT NULL DEFAULT ''"); } catch (e) {}
 try { db.exec("ALTER TABLE activities ADD COLUMN next_event_date TEXT NOT NULL DEFAULT ''"); } catch (e) {}
+try { db.exec("ALTER TABLE events ADD COLUMN is_community INTEGER NOT NULL DEFAULT 0"); } catch (e) {}
 
 // ─── ROSTER ───
 
@@ -450,12 +451,12 @@ const eventsAll = db.prepare(
   "SELECT * FROM events ORDER BY date ASC"
 );
 const eventInsert = db.prepare(`
-  INSERT INTO events (title, date, type, org, description, url, img, sub_page)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO events (title, date, type, org, description, url, img, sub_page, is_community)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 const eventDelete = db.prepare("DELETE FROM events WHERE id = ?");
 const eventUpdate = db.prepare(`
-  UPDATE events SET title=?, date=?, type=?, org=?, description=?, url=?, img=?, sub_page=?
+  UPDATE events SET title=?, date=?, type=?, org=?, description=?, url=?, img=?, sub_page=?, is_community=?
   WHERE id=?
 `);
 
@@ -467,7 +468,7 @@ function createEvent(e) {
   const info = eventInsert.run(
     e.title, e.date || null, e.type || "",
     e.org || "", e.description || "", e.url || "",
-    e.img || null, e.sub_page || ""
+    e.img || null, e.sub_page || "", e.is_community ? 1 : 0
   );
   return info.lastInsertRowid;
 }
@@ -476,7 +477,7 @@ function updateEvent(id, e) {
   return eventUpdate.run(
     e.title, e.date || null, e.type || "",
     e.org || "", e.description || "", e.url || "",
-    e.img || null, e.sub_page || "", id
+    e.img || null, e.sub_page || "", e.is_community ? 1 : 0, id
   );
 }
 
@@ -492,7 +493,7 @@ function seedEvents(events) {
       eventInsert.run(
         e.title, e.date || null, e.type || "",
         e.org || "", e.description || e.desc || "", e.url || "",
-        e.img || null, e.sub_page || e.subPage || ""
+        e.img || null, e.sub_page || e.subPage || "", e.is_community ? 1 : 0
       );
     }
   });
