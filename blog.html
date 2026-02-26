@@ -455,8 +455,7 @@
     const quotes = document.querySelectorAll('.quote');
     const thumb = document.getElementById('scroll-thumb');
     const track = document.getElementById('scroll-track');
-    if (quotes.length < 2) { track.style.opacity = 0; return; }
-    track.style.opacity = 1;
+    if (quotes.length < 2) { track.classList.remove('visible'); return; }
 
     const trackH = track.offsetHeight;
     const scrollMax = document.documentElement.scrollHeight - window.innerHeight;
