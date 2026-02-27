@@ -2626,7 +2626,7 @@ const App = () => {
   if (!currentUser) return <SignInPage onSignIn={handleSignIn}/>;
 
   return (
-    <div style={inverted ? {filter:"invert(1) hue-rotate(180deg)",minHeight:"100vh"} : undefined}>
+    <div style={{display:"flex",flexDirection:"column",minHeight:"100vh",  ...(inverted ? {filter:"invert(1) hue-rotate(180deg)"} : {})}}>
       <TopNav activeTab={activeTab} subPage={subPage} navigate={navigate} onSignOut={handleSignOut} currentUser={currentUser}/>
       <div style={{marginTop:72,flex:1,display:"flex",flexDirection:"column"}}>
         <div style={{flex:"1 0 auto"}}>
