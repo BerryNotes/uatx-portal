@@ -159,4 +159,18 @@ function sendClubSubmissionNotification(adminEmail, activity, submitterName) {
   });
 }
 
-module.exports = { sendWelcomeEmail, sendOpportunityNotification, sendClubEmail, sendClubSubmissionNotification };
+function sendBugReport(message) {
+  return sendEmail({
+    to: "pvasilik@student.uaustin.org",
+    subject: "Bug Report — UATX Student Portal",
+    html: wrapper(`
+      <h2 style="margin:0 0 16px;color:#1a2332;font-size:22px;">Bug Report</h2>
+      <p style="margin:0 0 8px;color:#6b6b6b;font-size:12px;">Submitted anonymously via the portal</p>
+      <div style="margin:20px 0;padding:20px;background:#f9f7f3;border-left:3px solid #c9a84c;">
+        <p style="margin:0;color:#2c2c2c;font-size:14px;line-height:1.7;white-space:pre-wrap;">${escapeHtml(message)}</p>
+      </div>
+    `),
+  });
+}
+
+module.exports = { sendWelcomeEmail, sendOpportunityNotification, sendClubEmail, sendClubSubmissionNotification, sendBugReport };

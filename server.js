@@ -53,7 +53,7 @@ const {
   updateBlogPost,
   deleteBlogPost,
 } = require("./db");
-const { sendWelcomeEmail, sendOpportunityNotification, sendClubEmail, sendClubSubmissionNotification } = require("./email");
+const { sendWelcomeEmail, sendOpportunityNotification, sendClubEmail, sendClubSubmissionNotification, sendBugReport } = require("./email");
 
 const PORT = process.env.PORT || 3333;
 const DIR = __dirname;
@@ -732,6 +732,16 @@ app.delete("/api/blog/posts/:id", (req, res) => {
   if (!existing) return res.status(404).json({ error: "Post not found" });
   deleteBlogPost(req.params.id);
   res.json({ ok: true });
+});
+
+// ─── BUG REPORTS (anonymous) ───
+
+app.post("/api/bug-report", (req, res) => {
+  const { message } = req.body;
+  if (!message || !message.trim()) return res.status(400).json({ error: "Message required" });
+  sendBugReport(message.trim())
+    .then(() => res.json({ ok: true }))
+    .catch(err => { console.error("[bug-report]", err); res.json({ ok: true }); });
 });
 
 // ─── START ───
