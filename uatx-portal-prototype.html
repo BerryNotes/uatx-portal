@@ -25,6 +25,7 @@
   @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   @keyframes toastIn { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: translateX(0); } }
   @keyframes bounce { 0%, 20%, 50%, 80%, 100% { transform: translateY(0); } 40% { transform: translateY(6px); } 60% { transform: translateY(3px); } }
+  .app-body { margin-top: 72px !important; min-height: calc(100vh - 72px) !important; display: grid !important; grid-template-rows: 1fr auto !important; }
 </style>
 </head>
 <body>
@@ -1307,6 +1308,7 @@ const TopNav = ({activeTab, subPage, navigate, onSignOut, currentUser}) => {
         {profileOpen && (
           <div style={{position:"absolute",top:"100%",right:0,marginTop:4,backgroundColor:C.navy,border:"1px solid "+C.navyLight,minWidth:180,zIndex:20,boxShadow:"0 4px 16px rgba(0,0,0,0.3)"}}>
             <div onClick={()=>{setProfileOpen(false);navigate("profile");}} style={{padding:"10px 20px",cursor:"pointer",fontSize:13,color:C.cream+"cc",borderBottom:"1px solid "+C.navyLight,transition:"all 0.15s ease"}} onMouseEnter={e=>e.target.style.backgroundColor=C.navyLight} onMouseLeave={e=>e.target.style.backgroundColor="transparent"}>My Profile</div>
+            <a href="https://uaustin.speakup.report/Compliance" target="_blank" rel="noopener noreferrer" style={{display:"block",padding:"10px 20px",cursor:"pointer",fontSize:13,color:C.cream+"cc",borderBottom:"1px solid "+C.navyLight,transition:"all 0.15s ease",textDecoration:"none"}} onMouseEnter={e=>e.target.style.backgroundColor=C.navyLight} onMouseLeave={e=>e.target.style.backgroundColor="transparent"} onClick={()=>setProfileOpen(false)}>Report a Concern</a>
             <div onClick={()=>{setProfileOpen(false);onSignOut();}} style={{padding:"10px 20px",cursor:"pointer",fontSize:13,color:C.alert,transition:"all 0.15s ease"}} onMouseEnter={e=>e.target.style.backgroundColor=C.navyLight} onMouseLeave={e=>e.target.style.backgroundColor="transparent"}>Sign Out</div>
           </div>
         )}
@@ -2627,9 +2629,14 @@ const App = () => {
   if (!currentUser) return <SignInPage onSignIn={handleSignIn}/>;
 
   return (
-    <div style={{...(inverted ? {filter:"invert(1) hue-rotate(180deg)"} : {})}}>
+    <div style={{minHeight:"100vh", ...(inverted ? {filter:"invert(1) hue-rotate(180deg)"} : {})}}>
       <TopNav activeTab={activeTab} subPage={subPage} navigate={navigate} onSignOut={handleSignOut} currentUser={currentUser}/>
-      <div ref={el => { if (el) el.style.minHeight = (window.innerHeight - 72) + "px"; }} style={{marginTop:72,display:"grid",gridTemplateRows:"1fr auto"}}>
+      <div className="app-body" ref={el => {
+        if (!el) return;
+        const fix = () => { el.style.minHeight = (window.innerHeight - 72) + "px"; };
+        fix();
+        window.addEventListener("resize", fix);
+      }}>
         <div>
           {subPage ? <DetailPage subPage={subPage} navigate={navigate}/> : pages[activeTab]}
         </div>
