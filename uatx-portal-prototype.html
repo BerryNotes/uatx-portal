@@ -2293,7 +2293,7 @@ const EventsPage = ({navigate, serverEvents=[]}) => {
 };
 
 // ─── FOOTER ───
-const Footer = () => (
+const Footer = ({onInvert}) => (
   <footer style={{backgroundColor:"#0e162a",padding:"40px 40px 32px",marginTop:0}}>
     <div style={{display:"flex",justifyContent:"space-between",gap:40}}>
       <div style={{flex:1}}>
@@ -2301,7 +2301,7 @@ const Footer = () => (
           <img src="/images/Home/logo.png" alt="UATX" style={{width:48,height:48,objectFit:"contain"}}/>
           <span style={{color:C.cream,fontFamily:"Georgia, serif",fontSize:22,fontWeight:700,lineHeight:1.2}}>UATX Student Portal</span>
         </div>
-        <div style={{marginTop:10,fontSize:11,color:C.cream+"55"}}>&copy; {new Date().getFullYear()} University of Austin. All rights reserved.</div>
+        <div style={{marginTop:10,fontSize:11,color:C.cream+"55"}}><span onClick={onInvert} style={{cursor:"default"}}>&copy;</span> {new Date().getFullYear()} University of Austin. All rights reserved.</div>
       </div>
       <div>
         <div style={{fontSize:11,fontWeight:700,color:C.gold,textTransform:"uppercase",letterSpacing:"1px",marginBottom:12}}>Contact</div>
@@ -2406,6 +2406,9 @@ const App = () => {
   const [serverActivities, setServerActivities] = useState([]);
   const [serverEvents, setServerEvents] = useState([]);
   const [allClubEvents, setAllClubEvents] = useState([]);
+
+  // Invert colors easter egg
+  const [inverted, setInverted] = useState(false);
 
   // Toast state
   const [toasts, setToasts] = useState([]);
@@ -2623,16 +2626,16 @@ const App = () => {
   if (!currentUser) return <SignInPage onSignIn={handleSignIn}/>;
 
   return (
-    <>
+    <div style={inverted ? {filter:"invert(1) hue-rotate(180deg)",minHeight:"100vh"} : undefined}>
       <TopNav activeTab={activeTab} subPage={subPage} navigate={navigate} onSignOut={handleSignOut} currentUser={currentUser}/>
       <div style={{marginTop:72,flex:1,display:"flex",flexDirection:"column"}}>
         <div style={{flex:"1 0 auto"}}>
           {subPage ? <DetailPage subPage={subPage} navigate={navigate}/> : pages[activeTab]}
         </div>
-        <Footer/>
+        <Footer onInvert={()=>setInverted(v=>!v)}/>
       </div>
       <Toast toasts={toasts}/>
-    </>
+    </div>
   );
 };
 
