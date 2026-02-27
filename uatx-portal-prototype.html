@@ -13,7 +13,8 @@
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Libre Franklin', sans-serif; background: #f5f0e8; }
+  html, html.lenis, html.lenis-smooth { height: 100% !important; }
+  body { font-family: 'Libre Franklin', sans-serif; background: #f5f0e8; min-height: 100%; }
   #root { min-height: 100vh; display: flex; flex-direction: column; }
   html { scrollbar-width: none; }
   body::-webkit-scrollbar { display: none; }
@@ -2294,7 +2295,7 @@ const EventsPage = ({navigate, serverEvents=[]}) => {
 
 // ─── FOOTER ───
 const Footer = ({onInvert}) => (
-  <footer style={{backgroundColor:"#0e162a",padding:"40px 40px 32px",marginTop:0}}>
+  <footer style={{backgroundColor:"#0e162a",padding:"40px 40px 32px",marginTop:"auto"}}>
     <div style={{display:"flex",justifyContent:"space-between",gap:40}}>
       <div style={{flex:1}}>
         <div style={{display:"flex",alignItems:"center",gap:14}}>
