@@ -2644,8 +2644,8 @@ const App = () => {
   return (
     <div style={{minHeight:"100vh", ...(inverted ? {filter:"invert(1) hue-rotate(180deg)"} : {})}}>
       <TopNav activeTab={activeTab} subPage={subPage} navigate={navigate} onSignOut={handleSignOut} currentUser={currentUser}/>
-      <div style={{marginTop:72,minHeight:"calc(100vh - 72px)",display:"grid",gridTemplateRows:"1fr auto"}}>
-        <div>
+      <div style={{marginTop:72,minHeight:"calc(100vh - 72px)",display:"flex",flexDirection:"column"}}>
+        <div style={{flex:"1 0 auto"}}>
           {subPage ? <DetailPage subPage={subPage} navigate={navigate}/> : pages[activeTab]}
         </div>
         <Footer onInvert={()=>setInverted(v=>!v)}/>
