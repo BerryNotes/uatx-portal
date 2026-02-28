@@ -1700,63 +1700,65 @@ const CalendarPage = ({allInternships, navigate, serverActivities=[], allClubEve
           </div>
         </div>
 
-        {/* Calendar grid */}
-        <div style={{flex:1,backgroundColor:C.white,border:"1px solid "+C.border,borderRadius:10,overflow:"hidden"}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px 24px",backgroundColor:C.cream}}>
-            <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <div onClick={prevMonth} style={{cursor:"pointer",width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:6,backgroundColor:C.white,border:"1px solid "+C.border,fontSize:13,color:C.navy,fontWeight:700}}>{"\u25C0"}</div>
-              <div onClick={nextMonth} style={{cursor:"pointer",width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:6,backgroundColor:C.white,border:"1px solid "+C.border,fontSize:13,color:C.navy,fontWeight:700}}>{"\u25B6"}</div>
-              <span style={{fontFamily:"Georgia, serif",fontSize:18,fontWeight:700,color:C.navy,marginLeft:8}}>{monthName}</span>
+        {/* Calendar grid + club events */}
+        <div style={{flex:1}}>
+          <div style={{backgroundColor:C.white,border:"1px solid "+C.border,borderRadius:10,overflow:"hidden"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px 24px",backgroundColor:C.cream}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <div onClick={prevMonth} style={{cursor:"pointer",width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:6,backgroundColor:C.white,border:"1px solid "+C.border,fontSize:13,color:C.navy,fontWeight:700}}>{"\u25C0"}</div>
+                <div onClick={nextMonth} style={{cursor:"pointer",width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:6,backgroundColor:C.white,border:"1px solid "+C.border,fontSize:13,color:C.navy,fontWeight:700}}>{"\u25B6"}</div>
+                <span style={{fontFamily:"Georgia, serif",fontSize:18,fontWeight:700,color:C.navy,marginLeft:8}}>{monthName}</span>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:16}}>
+                <span style={{fontSize:11,color:C.alert,fontWeight:600}}>{"\u25CF"} Deadlines</span>
+                <span style={{fontSize:11,color:C.success,fontWeight:600}}>{"\u25CF"} Events</span>
+                <span style={{fontSize:11,color:C.gold,fontWeight:600}}>{"\u25CF"} Clubs</span>
+                <Btn size="sm" variant="ghost" onClick={goToday}>Today</Btn>
+              </div>
             </div>
-            <div style={{display:"flex",alignItems:"center",gap:16}}>
-              <span style={{fontSize:11,color:C.alert,fontWeight:600}}>{"\u25CF"} Deadlines</span>
-              <span style={{fontSize:11,color:C.success,fontWeight:600}}>{"\u25CF"} Events</span>
-              <span style={{fontSize:11,color:C.gold,fontWeight:600}}>{"\u25CF"} Clubs</span>
-              <Btn size="sm" variant="ghost" onClick={goToday}>Today</Btn>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(7, 1fr)"}}>
+              {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d => (
+                <div key={d} style={{padding:"10px 0",textAlign:"center",fontSize:11,fontWeight:600,color:C.textLight,textTransform:"uppercase",letterSpacing:"0.5px",borderBottom:"1px solid "+C.border}}>{d}</div>
+              ))}
+              {days.map((day,i) => {
+                const items = getItems(day);
+                const isToday = day && calYear===now.getFullYear() && calMonth===now.getMonth() && day===now.getDate();
+                return (
+                  <div key={i} style={{height:100,padding:"6px 8px",backgroundColor:day?(isToday?C.gold+"08":C.white):"#fafaf8",borderRight:i%7<6?"1px solid #f0ece4":"none",borderBottom:"1px solid #f0ece4",overflow:"hidden"}}>
+                    {day && <>
+                      <div style={{fontSize:12,fontWeight:isToday?700:400,color:isToday?C.gold:items.length?C.navy:C.textLight,marginBottom:4,textAlign:"right"}}>{isToday ? <span style={{backgroundColor:C.gold,color:C.white,borderRadius:"50%",width:24,height:24,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:11}}>{day}</span> : day}</div>
+                      {items.slice(0,3).map((item,j) => (
+                        <div key={j} onClick={item.subPage?()=>navigate(item.subPage):undefined} style={{fontSize:10,padding:"3px 6px",marginTop:2,borderRadius:4,borderLeft:"3px solid "+(item.type==="deadline"?C.alert:item.type==="club"?C.gold:C.success),backgroundColor:(item.type==="deadline"?C.alert:item.type==="club"?C.gold:C.success)+"10",color:item.type==="deadline"?C.alert:item.type==="club"?C.gold:C.success,fontWeight:600,lineHeight:1.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",cursor:item.subPage?"pointer":"default"}}>{item.label}</div>
+                      ))}
+                      {items.length>3 && <div style={{fontSize:9,color:C.textLight,marginTop:2,textAlign:"center"}}>+{items.length-3} more</div>}
+                    </>}
+                  </div>
+                );
+              })}
             </div>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(7, 1fr)"}}>
-            {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d => (
-              <div key={d} style={{padding:"10px 0",textAlign:"center",fontSize:11,fontWeight:600,color:C.textLight,textTransform:"uppercase",letterSpacing:"0.5px",borderBottom:"1px solid "+C.border}}>{d}</div>
-            ))}
-            {days.map((day,i) => {
-              const items = getItems(day);
-              const isToday = day && calYear===now.getFullYear() && calMonth===now.getMonth() && day===now.getDate();
-              return (
-                <div key={i} style={{height:100,padding:"6px 8px",backgroundColor:day?(isToday?C.gold+"08":C.white):"#fafaf8",borderRight:i%7<6?"1px solid #f0ece4":"none",borderBottom:"1px solid #f0ece4",overflow:"hidden"}}>
-                  {day && <>
-                    <div style={{fontSize:12,fontWeight:isToday?700:400,color:isToday?C.gold:items.length?C.navy:C.textLight,marginBottom:4,textAlign:"right"}}>{isToday ? <span style={{backgroundColor:C.gold,color:C.white,borderRadius:"50%",width:24,height:24,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:11}}>{day}</span> : day}</div>
-                    {items.slice(0,3).map((item,j) => (
-                      <div key={j} onClick={item.subPage?()=>navigate(item.subPage):undefined} style={{fontSize:10,padding:"3px 6px",marginTop:2,borderRadius:4,borderLeft:"3px solid "+(item.type==="deadline"?C.alert:item.type==="club"?C.gold:C.success),backgroundColor:(item.type==="deadline"?C.alert:item.type==="club"?C.gold:C.success)+"10",color:item.type==="deadline"?C.alert:item.type==="club"?C.gold:C.success,fontWeight:600,lineHeight:1.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",cursor:item.subPage?"pointer":"default"}}>{item.label}</div>
-                    ))}
-                    {items.length>3 && <div style={{fontSize:9,color:C.textLight,marginTop:2,textAlign:"center"}}>+{items.length-3} more</div>}
-                  </>}
-                </div>
-              );
-            })}
-          </div>
+
+          {/* Club Events */}
+          {allClubEvents.length > 0 && (
+            <div style={{marginTop:16}}>
+              <h3 style={{fontFamily:"Georgia, serif",fontSize:18,color:C.navy,margin:"0 0 12px"}}>Upcoming Club Events</h3>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:12}}>
+                {allClubEvents.sort((a,b) => new Date(a.date||"9999") - new Date(b.date||"9999")).map(ce => {
+                  const club = serverActivities.find(a => a.id === ce.activity_id);
+                  return (
+                    <div key={ce.id} style={{backgroundColor:C.white,border:"1px solid "+C.gold+"30",padding:14}}>
+                      <div style={{fontSize:13,fontWeight:600,color:C.navy}}>{ce.title}</div>
+                      <div style={{fontSize:11,color:C.textLight,marginTop:2}}>
+                        {club ? club.title : "Club"}{ce.date ? " \u00B7 " + new Date(ce.date).toLocaleString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}) : ""}{ce.location ? " \u00B7 " + ce.location : ""}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </div>
-
-      {/* Club Events */}
-      {allClubEvents.length > 0 && (
-        <div style={{marginTop:24}}>
-          <h3 style={{fontFamily:"Georgia, serif",fontSize:18,color:C.navy,margin:"0 0 12px"}}>Upcoming Club Events</h3>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:12}}>
-            {allClubEvents.sort((a,b) => new Date(a.date||"9999") - new Date(b.date||"9999")).map(ce => {
-              const club = serverActivities.find(a => a.id === ce.activity_id);
-              return (
-                <div key={ce.id} style={{backgroundColor:C.white,border:"1px solid "+C.gold+"30",padding:14}}>
-                  <div style={{fontSize:13,fontWeight:600,color:C.navy}}>{ce.title}</div>
-                  <div style={{fontSize:11,color:C.textLight,marginTop:2}}>
-                    {club ? club.title : "Club"}{ce.date ? " \u00B7 " + new Date(ce.date).toLocaleString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}) : ""}{ce.location ? " \u00B7 " + ce.location : ""}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
     </div>
   );
 };
