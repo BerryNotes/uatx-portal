@@ -1738,25 +1738,6 @@ const CalendarPage = ({allInternships, navigate, serverActivities=[], allClubEve
             </div>
           </div>
 
-          {/* Club Events */}
-          {allClubEvents.length > 0 && (
-            <div style={{marginTop:16}}>
-              <h3 style={{fontFamily:"Georgia, serif",fontSize:18,color:C.navy,margin:"0 0 12px"}}>Upcoming Club Events</h3>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:12}}>
-                {allClubEvents.sort((a,b) => new Date(a.date||"9999") - new Date(b.date||"9999")).map(ce => {
-                  const club = serverActivities.find(a => a.id === ce.activity_id);
-                  return (
-                    <div key={ce.id} style={{backgroundColor:C.white,border:"1px solid "+C.gold+"30",padding:14}}>
-                      <div style={{fontSize:13,fontWeight:600,color:C.navy}}>{ce.title}</div>
-                      <div style={{fontSize:11,color:C.textLight,marginTop:2}}>
-                        {club ? club.title : "Club"}{ce.date ? " \u00B7 " + new Date(ce.date).toLocaleString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}) : ""}{ce.location ? " \u00B7 " + ce.location : ""}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>
