@@ -156,6 +156,18 @@ function requireAdmin(req, res, next) {
   next();
 }
 
+function isLocalRequest(req) {
+  const ip = String(req.ip || "").toLowerCase();
+  const host = String(req.hostname || "").toLowerCase();
+  return (
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    ip === "::1" ||
+    ip === "127.0.0.1" ||
+    ip === "::ffff:127.0.0.1"
+  );
+}
+
 function normalizePublicUrl(value, { allowRelative = false } = {}) {
   if (typeof value !== "string") return "";
   let v = value.trim();
@@ -328,6 +340,48 @@ app.post("/api/auth/google", rateLimit(60000, 10), async (req, res) => {
     console.error("[auth] Google validation error:", err.message);
     res.status(500).json({ error: "Authentication failed" });
   }
+});
+
+// Local dev fallback login when Google client ID is not configured
+app.post("/api/auth/dev-login", rateLimit(60000, 10), (req, res) => {
+  if (IS_PROD) return res.status(403).json({ error: "Not available in production" });
+  if (!isLocalRequest(req)) return res.status(403).json({ error: "Localhost only" });
+
+  const email = String(req.body?.email || "").trim().toLowerCase();
+  const name = String(req.body?.name || "").trim() || "Local Dev User";
+  if (!email) return res.status(400).json({ error: "Email is required" });
+
+  const allowed =
+    email.endsWith("@student.uaustin.org") || email.endsWith("@uaustin.org");
+  if (!allowed) {
+    return res.status(400).json({ error: "Use a @student.uaustin.org or @uaustin.org email" });
+  }
+
+  // Local dev login defaults to admin access for ease of local testing
+  const forceAdmin = process.env.LOCAL_DEV_FORCE_ADMIN !== "0";
+  const rosterName = name || email.split("@")[0];
+  if (!isOnRoster(email)) addToRoster(rosterName, email, forceAdmin ? 1 : 0);
+
+  const rosterEntry = rosterFindByEmail(email);
+  const { id } = findOrCreateUser({
+    email,
+    name: rosterName,
+    googleSub: null,
+    avatarUrl: null,
+    isAdmin: forceAdmin || !!(rosterEntry && rosterEntry.is_admin),
+  });
+
+  req.session.userId = id;
+  const user = getUserById(id);
+  res.json({
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      avatar_url: user.avatar_url,
+      is_admin: !!user.is_admin,
+    },
+  });
 });
 
 app.get("/api/auth/me", (req, res) => {

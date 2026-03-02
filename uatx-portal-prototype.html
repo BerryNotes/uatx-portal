@@ -2235,9 +2235,14 @@ const Footer = () => (
 const SignInPage = ({onSignIn}) => {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [devEmail, setDevEmail] = useState("pvasilik@student.uaustin.org");
+  const [devName, setDevName] = useState("Local Admin");
   const btnRef = useRef(null);
+  const hasGoogleClientId = !!window.__GOOGLE_CLIENT_ID;
 
   useEffect(() => {
+    if (!hasGoogleClientId) return;
+
     const initGoogle = () => {
       if (!window.google?.accounts?.id) {
         setTimeout(initGoogle, 200);
@@ -2272,7 +2277,31 @@ const SignInPage = ({onSignIn}) => {
       }
     };
     initGoogle();
-  }, []);
+  }, [hasGoogleClientId]);
+
+  const handleDevLogin = async () => {
+    if (!devEmail.trim()) {
+      setError("Enter an email for local sign-in.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await api("/api/auth/dev-login", {
+        method: "POST",
+        body: JSON.stringify({ email: devEmail.trim(), name: devName.trim() || "Local Admin" }),
+      });
+      if (data.error) {
+        setError(data.error);
+        setLoading(false);
+        return;
+      }
+      onSignIn(data.user);
+    } catch (e) {
+      setError("Local sign-in failed.");
+      setLoading(false);
+    }
+  };
 
   return (
     <div style={{minHeight:"100vh",background:"linear-gradient(135deg, "+C.navy+" 0%, "+C.navyDark+" 100%)",display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -2286,10 +2315,38 @@ const SignInPage = ({onSignIn}) => {
           {loading ? (
             <p style={{fontSize:13,color:C.creamDark}}>Signing in...</p>
           ) : (
-            <div ref={btnRef} style={{minHeight:44}}></div>
+            hasGoogleClientId ? (
+              <div ref={btnRef} style={{minHeight:44}}></div>
+            ) : (
+              <div style={{width:"100%",display:"flex",flexDirection:"column",gap:10}}>
+                <input
+                  value={devEmail}
+                  onChange={e=>setDevEmail(e.target.value)}
+                  placeholder="email@student.uaustin.org"
+                  style={{width:"100%",padding:"10px 12px",backgroundColor:C.navyDark,color:C.cream,border:"1px solid "+C.navyLight,fontSize:13,fontFamily:"'Libre Franklin', sans-serif"}}
+                />
+                <input
+                  value={devName}
+                  onChange={e=>setDevName(e.target.value)}
+                  placeholder="Name"
+                  style={{width:"100%",padding:"10px 12px",backgroundColor:C.navyDark,color:C.cream,border:"1px solid "+C.navyLight,fontSize:13,fontFamily:"'Libre Franklin', sans-serif"}}
+                />
+                <button
+                  onClick={handleDevLogin}
+                  style={{width:"100%",padding:"10px 12px",backgroundColor:C.gold,color:C.navy,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'Libre Franklin', sans-serif"}}
+                >
+                  Localhost Dev Sign In
+                </button>
+              </div>
+            )
           )}
           {error && <p style={{fontSize:12,color:C.alert,textAlign:"center",margin:0,maxWidth:320}}>{error}</p>}
-          <p style={{fontSize:11,color:C.creamDark,textAlign:"center",margin:"8px 0 0"}}>Sign in with your <strong>@student.uaustin.org</strong> or <strong>@uaustin.org</strong> account</p>
+          <p style={{fontSize:11,color:C.creamDark,textAlign:"center",margin:"8px 0 0"}}>
+            {hasGoogleClientId
+              ? <>Sign in with your <strong>@student.uaustin.org</strong> or <strong>@uaustin.org</strong> account</>
+              : <>Google client ID is not configured locally. Use dev sign-in above.</>
+            }
+          </p>
           <p style={{fontSize:11,color:C.creamDark,textAlign:"center",margin:0}}>Need help? Contact <a href="mailto:pvasilik@student.uaustin.org" style={{color:C.gold,fontWeight:600}}>pvasilik@student.uaustin.org</a></p>
         </div>
       </div>
