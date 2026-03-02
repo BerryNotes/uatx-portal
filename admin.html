@@ -122,6 +122,10 @@
     .check-row { display: flex; align-items: center; gap: 8px; }
     .check-row input[type="checkbox"] { accent-color: #c9a84c; }
     .check-row label { font-size: 13px; color: #c4c4d4; cursor: pointer; }
+    .detail-toolbar { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0 8px; }
+    .detail-toolbar button { background: #111a26; color: #c4c4d4; border: 1px solid #243044; border-radius: 3px; font-size: 11px; font-family: inherit; font-weight: 600; padding: 4px 8px; cursor: pointer; }
+    .detail-toolbar button:hover { border-color: #c9a84c; color: #d4b96a; }
+    .detail-help { font-size: 11px; color: #6b7280; margin-top: 6px; line-height: 1.4; }
   </style>
 </head>
 <body>
@@ -259,8 +263,16 @@
           <textarea id="opp-desc" style="width:100%"></textarea>
         </div>
         <div class="field" style="margin-bottom:12px">
-          <label>Detail Page Content (full description shown when clicked — use blank lines to separate paragraphs)</label>
-          <textarea id="opp-detail" style="width:100%;min-height:120px" placeholder="About the Organization&#10;&#10;Write detailed information here...&#10;&#10;How to Apply&#10;&#10;Application instructions..."></textarea>
+          <label>Detail Page Content (supports headings, bullets, bold, italic)</label>
+          <div class="detail-toolbar">
+            <button type="button" onclick="applyDetailFormat('opp-detail','h2')">H2</button>
+            <button type="button" onclick="applyDetailFormat('opp-detail','h3')">H3</button>
+            <button type="button" onclick="applyDetailFormat('opp-detail','bold')">Bold</button>
+            <button type="button" onclick="applyDetailFormat('opp-detail','italic')">Italic</button>
+            <button type="button" onclick="applyDetailFormat('opp-detail','bullet')">Bullets</button>
+          </div>
+          <textarea id="opp-detail" style="width:100%;min-height:120px" placeholder="## About the Organization&#10;&#10;Write detailed information with **bold** and *italic* text.&#10;&#10;- Bullet one&#10;- Bullet two&#10;&#10;### How to Apply&#10;Application instructions..."></textarea>
+          <div class="detail-help">Use markdown: <code>## Heading</code>, <code>### Subheading</code>, <code>- Bullet</code>, <code>**bold**</code>, <code>*italic*</code>.</div>
         </div>
         <div class="form-row">
           <div class="field"><label>Apply URL (optional)</label><input id="opp-apply-url" placeholder="https://apply.example.com" style="width:300px"></div>
@@ -774,7 +786,15 @@ function renderOpportunities(opps) {
         </div>
         <div class="opp-edit-full field">
           <label>Detail Page Content</label>
+          <div class="detail-toolbar">
+            <button type="button" onclick="applyDetailFormat('edit-detail','h2')">H2</button>
+            <button type="button" onclick="applyDetailFormat('edit-detail','h3')">H3</button>
+            <button type="button" onclick="applyDetailFormat('edit-detail','bold')">Bold</button>
+            <button type="button" onclick="applyDetailFormat('edit-detail','italic')">Italic</button>
+            <button type="button" onclick="applyDetailFormat('edit-detail','bullet')">Bullets</button>
+          </div>
           <textarea id="edit-detail" style="min-height:100px">${esc(o.detail_content || '')}</textarea>
+          <div class="detail-help">Use markdown: <code>## Heading</code>, <code>### Subheading</code>, <code>- Bullet</code>, <code>**bold**</code>, <code>*italic*</code>.</div>
         </div>
         <div class="opp-edit-grid">
           <div class="field"><label>Apply URL</label><input id="edit-apply-url" value="${attr(o.apply_url || '')}"></div>
@@ -816,6 +836,75 @@ const INDUSTRIES = ["Finance & Banking","Technology","Law & Policy","Government"
 
 let lastCustomOpps = [];
 
+function normalizePublicUrlInput(value, allowRelative) {
+  if (typeof value !== "string") return "";
+  let v = value.trim();
+  if (!v) return "";
+
+  const driveMatch = v.match(/drive\.google\.com\/file\/d\/([^/]+)/i);
+  if (driveMatch) return "https://drive.google.com/uc?export=view&id=" + driveMatch[1];
+
+  if (v.startsWith("data:image/")) return v;
+  if (v.startsWith("//")) return "https:" + v;
+  if (v.startsWith("http://")) return "https://" + v.slice(7);
+  if (/^https?:\/\//i.test(v)) return v;
+  if (/^[a-z0-9.-]+\.[a-z]{2,}(\/|$)/i.test(v)) return "https://" + v;
+
+  if (v.startsWith("UATX Portal Images/")) return "/images/" + v.slice("UATX Portal Images/".length);
+  if (v.startsWith("images/")) return "/" + v;
+  if (allowRelative && v.startsWith("/")) return v;
+  if (allowRelative && /^[^:]+$/.test(v)) return "/" + v.replace(/^\/+/, "");
+  return "";
+}
+
+function applyDetailFormat(fieldId, mode) {
+  const el = document.getElementById(fieldId);
+  if (!el) return;
+
+  const value = el.value || "";
+  const start = el.selectionStart || 0;
+  const end = el.selectionEnd || 0;
+  const selected = value.slice(start, end);
+
+  const insertText = (text, cursorOffsetStart, cursorOffsetEnd) => {
+    el.value = value.slice(0, start) + text + value.slice(end);
+    const nextStart = start + cursorOffsetStart;
+    const nextEnd = start + cursorOffsetEnd;
+    el.focus();
+    el.setSelectionRange(nextStart, nextEnd);
+  };
+
+  if (mode === "bold") {
+    const content = selected || "bold text";
+    const wrapped = "**" + content + "**";
+    insertText(wrapped, 2, 2 + content.length);
+    return;
+  }
+  if (mode === "italic") {
+    const content = selected || "italic text";
+    const wrapped = "*" + content + "*";
+    insertText(wrapped, 1, 1 + content.length);
+    return;
+  }
+  if (mode === "h2" || mode === "h3") {
+    const prefix = mode === "h2" ? "## " : "### ";
+    const content = selected || "Heading";
+    const next = prefix + content;
+    insertText(next, prefix.length, prefix.length + content.length);
+    return;
+  }
+  if (mode === "bullet") {
+    const lines = (selected || "Bullet item").split(/\r?\n/);
+    const bulleted = lines.map(line => {
+      const trimmed = line.trim();
+      if (!trimmed) return "- ";
+      if (trimmed.startsWith("- ")) return trimmed;
+      return "- " + trimmed;
+    }).join("\n");
+    insertText(bulleted, 0, bulleted.length);
+  }
+}
+
 function startOppEdit(id) {
   editingOppId = id;
   renderOpportunities(lastCustomOpps);
@@ -838,8 +927,8 @@ async function saveOppEdit(id) {
     featured: document.getElementById("edit-featured").checked,
     description: document.getElementById("edit-desc").value.trim(),
     detail_content: document.getElementById("edit-detail").value.trim(),
-    apply_url: document.getElementById("edit-apply-url").value.trim(),
-    logo: document.getElementById("edit-logo").value.trim() || null,
+    apply_url: normalizePublicUrlInput(document.getElementById("edit-apply-url").value, false),
+    logo: normalizePublicUrlInput(document.getElementById("edit-logo").value, true) || null,
   };
   if (!opportunity.org || !opportunity.title) return toast("Organization and title required", true);
   const res = await fetch("/api/admin/opportunities/" + id, {
@@ -866,8 +955,8 @@ async function createOpp(notify) {
     featured: document.getElementById("opp-featured").checked,
     description: document.getElementById("opp-desc").value.trim(),
     detail_content: document.getElementById("opp-detail").value.trim(),
-    apply_url: document.getElementById("opp-apply-url").value.trim(),
-    logo: document.getElementById("opp-logo").value.trim() || null,
+    apply_url: normalizePublicUrlInput(document.getElementById("opp-apply-url").value, false),
+    logo: normalizePublicUrlInput(document.getElementById("opp-logo").value, true) || null,
   };
   if (!opportunity.org || !opportunity.title) return toast("Organization and title required", true);
   const res = await fetch("/api/admin/opportunities", {

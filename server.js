@@ -156,6 +156,42 @@ function requireAdmin(req, res, next) {
   next();
 }
 
+function normalizePublicUrl(value, { allowRelative = false } = {}) {
+  if (typeof value !== "string") return "";
+  let v = value.trim();
+  if (!v) return "";
+
+  const driveMatch = v.match(/drive\.google\.com\/file\/d\/([^/]+)/i);
+  if (driveMatch) return `https://drive.google.com/uc?export=view&id=${driveMatch[1]}`;
+
+  if (v.startsWith("data:image/")) return v;
+  if (v.startsWith("//")) return "https:" + v;
+  if (v.startsWith("http://")) return "https://" + v.slice(7);
+  if (/^https?:\/\//i.test(v)) return v;
+  if (/^[a-z0-9.-]+\.[a-z]{2,}(\/|$)/i.test(v)) return "https://" + v;
+
+  if (v.startsWith("UATX Portal Images/")) return "/images/" + v.slice("UATX Portal Images/".length);
+  if (v.startsWith("images/")) return "/" + v;
+  if (allowRelative && v.startsWith("/")) return v;
+  if (allowRelative && /^[^:]+$/.test(v)) return "/" + v.replace(/^\/+/, "");
+  return "";
+}
+
+function normalizeOpportunity(opportunity) {
+  const o = { ...opportunity };
+  o.org = typeof o.org === "string" ? o.org.trim() : "";
+  o.title = typeof o.title === "string" ? o.title.trim() : "";
+  o.industry = typeof o.industry === "string" ? o.industry.trim() : "";
+  o.type = typeof o.type === "string" ? o.type.trim() : "";
+  o.location = typeof o.location === "string" ? o.location.trim() : "";
+  o.description = typeof o.description === "string" ? o.description.trim() : "";
+  o.detail_content = typeof o.detail_content === "string" ? o.detail_content.trim() : "";
+  o.deadline = typeof o.deadline === "string" && o.deadline.trim() ? o.deadline.trim() : null;
+  o.logo = normalizePublicUrl(o.logo || "", { allowRelative: true }) || null;
+  o.apply_url = normalizePublicUrl(o.apply_url || "", { allowRelative: false }) || "";
+  return o;
+}
+
 // ─── PUBLIC CONFIG (exposes Google Client ID to frontend) ───
 
 app.get("/api/config", (req, res) => {
@@ -494,18 +530,19 @@ app.get("/api/admin/opportunities", requireAdmin, (req, res) => {
 
 app.post("/api/admin/opportunities", requireAdmin, async (req, res) => {
   const { opportunity, notify } = req.body;
-  if (!opportunity || !opportunity.org || !opportunity.title) {
+  const normalizedOpp = normalizeOpportunity(opportunity || {});
+  if (!normalizedOpp.org || !normalizedOpp.title) {
     return res.status(400).json({ error: "Organization and title are required" });
   }
 
-  const id = createOpportunity(opportunity);
+  const id = createOpportunity(normalizedOpp);
 
   // Send notifications if requested
   let notified = 0;
-  if (notify && opportunity.industry) {
-    const students = getStudentsForNotification(opportunity.industry);
+  if (notify && normalizedOpp.industry) {
+    const students = getStudentsForNotification(normalizedOpp.industry);
     for (const student of students) {
-      await sendOpportunityNotification(student.email, student.name, { ...opportunity, id });
+      await sendOpportunityNotification(student.email, student.name, { ...normalizedOpp, id });
       notified++;
     }
   }
@@ -515,10 +552,11 @@ app.post("/api/admin/opportunities", requireAdmin, async (req, res) => {
 
 app.put("/api/admin/opportunities/:id", requireAdmin, (req, res) => {
   const { opportunity } = req.body;
-  if (!opportunity || !opportunity.org || !opportunity.title) {
+  const normalizedOpp = normalizeOpportunity(opportunity || {});
+  if (!normalizedOpp.org || !normalizedOpp.title) {
     return res.status(400).json({ error: "Organization and title are required" });
   }
-  updateOpportunity(req.params.id, opportunity);
+  updateOpportunity(req.params.id, normalizedOpp);
   res.json({ ok: true, opportunities: getAllOpportunities() });
 });
 
