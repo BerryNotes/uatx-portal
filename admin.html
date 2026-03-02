@@ -125,6 +125,8 @@
     .detail-toolbar { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0 8px; }
     .detail-toolbar button { background: #111a26; color: #c4c4d4; border: 1px solid #243044; border-radius: 3px; font-size: 11px; font-family: inherit; font-weight: 600; padding: 4px 8px; cursor: pointer; }
     .detail-toolbar button:hover { border-color: #c9a84c; color: #d4b96a; }
+    .detail-toolbar select { background: #111a26; color: #c4c4d4; border: 1px solid #243044; border-radius: 3px; font-size: 11px; font-family: inherit; font-weight: 600; padding: 4px 8px; cursor: pointer; }
+    .detail-toolbar select:hover { border-color: #c9a84c; color: #d4b96a; }
     .detail-help { font-size: 11px; color: #6b7280; margin-top: 6px; line-height: 1.4; }
   </style>
 </head>
@@ -264,14 +266,17 @@
         </div>
         <div class="field" style="margin-bottom:12px">
           <label>Detail Page Content (supports headings, bullets, bold, italic)</label>
+          <textarea id="opp-detail" style="width:100%;min-height:120px" placeholder="## About the Organization&#10;&#10;Write detailed information with **bold** and *italic* text.&#10;&#10;- Bullet one&#10;- Bullet two&#10;&#10;### How to Apply&#10;Application instructions..."></textarea>
           <div class="detail-toolbar">
-            <button type="button" onclick="applyDetailFormat('opp-detail','h2')">H2</button>
-            <button type="button" onclick="applyDetailFormat('opp-detail','h3')">H3</button>
             <button type="button" onclick="applyDetailFormat('opp-detail','bold')">Bold</button>
             <button type="button" onclick="applyDetailFormat('opp-detail','italic')">Italic</button>
             <button type="button" onclick="applyDetailFormat('opp-detail','bullet')">Bullets</button>
+            <select onchange="if(this.value){applyDetailFormat('opp-detail', this.value); this.selectedIndex=0;}">
+              <option value="">Font Size</option>
+              <option value="h2">Large</option>
+              <option value="h3">Medium</option>
+            </select>
           </div>
-          <textarea id="opp-detail" style="width:100%;min-height:120px" placeholder="## About the Organization&#10;&#10;Write detailed information with **bold** and *italic* text.&#10;&#10;- Bullet one&#10;- Bullet two&#10;&#10;### How to Apply&#10;Application instructions..."></textarea>
           <div class="detail-help">Use markdown: <code>## Heading</code>, <code>### Subheading</code>, <code>- Bullet</code>, <code>**bold**</code>, <code>*italic*</code>.</div>
         </div>
         <div class="form-row">
@@ -786,14 +791,17 @@ function renderOpportunities(opps) {
         </div>
         <div class="opp-edit-full field">
           <label>Detail Page Content</label>
+          <textarea id="edit-detail" style="min-height:100px">${esc(o.detail_content || '')}</textarea>
           <div class="detail-toolbar">
-            <button type="button" onclick="applyDetailFormat('edit-detail','h2')">H2</button>
-            <button type="button" onclick="applyDetailFormat('edit-detail','h3')">H3</button>
             <button type="button" onclick="applyDetailFormat('edit-detail','bold')">Bold</button>
             <button type="button" onclick="applyDetailFormat('edit-detail','italic')">Italic</button>
             <button type="button" onclick="applyDetailFormat('edit-detail','bullet')">Bullets</button>
+            <select onchange="if(this.value){applyDetailFormat('edit-detail', this.value); this.selectedIndex=0;}">
+              <option value="">Font Size</option>
+              <option value="h2">Large</option>
+              <option value="h3">Medium</option>
+            </select>
           </div>
-          <textarea id="edit-detail" style="min-height:100px">${esc(o.detail_content || '')}</textarea>
           <div class="detail-help">Use markdown: <code>## Heading</code>, <code>### Subheading</code>, <code>- Bullet</code>, <code>**bold**</code>, <code>*italic*</code>.</div>
         </div>
         <div class="opp-edit-grid">
