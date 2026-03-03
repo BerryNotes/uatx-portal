@@ -340,11 +340,25 @@ app.post("/api/auth/google", rateLimit(60000, 10), async (req, res) => {
     if (!tokenRes.ok) return res.status(401).json({ error: "Invalid token" });
 
     const payload = await tokenRes.json();
-    const { email, name, sub: googleSub, picture: avatarUrl, hd } = payload;
+    const rawEmail = String(payload.email || "").trim();
+    const email = rawEmail.toLowerCase();
+    const name = String(payload.name || "").trim();
+    const googleSub = payload.sub;
+    const avatarUrl = payload.picture;
+    const hd = String(payload.hd || "").toLowerCase();
+
+    if (!email || !googleSub) {
+      return res.status(401).json({ error: "Invalid Google account payload" });
+    }
+
+    if (payload.email_verified === false || payload.verified_email === false) {
+      return res.status(403).json({ error: "Google email must be verified" });
+    }
 
     // Restrict to UATX domains (students + faculty)
     const ALLOWED_DOMAINS = ["student.uaustin.org", "uaustin.org"];
-    if (!ALLOWED_DOMAINS.includes(hd)) {
+    const emailDomain = email.includes("@") ? email.split("@")[1] : "";
+    if (!ALLOWED_DOMAINS.includes(hd) && !ALLOWED_DOMAINS.includes(emailDomain)) {
       return res.status(403).json({ error: "Only @student.uaustin.org and @uaustin.org accounts are allowed" });
     }
 
