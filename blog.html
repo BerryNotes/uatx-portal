@@ -309,7 +309,7 @@
 
 <div class="bg"></div>
 
-<div class="controls" id="controls">
+<div class="controls view-hidden" id="controls">
   <button class="ctrl-btn" onclick="openEditor()">+</button>
 </div>
 
@@ -318,7 +318,7 @@
 
 <div class="empty view-hidden" id="empty-state">
   <p>Nothing here yet.</p>
-  <button class="ctrl-btn" onclick="openEditor()">Add a quote</button>
+  <button class="ctrl-btn view-hidden" id="empty-add-btn" onclick="openEditor()">Add a quote</button>
 </div>
 
 <!-- Post detail overlay -->
@@ -327,7 +327,7 @@
   <div class="overlay-inner">
     <div class="overlay-text" id="overlay-text"></div>
     <div class="overlay-date" id="overlay-date"></div>
-    <div class="overlay-actions" id="overlay-actions">
+    <div class="overlay-actions view-hidden" id="overlay-actions">
       <button class="ctrl-btn" onclick="editCurrent()">Edit</button>
       <button class="ctrl-btn ctrl-btn-danger" onclick="deleteCurrent()">Delete</button>
     </div>
@@ -349,7 +349,15 @@
   let posts = [];
   let currentPostId = null;
   let editingPostId = null;
+  let isAdmin = false;
   // ─── API ───
+
+  async function fetchMe() {
+    const res = await fetch('/api/auth/me');
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data && data.user ? data.user : null;
+  }
 
   async function fetchPosts() {
     const res = await fetch('/api/blog/posts');
@@ -365,6 +373,7 @@
   }
 
   async function saveQuote() {
+    if (!isAdmin) return;
     const raw = document.getElementById('editor-content').value.trim();
     if (!raw) return;
 
@@ -389,6 +398,7 @@
   }
 
   async function deleteCurrent() {
+    if (!isAdmin) return;
     if (!currentPostId || !confirm('Delete this quote?')) return;
     await fetch(`/api/blog/posts/${currentPostId}`, { method: 'DELETE' });
     currentPostId = null;
@@ -706,6 +716,7 @@
   }
 
   function openEditor(postId) {
+    if (!isAdmin) return;
     editingPostId = postId || null;
     document.getElementById('editor-content').value = '';
 
@@ -728,12 +739,27 @@
   }
 
   function editCurrent() {
+    if (!isAdmin) return;
     closeOverlay();
     openEditor(currentPostId);
   }
 
+  function setAdminUI(admin) {
+    const controls = document.getElementById('controls');
+    const overlayActions = document.getElementById('overlay-actions');
+    const emptyAdd = document.getElementById('empty-add-btn');
+    if (controls) controls.classList.toggle('view-hidden', !admin);
+    if (overlayActions) overlayActions.classList.toggle('view-hidden', !admin);
+    if (emptyAdd) emptyAdd.classList.toggle('view-hidden', !admin);
+  }
+
   // ─── Init ───
-  fetchPosts();
+  (async function init() {
+    const user = await fetchMe();
+    isAdmin = !!(user && user.is_admin);
+    setAdminUI(isAdmin);
+    await fetchPosts();
+  })();
 </script>
 </body>
 </html>
