@@ -118,6 +118,12 @@ const isEventExpired = (dateValue) => {
   return dateOnly <= getTodayISODate();
 };
 
+const COMMUNITY_EVENT_CATEGORIES = ["Student Life", "Residential Life"];
+const normalizeCommunityEventCategory = (value) => {
+  const raw = String(value || "").trim();
+  return COMMUNITY_EVENT_CATEGORIES.includes(raw) ? raw : "Student Life";
+};
+
 const formatInlineDetailMarkup = (text) => {
   if (!text) return "";
   let out = String(text);
@@ -2693,7 +2699,12 @@ const CommunityPage = ({mode="all", joinedClubs, setJoinedClubs, clubEmailPrefs=
 
   const adminCommunityEvents = serverEvents
     .filter(e => e.is_community)
-    .map(e => ({ ...e, desc: e.description || e.desc || "", source: "community" }));
+    .map(e => ({
+      ...e,
+      type: normalizeCommunityEventCategory(e.type),
+      desc: e.description || e.desc || "",
+      source: "community"
+    }));
   const clubCommunityEvents = allClubEvents.map(e => {
     const activityId = normalizeClubId(e.activity_id);
     const club = allActivities.find(a => normalizeClubId(a.serverId || a.id) === activityId);
@@ -2729,7 +2740,7 @@ const CommunityPage = ({mode="all", joinedClubs, setJoinedClubs, clubEmailPrefs=
                     {event.img ? (
                       <img src={event.img} alt={event.org || event.title} style={{width:34,height:34,borderRadius:5,objectFit:"contain",backgroundColor:C.white,border:"1px solid "+C.border,flexShrink:0}} onError={e=>{e.target.style.display="none";}}/>
                     ) : (
-                      <div style={{width:34,height:34,borderRadius:5,backgroundColor:C.navyDark,display:"flex",alignItems:"center",justifyContent:"center",color:C.gold,fontSize:12,fontWeight:700,fontFamily:"Georgia, serif",flexShrink:0}}>{(event.org || "E").charAt(0)}</div>
+                      <div style={{width:34,height:34,borderRadius:5,backgroundColor:C.navyDark,display:"flex",alignItems:"center",justifyContent:"center",color:C.gold,fontSize:12,fontWeight:700,fontFamily:"Georgia, serif",flexShrink:0}}>{(String(event.title || "").trim().charAt(0) || "E").toUpperCase()}</div>
                     )}
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{fontSize:15,fontWeight:700,color:C.navy,fontFamily:"Georgia, serif",lineHeight:1.25,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{event.title}</div>
@@ -3089,6 +3100,9 @@ const App = () => {
         const events = data.events.map((raw) => {
           const e = { ...raw };
           e.desc = e.description || e.desc || "";
+          if (e.is_community) {
+            e.type = normalizeCommunityEventCategory(e.type);
+          }
           const detailText = (e.detail_content || "").trim();
           const pageKey = "event-server-" + e.id;
 

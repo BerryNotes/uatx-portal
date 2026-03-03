@@ -370,17 +370,10 @@
             <div class="field"><label>Title</label><input id="comm-evt-title" style="width:240px"></div>
             <div class="field"><label>Organization</label><input id="comm-evt-org" style="width:180px"></div>
             <div class="field">
-              <label>Type</label>
+              <label>Category</label>
               <select id="comm-evt-type" style="width:160px">
-                <option value="">Select...</option>
-                <option>Student Visit</option>
-                <option>VIP Event Partnership</option>
-                <option>Study Abroad</option>
-                <option>Summer Program</option>
-                <option>Seminar Series</option>
-                <option>Multiple Programs</option>
-                <option>Conference</option>
-                <option>Workshop</option>
+                <option>Student Life</option>
+                <option>Residential Life</option>
               </select>
             </div>
           </div>
@@ -1393,8 +1386,12 @@ let lastEvents = [];
 let editingEventId = null;
 
 const EVENT_TYPES = ["Student Visit","VIP Event Partnership","Study Abroad","Summer Program","Seminar Series","Multiple Programs","Conference","Workshop"];
+const COMMUNITY_EVENT_TYPES = ["Student Life", "Residential Life"];
+const normalizeCommunityEventType = (value) => COMMUNITY_EVENT_TYPES.includes(value) ? value : "Student Life";
 const getProgramEvents = (events = lastEvents) => (events || []).filter(e => !e.is_community);
-const getCommunityEvents = (events = lastEvents) => (events || []).filter(e => !!e.is_community);
+const getCommunityEvents = (events = lastEvents) => (events || [])
+  .filter(e => !!e.is_community)
+  .map(e => ({ ...e, type: normalizeCommunityEventType(e.type) }));
 
 async function loadEvents() {
   const res = await fetch("/api/admin/events");
@@ -1438,10 +1435,9 @@ function renderCommunityEvents(events) {
         <div class="opp-edit-grid">
           <div class="field"><label>Title</label><input id="edit-evt-title" value="${attr(e.title)}"></div>
           <div class="field"><label>Organization</label><input id="edit-evt-org" value="${attr(e.org || '')}"></div>
-          <div class="field"><label>Type</label>
+          <div class="field"><label>Category</label>
             <select id="edit-evt-type">
-              <option value="">Select...</option>
-              ${EVENT_TYPES.map(t => '<option' + (t === e.type ? ' selected' : '') + '>' + t + '</option>').join('')}
+              ${COMMUNITY_EVENT_TYPES.map(t => '<option' + (t === e.type ? ' selected' : '') + '>' + t + '</option>').join('')}
             </select>
           </div>
           <div class="field"><label>Date</label><input id="edit-evt-date" type="date" min="${todayISO()}" value="${e.date || ''}"></div>
@@ -1578,10 +1574,13 @@ function cancelEventEdit() { editingEventId = null; filterEvents(); filterCommun
 
 async function saveEventEdit(id) {
   const existing = lastEvents.find(e => e.id === id) || {};
+  const normalizedType = existing.is_community
+    ? normalizeCommunityEventType(document.getElementById("edit-evt-type").value)
+    : document.getElementById("edit-evt-type").value;
   const event = {
     title: document.getElementById("edit-evt-title").value.trim(),
     org: document.getElementById("edit-evt-org").value.trim(),
-    type: document.getElementById("edit-evt-type").value,
+    type: normalizedType,
     date: document.getElementById("edit-evt-date").value || null,
     url: document.getElementById("edit-evt-url").value.trim(),
     img: document.getElementById("edit-evt-img").value.trim() || null,
@@ -1638,7 +1637,7 @@ async function createCommunityEventAdmin() {
   const event = {
     title: document.getElementById("comm-evt-title").value.trim(),
     org: document.getElementById("comm-evt-org").value.trim(),
-    type: document.getElementById("comm-evt-type").value,
+    type: normalizeCommunityEventType(document.getElementById("comm-evt-type").value),
     date: document.getElementById("comm-evt-date").value || null,
     url: document.getElementById("comm-evt-url").value.trim(),
     img: document.getElementById("comm-evt-img").value.trim() || null,

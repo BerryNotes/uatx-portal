@@ -268,6 +268,27 @@ function isEventDateHit(value) {
   return dateOnly <= getTodayISODate();
 }
 
+const COMMUNITY_EVENT_TYPES = new Set(["Student Life", "Residential Life"]);
+
+function normalizeAdminEventPayload(rawEvent) {
+  const event = rawEvent && typeof rawEvent === "object" ? { ...rawEvent } : {};
+  event.title = typeof event.title === "string" ? event.title.trim() : "";
+  event.org = typeof event.org === "string" ? event.org.trim() : "";
+  event.type = typeof event.type === "string" ? event.type.trim() : "";
+  event.description = typeof event.description === "string" ? event.description.trim() : "";
+  event.detail_content = typeof event.detail_content === "string" ? event.detail_content.trim() : "";
+  event.url = typeof event.url === "string" ? event.url.trim() : "";
+  event.img = typeof event.img === "string" ? event.img.trim() : "";
+  event.date = typeof event.date === "string" && event.date.trim() ? event.date.trim() : null;
+  event.sub_page = typeof event.sub_page === "string" ? event.sub_page.trim() : "";
+  event.is_community = !!event.is_community;
+
+  if (event.is_community && !COMMUNITY_EVENT_TYPES.has(event.type)) {
+    event.type = "Student Life";
+  }
+  return event;
+}
+
 // ─── PUBLIC CONFIG (exposes Google Client ID to frontend) ───
 
 app.get("/api/config", (req, res) => {
@@ -825,16 +846,16 @@ app.get("/api/admin/events", requireAdmin, (req, res) => {
 });
 
 app.post("/api/admin/events", requireAdmin, (req, res) => {
-  const { event } = req.body;
-  if (!event || !event.title) return res.status(400).json({ error: "Title is required" });
+  const event = normalizeAdminEventPayload(req.body && req.body.event);
+  if (!event.title) return res.status(400).json({ error: "Title is required" });
   if (isPastDateOnly(event.date)) return res.status(400).json({ error: "Event date cannot be in the past" });
   createEvent(event);
   res.json({ ok: true, events: getAllEvents() });
 });
 
 app.put("/api/admin/events/:id", requireAdmin, (req, res) => {
-  const { event } = req.body;
-  if (!event || !event.title) return res.status(400).json({ error: "Title is required" });
+  const event = normalizeAdminEventPayload(req.body && req.body.event);
+  if (!event.title) return res.status(400).json({ error: "Title is required" });
   if (isPastDateOnly(event.date)) return res.status(400).json({ error: "Event date cannot be in the past" });
   updateEvent(req.params.id, event);
   res.json({ ok: true, events: getAllEvents() });
