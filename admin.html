@@ -1140,7 +1140,7 @@ function renderOpportunities(opps) {
             ${o.industry ? '<span>' + esc(o.industry) + '</span>' : ''}
             ${o.type ? '<span>' + esc(o.type) + '</span>' : ''}
             ${o.location ? '<span>' + esc(o.location) + '</span>' : ''}
-            <span>${o.deadline ? 'Due ' + formatDate(o.deadline) : 'No deadline'}</span>
+            <span>${o.deadline ? 'Due ' + formatDate(o.deadline) : 'Rolling'}</span>
           </div>
           <div class="opp-card-badges">
             ${o.paid ? '<span class="badge-paid">Paid</span>' : ''}
