@@ -151,6 +151,7 @@
     <button class="tab-btn" data-tab="opportunities">Opportunities</button>
     <button class="tab-btn" data-tab="community">Community</button>
     <button class="tab-btn" data-tab="events">Programs & Travel</button>
+    <button class="tab-btn" data-tab="expired">Expired Opps</button>
   </div>
 
   <!-- ROSTER TAB -->
@@ -198,8 +199,23 @@
         </div>
       </div>
 
-      <div style="margin-bottom:16px">
+      <div style="margin-bottom:12px">
         <input id="roster-search" placeholder="Search roster..." oninput="filterRoster()" style="width:100%;background:#111a26;color:#f5f0e8;border:1px solid #243044;padding:10px 14px;font-size:13px;font-family:inherit;border-radius:3px;outline:none">
+      </div>
+      <div style="margin-bottom:16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <select id="roster-filter-industry" onchange="filterRoster()" style="background:#111a26;color:#f5f0e8;border:1px solid #243044;padding:6px 10px;font-size:12px;font-family:inherit;border-radius:3px">
+          <option value="">All Industries</option>
+        </select>
+        <select id="roster-filter-club" onchange="filterRoster()" style="background:#111a26;color:#f5f0e8;border:1px solid #243044;padding:6px 10px;font-size:12px;font-family:inherit;border-radius:3px">
+          <option value="">All Clubs</option>
+        </select>
+        <select id="roster-filter-status" onchange="filterRoster()" style="background:#111a26;color:#f5f0e8;border:1px solid #243044;padding:6px 10px;font-size:12px;font-family:inherit;border-radius:3px">
+          <option value="">All Status</option>
+          <option value="registered">Registered</option>
+          <option value="pending">Pending</option>
+          <option value="admin">Admins Only</option>
+        </select>
+        <button class="btn btn-outline" onclick="clearRosterFilters()" style="font-size:11px;padding:5px 10px">Clear Filters</button>
       </div>
 
       <table>
@@ -265,19 +281,22 @@
           <textarea id="opp-desc" style="width:100%"></textarea>
         </div>
         <div class="field" style="margin-bottom:12px">
-          <label>Detail Page Content (supports headings, bullets, bold, italic)</label>
-          <textarea id="opp-detail" style="width:100%;min-height:120px" placeholder="## About the Organization&#10;&#10;Write detailed information with **bold** and *italic* text.&#10;&#10;- Bullet one&#10;- Bullet two&#10;&#10;### How to Apply&#10;Application instructions..."></textarea>
+          <label>Detail Page Content (full description shown when clicked — use blank lines to separate paragraphs)</label>
           <div class="detail-toolbar">
             <button type="button" onclick="applyDetailFormat('opp-detail','bold')">Bold</button>
             <button type="button" onclick="applyDetailFormat('opp-detail','italic')">Italic</button>
             <button type="button" onclick="applyDetailFormat('opp-detail','bullet')">Bullets</button>
+            <button type="button" onclick="applyDetailFormat('opp-detail','number')">Numbered</button>
             <select onchange="if(this.value){applyDetailFormat('opp-detail', this.value); this.selectedIndex=0;}">
               <option value="">Font Size</option>
               <option value="h2">Large</option>
               <option value="h3">Medium</option>
+              <option value="h4">Small</option>
+              <option value="paragraph">Body</option>
             </select>
           </div>
-          <div class="detail-help">Use markdown: <code>## Heading</code>, <code>### Subheading</code>, <code>- Bullet</code>, <code>**bold**</code>, <code>*italic*</code>.</div>
+          <textarea id="opp-detail" style="width:100%;min-height:120px" placeholder="About the Organization&#10;&#10;Write detailed information here...&#10;&#10;How to Apply&#10;&#10;Application instructions..."></textarea>
+          <div class="detail-help">Use the toolbar to style content. Blank lines separate paragraphs.</div>
         </div>
         <div class="form-row">
           <div class="field"><label>Apply URL (optional)</label><input id="opp-apply-url" placeholder="https://apply.example.com" style="width:300px"></div>
@@ -303,72 +322,119 @@
     <div class="content">
       <div class="section-header">
         <div style="display:flex;align-items:center">
-          <h2>Community Activities</h2>
+          <h2>Clubs</h2>
           <span class="count" id="activity-count"></span>
         </div>
       </div>
 
       <div style="background:#111a26;border:1px solid #243044;padding:20px;margin-bottom:24px;border-radius:4px">
-        <div style="font-size:13px;font-weight:600;color:#f5f0e8;margin-bottom:12px">New Activity</div>
-        <div class="form-row">
-          <div class="field"><label>Title</label><input id="act-title" style="width:240px"></div>
-          <div class="field">
-            <label>Category</label>
-            <select id="act-category" style="width:160px">
-              <option value="">Select...</option>
-              <option>Academic</option>
-              <option>Social</option>
-              <option>Sports</option>
-              <option>Arts</option>
-              <option>Service</option>
-              <option>Professional</option>
-              <option>Religious</option>
-              <option>Cultural</option>
-              <option>Political</option>
-              <option>Media</option>
-            </select>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <div style="font-size:13px;font-weight:600;color:#f5f0e8">Create</div>
+          <div style="display:flex;gap:8px">
+            <button id="create-mode-club" class="btn btn-gold" type="button" onclick="setCommunityCreateMode('club')">Clubs</button>
+            <button id="create-mode-community-event" class="btn btn-outline" type="button" onclick="setCommunityCreateMode('community-event')">Community Events</button>
           </div>
-          <div class="field"><label>Meet Day</label><input id="act-meetday" placeholder="e.g. Tuesdays" style="width:160px"></div>
         </div>
-        <div class="form-row">
-          <div class="field"><label>President Email</label><input id="act-president" placeholder="president@uaustin.org" style="width:260px"></div>
-        </div>
-        <div class="field" style="margin-bottom:16px">
-          <label>Description</label>
-          <textarea id="act-desc" style="width:100%"></textarea>
-        </div>
-        <div class="check-row" style="margin-bottom:12px">
-          <input type="checkbox" id="act-show-event">
-          <label for="act-show-event">Show as Community Event</label>
-        </div>
-        <div class="form-row">
-          <div class="field"><label>Event Title</label><input id="act-event-title" placeholder="e.g. Debate Night" style="width:220px"></div>
-          <div class="field"><label>Event Date</label><input id="act-event-date" type="date" style="width:160px"></div>
-          <div class="field"><label>Event Location</label><input id="act-event-location" placeholder="e.g. Room 201" style="width:220px"></div>
-        </div>
-        <div class="field" style="margin-bottom:16px">
-          <label>Event Description Page Content (markdown supported)</label>
-          <div class="detail-toolbar">
-            <button type="button" onclick="applyDetailFormat('act-event-description','bold')">Bold</button>
-            <button type="button" onclick="applyDetailFormat('act-event-description','italic')">Italic</button>
-            <button type="button" onclick="applyDetailFormat('act-event-description','bullet')">Bullets</button>
-            <select onchange="if(this.value){applyDetailFormat('act-event-description', this.value); this.selectedIndex=0;}">
-              <option value="">Font Size</option>
-              <option value="h2">Large</option>
-              <option value="h3">Medium</option>
-            </select>
+        <div id="club-create-form">
+          <div style="font-size:13px;font-weight:600;color:#f5f0e8;margin-bottom:12px">New Club</div>
+          <div class="form-row">
+            <div class="field"><label>Title</label><input id="act-title" style="width:240px"></div>
+            <div class="field">
+              <label>Category</label>
+              <select id="act-category" style="width:160px">
+                <option value="">Select...</option>
+                <option>Academic</option>
+                <option>Social</option>
+                <option>Sports</option>
+                <option>Arts</option>
+                <option>Service</option>
+                <option>Professional</option>
+                <option>Religious</option>
+                <option>Cultural</option>
+                <option>Political</option>
+                <option>Media</option>
+              </select>
+            </div>
+            <div class="field"><label>Meet Day</label><input id="act-meetday" placeholder="e.g. Tuesdays" style="width:160px"></div>
           </div>
-          <textarea id="act-event-description" style="width:100%;min-height:100px" placeholder="## About this event&#10;&#10;Add details, agenda, and expectations..."></textarea>
+          <div class="form-row">
+            <div class="field"><label>President Email</label><input id="act-president" placeholder="president@uaustin.org" style="width:260px"></div>
+          </div>
+          <div class="field" style="margin-bottom:16px">
+            <label>Description</label>
+            <textarea id="act-desc" style="width:100%"></textarea>
+          </div>
+          <button class="btn btn-gold" onclick="createActivity()">Save Club</button>
         </div>
-        <button class="btn btn-gold" onclick="createActivity()">Save</button>
+        <div id="community-event-create-form" style="display:none">
+          <div style="font-size:13px;font-weight:600;color:#f5f0e8;margin-bottom:12px">New Community Event</div>
+          <div class="form-row">
+            <div class="field"><label>Title</label><input id="comm-evt-title" style="width:240px"></div>
+            <div class="field"><label>Organization</label><input id="comm-evt-org" style="width:180px"></div>
+            <div class="field">
+              <label>Type</label>
+              <select id="comm-evt-type" style="width:160px">
+                <option value="">Select...</option>
+                <option>Student Visit</option>
+                <option>VIP Event Partnership</option>
+                <option>Study Abroad</option>
+                <option>Summer Program</option>
+                <option>Seminar Series</option>
+                <option>Multiple Programs</option>
+                <option>Conference</option>
+                <option>Workshop</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="field"><label>Date</label><input id="comm-evt-date" type="date" style="width:160px"></div>
+            <div class="field"><label>URL</label><input id="comm-evt-url" placeholder="https://..." style="width:280px"></div>
+            <div class="field"><label>Image Path</label><input id="comm-evt-img" placeholder="/images/UATX Sponsered Events & Travel/..." style="width:280px"></div>
+          </div>
+          <div class="field" style="margin-bottom:16px">
+            <label>Description</label>
+            <textarea id="comm-evt-desc" style="width:100%"></textarea>
+          </div>
+          <div class="field" style="margin-bottom:16px">
+            <label>Page Description (shown on Learn More page)</label>
+            <div class="detail-toolbar">
+              <button type="button" onclick="applyDetailFormat('comm-evt-detail','bold')">Bold</button>
+              <button type="button" onclick="applyDetailFormat('comm-evt-detail','italic')">Italic</button>
+              <button type="button" onclick="applyDetailFormat('comm-evt-detail','bullet')">Bullets</button>
+              <button type="button" onclick="applyDetailFormat('comm-evt-detail','number')">Numbered</button>
+              <select onchange="if(this.value){applyDetailFormat('comm-evt-detail', this.value); this.selectedIndex=0;}">
+                <option value="">Font Size</option>
+                <option value="h2">Large</option>
+                <option value="h3">Medium</option>
+                <option value="h4">Small</option>
+                <option value="paragraph">Body</option>
+              </select>
+            </div>
+            <textarea id="comm-evt-detail" style="width:100%;min-height:100px" placeholder="Add full event details. Use blank lines to separate paragraphs."></textarea>
+            <div class="detail-help">Use the toolbar to style content. Blank lines separate paragraphs.</div>
+          </div>
+          <button class="btn btn-gold" onclick="createCommunityEventAdmin()">Save Community Event</button>
+        </div>
       </div>
 
       <div style="margin-bottom:16px">
-        <input id="activity-search" placeholder="Search activities..." oninput="filterActivities()" style="width:100%;background:#111a26;color:#f5f0e8;border:1px solid #243044;padding:10px 14px;font-size:13px;font-family:inherit;border-radius:3px;outline:none">
+        <input id="activity-search" placeholder="Search clubs..." oninput="filterActivities()" style="width:100%;background:#111a26;color:#f5f0e8;border:1px solid #243044;padding:10px 14px;font-size:13px;font-family:inherit;border-radius:3px;outline:none">
       </div>
 
       <div id="activity-body"></div>
-      <div class="empty" id="activity-empty" style="display:none">No activities found.</div>
+      <div class="empty" id="activity-empty" style="display:none">No clubs found.</div>
+
+      <div class="section-header" style="margin-top:28px">
+        <div style="display:flex;align-items:center">
+          <h2>Community Events</h2>
+          <span class="count" id="community-event-count"></span>
+        </div>
+      </div>
+      <div style="margin-bottom:16px">
+        <input id="community-event-search" placeholder="Search community events..." oninput="filterCommunityEvents()" style="width:100%;background:#111a26;color:#f5f0e8;border:1px solid #243044;padding:10px 14px;font-size:13px;font-family:inherit;border-radius:3px;outline:none">
+      </div>
+      <div id="community-event-body"></div>
+      <div class="empty" id="community-event-empty" style="display:none">No community events found.</div>
     </div>
   </div>
 
@@ -411,6 +477,24 @@
           <label>Description</label>
           <textarea id="evt-desc" style="width:100%"></textarea>
         </div>
+        <div class="field" style="margin-bottom:16px">
+          <label>Page Description (shown on Learn More page)</label>
+          <div class="detail-toolbar">
+            <button type="button" onclick="applyDetailFormat('evt-detail','bold')">Bold</button>
+            <button type="button" onclick="applyDetailFormat('evt-detail','italic')">Italic</button>
+            <button type="button" onclick="applyDetailFormat('evt-detail','bullet')">Bullets</button>
+            <button type="button" onclick="applyDetailFormat('evt-detail','number')">Numbered</button>
+            <select onchange="if(this.value){applyDetailFormat('evt-detail', this.value); this.selectedIndex=0;}">
+              <option value="">Font Size</option>
+              <option value="h2">Large</option>
+              <option value="h3">Medium</option>
+              <option value="h4">Small</option>
+              <option value="paragraph">Body</option>
+            </select>
+          </div>
+          <textarea id="evt-detail" style="width:100%;min-height:100px" placeholder="Add full event details. Use blank lines to separate paragraphs."></textarea>
+          <div class="detail-help">Use the toolbar to style content. Blank lines separate paragraphs.</div>
+        </div>
         <button class="btn btn-gold" onclick="createEventAdmin()">Save</button>
       </div>
 
@@ -423,6 +507,24 @@
     </div>
   </div>
 
+  <!-- EXPIRED OPPORTUNITIES TAB -->
+  <div class="tab-panel" id="tab-expired">
+    <div class="content">
+      <div class="section-header">
+        <div style="display:flex;align-items:center">
+          <h2>Expired Opportunities</h2>
+          <span class="count" id="expired-count"></span>
+        </div>
+      </div>
+      <p style="font-size:12px;color:#6b7280;margin-bottom:16px">Opportunities with past deadlines. Not visible to students — for admin record-keeping only.</p>
+      <div style="margin-bottom:12px">
+        <input id="expired-search" placeholder="Search expired opportunities..." oninput="filterExpired()" style="width:100%;background:#111a26;color:#f5f0e8;border:1px solid #243044;padding:10px 14px;font-size:13px;font-family:inherit;border-radius:3px;outline:none">
+      </div>
+      <div id="expired-body"></div>
+      <div class="empty" id="expired-empty" style="display:none">No expired opportunities.</div>
+    </div>
+  </div>
+
 </div>
 
 <div id="toast-container"></div>
@@ -431,7 +533,91 @@
 // ─── STATE ───
 let currentUser = null;
 
+function todayISO() {
+  const now = new Date();
+  const tzOffsetMs = now.getTimezoneOffset() * 60000;
+  return new Date(now.getTime() - tzOffsetMs).toISOString().split("T")[0];
+}
+
+function isPastDateOnly(value) {
+  if (!value) return false;
+  const dateOnly = String(value).split("T")[0];
+  return dateOnly < todayISO();
+}
+
+function setEventDateMinimums() {
+  const minDate = todayISO();
+  const createDate = document.getElementById("evt-date");
+  const communityCreateDate = document.getElementById("comm-evt-date");
+  const editDate = document.getElementById("edit-evt-date");
+  if (createDate) createDate.min = minDate;
+  if (communityCreateDate) communityCreateDate.min = minDate;
+  if (editDate) editDate.min = minDate;
+}
+
+let communityCreateMode = "club";
+function setCommunityCreateMode(mode) {
+  communityCreateMode = mode === "community-event" ? "community-event" : "club";
+  const clubBtn = document.getElementById("create-mode-club");
+  const eventBtn = document.getElementById("create-mode-community-event");
+  const clubForm = document.getElementById("club-create-form");
+  const eventForm = document.getElementById("community-event-create-form");
+  if (clubBtn) clubBtn.className = "btn " + (communityCreateMode === "club" ? "btn-gold" : "btn-outline");
+  if (eventBtn) eventBtn.className = "btn " + (communityCreateMode === "community-event" ? "btn-gold" : "btn-outline");
+  if (clubForm) clubForm.style.display = communityCreateMode === "club" ? "block" : "none";
+  if (eventForm) eventForm.style.display = communityCreateMode === "community-event" ? "block" : "none";
+}
+
 // ─── INIT ───
+function applyDetailFormat(textareaId, format) {
+  const el = document.getElementById(textareaId);
+  if (!el) return;
+  const start = el.selectionStart || 0;
+  const end = el.selectionEnd || 0;
+  const selected = el.value.slice(start, end);
+
+  const updateSelection = (nextText, selection) => {
+    el.setRangeText(nextText, start, end, "end");
+    if (selection) {
+      el.setSelectionRange(start + selection.start, start + selection.end);
+    }
+    el.focus();
+  };
+
+  const selectedLines = selected.split("\n");
+  if (format === "bold") {
+    const inner = selected || "bold text";
+    updateSelection("**" + inner + "**", { start: 2, end: 2 + inner.length });
+    return;
+  }
+  if (format === "italic") {
+    const inner = selected || "italic text";
+    updateSelection("*" + inner + "*", { start: 1, end: 1 + inner.length });
+    return;
+  }
+  if (format === "bullet") {
+    const next = selectedLines.map(line => line.trim() ? ("- " + line.replace(/^-\s+/, "")) : line).join("\n");
+    updateSelection(next || "- ", null);
+    return;
+  }
+  if (format === "number") {
+    let idx = 1;
+    const next = selectedLines.map(line => line.trim() ? (String(idx++) + ". " + line.replace(/^\d+\.\s+/, "")) : line).join("\n");
+    updateSelection(next || "1. ", null);
+    return;
+  }
+  if (format === "h2" || format === "h3" || format === "h4") {
+    const prefix = format === "h2" ? "## " : (format === "h3" ? "### " : "#### ");
+    const heading = (selected || "Heading").replace(/^\s*#{2,4}\s+/, "");
+    updateSelection(prefix + heading, { start: prefix.length, end: prefix.length + heading.length });
+    return;
+  }
+  if (format === "paragraph") {
+    const body = (selected || "Body text").replace(/^\s*#{2,4}\s+/, "");
+    updateSelection(body, { start: 0, end: body.length });
+  }
+}
+
 async function init() {
   try {
     const res = await fetch("/api/auth/me");
@@ -448,6 +634,8 @@ async function init() {
     document.getElementById("auth-gate").style.display = "none";
     document.getElementById("app").style.display = "block";
     document.getElementById("user-info").textContent = currentUser.email;
+    setEventDateMinimums();
+    setCommunityCreateMode("club");
     loadRoster();
     loadOpportunities();
     loadActivities();
@@ -469,25 +657,92 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
 });
 
 // ─── ROSTER ───
+let lastStudents = [];
+
 async function loadRoster() {
   const res = await fetch("/api/admin/roster");
   const data = await res.json();
   lastRoster = data.roster;
+  // Load students for filter data
+  try {
+    const sRes = await fetch("/api/admin/students");
+    const sData = await sRes.json();
+    lastStudents = sData.students || [];
+    populateRosterFilters();
+  } catch(e) {}
+  filterRoster();
+}
+
+function populateRosterFilters() {
+  const indSet = new Set();
+  const clubSet = new Set();
+  lastStudents.forEach(s => {
+    try { const inds = JSON.parse(s.selected_industries || '[]'); inds.forEach(i => indSet.add(i)); } catch(e) {}
+  });
+  lastActivities.forEach(a => clubSet.add(a.title));
+  const indSel = document.getElementById("roster-filter-industry");
+  const clubSel = document.getElementById("roster-filter-club");
+  const curInd = indSel.value;
+  const curClub = clubSel.value;
+  indSel.innerHTML = '<option value="">All Industries</option>' + Array.from(indSet).sort().map(i => '<option value="' + esc(i) + '">' + esc(i) + '</option>').join('');
+  clubSel.innerHTML = '<option value="">All Clubs</option>' + Array.from(clubSet).sort().map(c => '<option value="' + esc(c) + '">' + esc(c) + '</option>').join('');
+  indSel.value = curInd;
+  clubSel.value = curClub;
+}
+
+function clearRosterFilters() {
+  document.getElementById("roster-search").value = "";
+  document.getElementById("roster-filter-industry").value = "";
+  document.getElementById("roster-filter-club").value = "";
+  document.getElementById("roster-filter-status").value = "";
   filterRoster();
 }
 
 function filterRoster() {
   const q = (document.getElementById("roster-search").value || "").toLowerCase();
-  if (!q) { renderRoster(lastRoster); return; }
-  const filtered = lastRoster.filter(r =>
-    (r.name + " " + r.email).toLowerCase().includes(q)
-  );
+  const indFilter = document.getElementById("roster-filter-industry").value;
+  const clubFilter = document.getElementById("roster-filter-club").value;
+  const statusFilter = document.getElementById("roster-filter-status").value;
+
+  // Build a lookup from students
+  const studentByEmail = {};
+  lastStudents.forEach(s => {
+    studentByEmail[s.email.toLowerCase()] = s;
+  });
+
+  let filtered = lastRoster;
+  if (q) {
+    filtered = filtered.filter(r => (r.name + " " + r.email).toLowerCase().includes(q));
+  }
+  if (statusFilter === "registered") filtered = filtered.filter(r => r.registered);
+  else if (statusFilter === "pending") filtered = filtered.filter(r => !r.registered);
+  else if (statusFilter === "admin") filtered = filtered.filter(r => r.is_admin);
+
+  if (indFilter) {
+    filtered = filtered.filter(r => {
+      const s = studentByEmail[r.email.toLowerCase()];
+      if (!s) return false;
+      try { return JSON.parse(s.selected_industries || '[]').includes(indFilter); } catch(e) { return false; }
+    });
+  }
+  if (clubFilter) {
+    filtered = filtered.filter(r => {
+      const s = studentByEmail[r.email.toLowerCase()];
+      if (!s) return false;
+      try {
+        const clubIds = JSON.parse(s.joined_clubs || '[]');
+        const club = lastActivities.find(a => a.title === clubFilter);
+        return club && Array.isArray(clubIds) && clubIds.includes(club.id);
+      } catch(e) { return false; }
+    });
+  }
   renderRoster(filtered);
 }
 
 let expandedRosterId = null;
 
 function renderRoster(roster) {
+  roster = [...roster].sort((a, b) => (b.is_admin ? 1 : 0) - (a.is_admin ? 1 : 0));
   document.getElementById("roster-count").textContent = "(" + roster.length + ")";
   const body = document.getElementById("roster-body");
   const empty = document.getElementById("roster-empty");
@@ -526,7 +781,7 @@ async function toggleRosterDetail(id, email, registered) {
   } else {
     expandedRosterId = id;
   }
-  renderRoster(lastRoster);
+  filterRoster();
 }
 
 let lastRoster = [];
@@ -555,45 +810,55 @@ async function loadStudentDetail(rosterId, email) {
 
     // Store current prefs for editing
     el.dataset.email = email;
-    el.dataset.prefs = JSON.stringify({
-      selected_industries: industries,
-      selected_areas: areas,
-      email_alerts: prefs ? prefs.email_alerts : true,
-      saved_opps: prefs && prefs.saved_opps ? prefs.saved_opps : [],
-      joined_clubs: clubIds,
-      club_email_prefs: prefs && prefs.club_email_prefs ? prefs.club_email_prefs : {},
-      internship_history: history
-    });
+    el.dataset.prefs = JSON.stringify({ selected_industries: industries, selected_areas: areas, email_alerts: prefs ? prefs.email_alerts : true, saved_opps: prefs && prefs.saved_opps ? prefs.saved_opps : [], joined_clubs: clubIds, internship_history: history });
 
     el.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <span style="font-size:11px;color:#4b5563">Joined: ${formatDate(data.student.created_at)}</span>
+        <div style="display:flex;align-items:center;gap:12px">
+          ${data.student.avatar_url ? '<img src="' + esc(data.student.avatar_url) + '" style="width:32px;height:32px;border-radius:50%;border:1px solid #243044">' : ''}
+          <div>
+            <div style="font-size:14px;font-weight:600;color:#f5f0e8">${esc(data.student.name)}</div>
+            <span style="font-size:11px;color:#4b5563">Joined ${formatDate(data.student.created_at)} &middot; ${esc(data.student.email)}</span>
+          </div>
+        </div>
         <button class="btn btn-gold" onclick="openProfileEdit('${esc(email)}', ${rosterId})">Edit Profile</button>
       </div>
-      <div class="detail-grid">
+      <div class="detail-grid" style="grid-template-columns:1fr 1fr 1fr;gap:16px">
         <div class="detail-section">
-          <h4>Interests</h4>
+          <h4>Industry Interests</h4>
           ${industries.length ? '<div>' + industries.map(i => '<span class="tag">' + esc(i) + '</span>').join('') + '</div>' : '<p class="empty-note">No industries selected</p>'}
-          ${areas.length ? '<div style="margin-top:8px">' + areas.map(a => '<span class="tag">' + esc(a) + '</span>').join('') + '</div>' : ''}
+          ${areas.length ? '<div style="margin-top:8px"><h4 style="margin-bottom:6px">Areas of Interest</h4>' + areas.map(a => '<span class="tag">' + esc(a) + '</span>').join('') + '</div>' : ''}
           <p style="margin-top:10px;font-size:12px;color:#6b7280">
             Email alerts: <strong style="color:${alerts === 'On' ? '#4a7c59' : '#6b7280'}">${alerts}</strong>
-            &nbsp;&middot;&nbsp; Saved: <strong>${savedCount}</strong>
+            &nbsp;&middot;&nbsp; Saved opps: <strong>${savedCount}</strong>
           </p>
         </div>
         <div class="detail-section">
-          <h4>Clubs Joined</h4>
-          ${clubNames.length ? '<div>' + clubNames.map(c => '<span class="tag">' + esc(c) + '</span>').join('') + '</div>' : '<p class="empty-note">No clubs joined</p>'}
+          <h4>Clubs</h4>
+          ${(() => {
+            const presidentOf = lastActivities.filter(a => a.president_email && a.president_email.toLowerCase() === email.toLowerCase()).map(a => a.title);
+            return presidentOf.length ? '<div style="margin-bottom:6px"><span style="font-size:10px;font-weight:700;color:#c9a84c;text-transform:uppercase;letter-spacing:0.05em">President of:</span><br>' + presidentOf.map(c => '<span class="tag" style="background:rgba(201,168,76,0.2);color:#c9a84c">' + esc(c) + '</span>').join('') + '</div>' : '';
+          })()}
+          ${clubNames.length ? '<div><span style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em">Member of:</span><br>' + clubNames.map(c => '<span class="tag">' + esc(c) + '</span>').join('') + '</div>' : '<p class="empty-note">No clubs joined</p>'}
         </div>
-      </div>
-      <div class="detail-section" style="margin-top:16px">
-        <h4>Internship History</h4>
-        ${history.length ? history.map(h => `
-          <div class="history-item">
-            <div class="history-org">${esc(h.org)}</div>
-            <div class="history-role">${esc(h.role || '')}</div>
-            <div class="history-dates">${esc(h.dates || '')}${h.industry ? ' &middot; ' + esc(h.industry) : ''}</div>
-          </div>
-        `).join('') : '<p class="empty-note">No history recorded</p>'}
+        <div class="detail-section">
+          <h4>Internship History (${history.length})</h4>
+          ${history.length ? history.map(h => `
+            <div class="history-item">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start">
+                <div>
+                  <div class="history-org">${esc(h.role || h.org)}</div>
+                  <div class="history-role">${h.role ? esc(h.org) : ''}</div>
+                </div>
+                ${h.industry ? '<span class="tag" style="flex-shrink:0">' + esc(h.industry) + '</span>' : ''}
+              </div>
+              <div class="history-dates">${esc(h.dates || '')}</div>
+              ${h.description ? '<div style="font-size:11px;color:#8b8ba0;margin-top:4px;line-height:1.4">' + esc(h.description) + '</div>' : ''}
+              ${h.summary ? '<div style="font-size:11px;color:#6b7280;margin-top:3px;font-style:italic">' + esc(h.summary) + '</div>' : ''}
+              ${h.careerNotes ? '<div style="font-size:11px;color:#4b5563;margin-top:3px">' + esc(h.careerNotes) + '</div>' : ''}
+            </div>
+          `).join('') : '<p class="empty-note">No history recorded</p>'}
+        </div>
       </div>
     `;
   } catch (e) {
@@ -601,11 +866,7 @@ async function loadStudentDetail(rosterId, email) {
   }
 }
 
-const ALL_INDUSTRIES = [
-  "Finance & Banking","Technology","Law & Policy","Government","Nonprofit","Media & Journalism","Consulting","Healthcare","Education","Energy","Real Estate","Defense & Security",
-  "Artificial Intelligence","Product Management","Marketing & Communications","Entrepreneurship","Manufacturing","Public Relations","Sports & Entertainment","Agriculture & Food",
-  "Environment & Sustainability","Human Resources","Sales & Business Development"
-];
+const ALL_INDUSTRIES = ["Finance & Banking","Technology","Law & Policy","Government","Nonprofit","Media & Journalism","Consulting","Healthcare","Education","Energy","Real Estate","Defense & Security"];
 
 function openProfileEdit(email, rosterId) {
   const el = document.getElementById("detail-" + rosterId);
@@ -690,7 +951,6 @@ async function saveProfileEdit(email, rosterId) {
     email_alerts: existing.email_alerts !== undefined ? existing.email_alerts : true,
     saved_opps: existing.saved_opps || [],
     joined_clubs: existing.joined_clubs || [],
-    club_email_prefs: existing.club_email_prefs || {},
     internship_history: internshipHistory
   };
 
@@ -720,7 +980,7 @@ async function addStudent() {
   document.getElementById("roster-name").value = "";
   document.getElementById("roster-email").value = "";
   document.getElementById("roster-admin").checked = false;
-  lastRoster = data.roster; renderRoster(data.roster);
+  lastRoster = data.roster; filterRoster();
   toast("Student added to roster");
 }
 
@@ -728,7 +988,7 @@ async function removeStudent(id) {
   if (!confirm("Remove this student from the roster?")) return;
   const res = await fetch("/api/admin/roster/" + id, { method: "DELETE" });
   const data = await res.json();
-  lastRoster = data.roster; renderRoster(data.roster);
+  lastRoster = data.roster; filterRoster();
   toast("Student removed");
 }
 
@@ -767,7 +1027,7 @@ async function uploadCSV() {
   if (!res.ok) return toast(data.error, true);
   document.getElementById("csv-input").value = "";
   document.getElementById("csv-area").style.display = "none";
-  lastRoster = data.roster; renderRoster(data.roster);
+  lastRoster = data.roster; filterRoster();
   toast(`Imported ${data.added} students`);
 }
 
@@ -779,6 +1039,7 @@ async function loadOpportunities() {
   const data = await res.json();
   lastCustomOpps = data.opportunities;
   renderOpportunities(data.opportunities);
+  renderExpired(getExpiredOpps());
 }
 
 function filterOpps() {
@@ -827,18 +1088,21 @@ function renderOpportunities(opps) {
         </div>
         <div class="opp-edit-full field">
           <label>Detail Page Content</label>
-          <textarea id="edit-detail" style="min-height:100px">${esc(o.detail_content || '')}</textarea>
           <div class="detail-toolbar">
             <button type="button" onclick="applyDetailFormat('edit-detail','bold')">Bold</button>
             <button type="button" onclick="applyDetailFormat('edit-detail','italic')">Italic</button>
             <button type="button" onclick="applyDetailFormat('edit-detail','bullet')">Bullets</button>
+            <button type="button" onclick="applyDetailFormat('edit-detail','number')">Numbered</button>
             <select onchange="if(this.value){applyDetailFormat('edit-detail', this.value); this.selectedIndex=0;}">
               <option value="">Font Size</option>
               <option value="h2">Large</option>
               <option value="h3">Medium</option>
+              <option value="h4">Small</option>
+              <option value="paragraph">Body</option>
             </select>
           </div>
-          <div class="detail-help">Use markdown: <code>## Heading</code>, <code>### Subheading</code>, <code>- Bullet</code>, <code>**bold**</code>, <code>*italic*</code>.</div>
+          <textarea id="edit-detail" style="min-height:100px">${esc(o.detail_content || '')}</textarea>
+          <div class="detail-help">Use the toolbar to style content. Blank lines separate paragraphs.</div>
         </div>
         <div class="opp-edit-grid">
           <div class="field"><label>Apply URL</label><input id="edit-apply-url" value="${attr(o.apply_url || '')}"></div>
@@ -876,82 +1140,9 @@ function renderOpportunities(opps) {
   }).join("");
 }
 
-const INDUSTRIES = [
-  "Finance & Banking","Technology","Law & Policy","Government","Nonprofit","Media & Journalism","Consulting","Healthcare","Education","Energy","Real Estate","Defense & Security",
-  "Artificial Intelligence","Product Management","Marketing & Communications","Entrepreneurship","Manufacturing","Public Relations","Sports & Entertainment","Agriculture & Food",
-  "Environment & Sustainability","Human Resources","Sales & Business Development"
-];
+const INDUSTRIES = ["Finance & Banking","Technology","Law & Policy","Government","Nonprofit","Media & Journalism","Consulting","Healthcare","Education","Energy","Real Estate","Defense & Security"];
 
 let lastCustomOpps = [];
-
-function normalizePublicUrlInput(value, allowRelative) {
-  if (typeof value !== "string") return "";
-  let v = value.trim();
-  if (!v) return "";
-
-  const driveMatch = v.match(/drive\.google\.com\/file\/d\/([^/]+)/i);
-  if (driveMatch) return "https://drive.google.com/uc?export=view&id=" + driveMatch[1];
-
-  if (v.startsWith("data:image/")) return v;
-  if (v.startsWith("//")) return "https:" + v;
-  if (v.startsWith("http://")) return "https://" + v.slice(7);
-  if (/^https?:\/\//i.test(v)) return v;
-  if (/^[a-z0-9.-]+\.[a-z]{2,}(\/|$)/i.test(v)) return "https://" + v;
-
-  if (v.startsWith("UATX Portal Images/")) return "/images/" + v.slice("UATX Portal Images/".length);
-  if (v.startsWith("images/")) return "/" + v;
-  if (allowRelative && v.startsWith("/")) return v;
-  if (allowRelative && /^[^:]+$/.test(v)) return "/" + v.replace(/^\/+/, "");
-  return "";
-}
-
-function applyDetailFormat(fieldId, mode) {
-  const el = document.getElementById(fieldId);
-  if (!el) return;
-
-  const value = el.value || "";
-  const start = el.selectionStart || 0;
-  const end = el.selectionEnd || 0;
-  const selected = value.slice(start, end);
-
-  const insertText = (text, cursorOffsetStart, cursorOffsetEnd) => {
-    el.value = value.slice(0, start) + text + value.slice(end);
-    const nextStart = start + cursorOffsetStart;
-    const nextEnd = start + cursorOffsetEnd;
-    el.focus();
-    el.setSelectionRange(nextStart, nextEnd);
-  };
-
-  if (mode === "bold") {
-    const content = selected || "bold text";
-    const wrapped = "**" + content + "**";
-    insertText(wrapped, 2, 2 + content.length);
-    return;
-  }
-  if (mode === "italic") {
-    const content = selected || "italic text";
-    const wrapped = "*" + content + "*";
-    insertText(wrapped, 1, 1 + content.length);
-    return;
-  }
-  if (mode === "h2" || mode === "h3") {
-    const prefix = mode === "h2" ? "## " : "### ";
-    const content = selected || "Heading";
-    const next = prefix + content;
-    insertText(next, prefix.length, prefix.length + content.length);
-    return;
-  }
-  if (mode === "bullet") {
-    const lines = (selected || "Bullet item").split(/\r?\n/);
-    const bulleted = lines.map(line => {
-      const trimmed = line.trim();
-      if (!trimmed) return "- ";
-      if (trimmed.startsWith("- ")) return trimmed;
-      return "- " + trimmed;
-    }).join("\n");
-    insertText(bulleted, 0, bulleted.length);
-  }
-}
 
 function startOppEdit(id) {
   editingOppId = id;
@@ -975,8 +1166,8 @@ async function saveOppEdit(id) {
     featured: document.getElementById("edit-featured").checked,
     description: document.getElementById("edit-desc").value.trim(),
     detail_content: document.getElementById("edit-detail").value.trim(),
-    apply_url: normalizePublicUrlInput(document.getElementById("edit-apply-url").value, false),
-    logo: normalizePublicUrlInput(document.getElementById("edit-logo").value, true) || null,
+    apply_url: document.getElementById("edit-apply-url").value.trim(),
+    logo: document.getElementById("edit-logo").value.trim() || null,
   };
   if (!opportunity.org || !opportunity.title) return toast("Organization and title required", true);
   const res = await fetch("/api/admin/opportunities/" + id, {
@@ -988,6 +1179,7 @@ async function saveOppEdit(id) {
   editingOppId = null;
   lastCustomOpps = data.opportunities;
   renderOpportunities(data.opportunities);
+  renderExpired(getExpiredOpps());
   toast("Opportunity updated");
 }
 
@@ -1003,8 +1195,8 @@ async function createOpp(notify) {
     featured: document.getElementById("opp-featured").checked,
     description: document.getElementById("opp-desc").value.trim(),
     detail_content: document.getElementById("opp-detail").value.trim(),
-    apply_url: normalizePublicUrlInput(document.getElementById("opp-apply-url").value, false),
-    logo: normalizePublicUrlInput(document.getElementById("opp-logo").value, true) || null,
+    apply_url: document.getElementById("opp-apply-url").value.trim(),
+    logo: document.getElementById("opp-logo").value.trim() || null,
   };
   if (!opportunity.org || !opportunity.title) return toast("Organization and title required", true);
   const res = await fetch("/api/admin/opportunities", {
@@ -1020,6 +1212,7 @@ async function createOpp(notify) {
   document.getElementById("opp-featured").checked = false;
   lastCustomOpps = data.opportunities;
   renderOpportunities(data.opportunities);
+  renderExpired(getExpiredOpps());
   toast(notify ? `Opportunity created, ${data.notified} student(s) notified` : "Opportunity created");
 }
 
@@ -1029,6 +1222,7 @@ async function deleteOpp(id) {
   const data = await res.json();
   lastCustomOpps = data.opportunities;
   renderOpportunities(data.opportunities);
+  renderExpired(getExpiredOpps());
   toast("Opportunity deleted");
 }
 
@@ -1051,10 +1245,7 @@ function filterActivities() {
   const q = (document.getElementById("activity-search").value || "").toLowerCase();
   if (!q) { renderActivities(lastActivities); return; }
   const filtered = lastActivities.filter(a =>
-    (
-      a.title + " " + a.description + " " + a.category + " " + a.meet_day + " " + a.president_email + " " +
-      (a.event_title || "") + " " + (a.event_location || "")
-    ).toLowerCase().includes(q)
+    (a.title + " " + a.description + " " + a.category + " " + a.meet_day + " " + a.president_email).toLowerCase().includes(q)
   );
   renderActivities(filtered);
 }
@@ -1083,29 +1274,6 @@ function renderActivities(activities) {
           <label>Description</label>
           <textarea id="edit-act-desc" style="min-height:60px">${esc(a.description || '')}</textarea>
         </div>
-        <div class="check-row" style="margin-bottom:12px">
-          <input type="checkbox" id="edit-act-show-event" ${a.show_as_event ? "checked" : ""}>
-          <label for="edit-act-show-event">Show as Community Event</label>
-        </div>
-        <div class="opp-edit-grid">
-          <div class="field"><label>Event Title</label><input id="edit-act-event-title" value="${attr(a.event_title || '')}"></div>
-          <div class="field"><label>Event Date</label><input id="edit-act-event-date" type="date" value="${attr(a.event_date || '')}"></div>
-          <div class="field"><label>Event Location</label><input id="edit-act-event-location" value="${attr(a.event_location || '')}"></div>
-        </div>
-        <div class="opp-edit-full field">
-          <label>Event Description Page Content (markdown supported)</label>
-          <div class="detail-toolbar">
-            <button type="button" onclick="applyDetailFormat('edit-act-event-description','bold')">Bold</button>
-            <button type="button" onclick="applyDetailFormat('edit-act-event-description','italic')">Italic</button>
-            <button type="button" onclick="applyDetailFormat('edit-act-event-description','bullet')">Bullets</button>
-            <select onchange="if(this.value){applyDetailFormat('edit-act-event-description', this.value); this.selectedIndex=0;}">
-              <option value="">Font Size</option>
-              <option value="h2">Large</option>
-              <option value="h3">Medium</option>
-            </select>
-          </div>
-          <textarea id="edit-act-event-description" style="min-height:100px">${esc(a.event_description || '')}</textarea>
-        </div>
         <div style="display:flex;gap:8px">
           <button class="btn btn-gold" onclick="saveActivityEdit(${a.id})">Save</button>
           <button class="btn btn-outline" onclick="cancelActivityEdit()">Cancel</button>
@@ -1120,17 +1288,9 @@ function renderActivities(activities) {
           <div class="opp-card-meta">
             ${a.category ? '<span>' + esc(a.category) + '</span>' : ''}
             ${a.meet_day ? '<span>' + esc(a.meet_day) + '</span>' : ''}
-            ${a.president_email ? '<span>' + esc(a.president_email) + '</span>' : ''}
+            ${a.president_email ? '<span style="color:#c9a84c;font-weight:500">President: ' + esc(a.president_email) + '</span>' : '<span style="color:#6b7280;font-style:italic">No president assigned</span>'}
             ${a.submitted_by ? '<span>Submitted by ' + esc(a.submitted_by) + '</span>' : ''}
-            ${a.show_as_event ? '<span style="color:#4a7c59">Community Event</span>' : ''}
           </div>
-          ${a.show_as_event && (a.event_title || a.event_date || a.event_location) ? `
-            <div class="opp-card-meta" style="margin-top:6px">
-              ${a.event_title ? '<span><strong>Event:</strong> ' + esc(a.event_title) + '</span>' : ''}
-              ${a.event_date ? '<span>' + formatDate(a.event_date) + '</span>' : ''}
-              ${a.event_location ? '<span>' + esc(a.event_location) + '</span>' : ''}
-            </div>
-          ` : ''}
           ${a.description ? '<div class="opp-card-desc">' + esc(a.description) + '</div>' : ''}
         </div>
       </div>
@@ -1160,11 +1320,6 @@ async function saveActivityEdit(id) {
     meet_day: document.getElementById("edit-act-meetday").value.trim(),
     president_email: document.getElementById("edit-act-president").value.trim(),
     description: document.getElementById("edit-act-desc").value.trim(),
-    show_as_event: document.getElementById("edit-act-show-event").checked,
-    event_title: document.getElementById("edit-act-event-title").value.trim(),
-    event_date: document.getElementById("edit-act-event-date").value || "",
-    event_location: document.getElementById("edit-act-event-location").value.trim(),
-    event_description: document.getElementById("edit-act-event-description").value.trim(),
   };
   if (!activity.title) return toast("Title is required", true);
   const res = await fetch("/api/admin/activities/" + id, {
@@ -1176,7 +1331,7 @@ async function saveActivityEdit(id) {
   editingActivityId = null;
   lastActivities = data.activities;
   renderActivities(data.activities);
-  toast("Activity updated");
+  toast("Club updated");
 }
 
 async function createActivity() {
@@ -1186,11 +1341,6 @@ async function createActivity() {
     meet_day: document.getElementById("act-meetday").value.trim(),
     president_email: document.getElementById("act-president").value.trim(),
     description: document.getElementById("act-desc").value.trim(),
-    show_as_event: document.getElementById("act-show-event").checked,
-    event_title: document.getElementById("act-event-title").value.trim(),
-    event_date: document.getElementById("act-event-date").value || "",
-    event_location: document.getElementById("act-event-location").value.trim(),
-    event_description: document.getElementById("act-event-description").value.trim(),
   };
   if (!activity.title) return toast("Title is required", true);
   const res = await fetch("/api/admin/activities", {
@@ -1199,12 +1349,11 @@ async function createActivity() {
   });
   const data = await res.json();
   if (!res.ok) return toast(data.error, true);
-  ["act-title","act-meetday","act-president","act-desc","act-event-title","act-event-date","act-event-location","act-event-description"].forEach(id => document.getElementById(id).value = "");
+  ["act-title","act-meetday","act-president","act-desc"].forEach(id => document.getElementById(id).value = "");
   document.getElementById("act-category").selectedIndex = 0;
-  document.getElementById("act-show-event").checked = false;
   lastActivities = data.activities;
   renderActivities(data.activities);
-  toast("Activity created");
+  toast("Club created");
 }
 
 async function approveActivity(id) {
@@ -1213,16 +1362,16 @@ async function approveActivity(id) {
   if (!res.ok) return toast(data.error, true);
   lastActivities = data.activities;
   renderActivities(data.activities);
-  toast("Activity approved and now public");
+  toast("Club approved and now public");
 }
 
 async function deleteActivity(id) {
-  if (!confirm("Delete this activity?")) return;
+  if (!confirm("Delete this club?")) return;
   const res = await fetch("/api/admin/activities/" + id, { method: "DELETE" });
   const data = await res.json();
   lastActivities = data.activities;
   renderActivities(data.activities);
-  toast("Activity deleted");
+  toast("Club deleted");
 }
 
 // ─── EVENTS ───
@@ -1230,21 +1379,110 @@ let lastEvents = [];
 let editingEventId = null;
 
 const EVENT_TYPES = ["Student Visit","VIP Event Partnership","Study Abroad","Summer Program","Seminar Series","Multiple Programs","Conference","Workshop"];
+const getProgramEvents = (events = lastEvents) => (events || []).filter(e => !e.is_community);
+const getCommunityEvents = (events = lastEvents) => (events || []).filter(e => !!e.is_community);
 
 async function loadEvents() {
   const res = await fetch("/api/admin/events");
   const data = await res.json();
-  lastEvents = data.events;
-  renderEvents(data.events);
+  lastEvents = data.events || [];
+  filterEvents();
+  filterCommunityEvents();
 }
 
 function filterEvents() {
   const q = (document.getElementById("event-search").value || "").toLowerCase();
-  if (!q) { renderEvents(lastEvents); return; }
-  const filtered = lastEvents.filter(e =>
+  const programs = getProgramEvents(lastEvents);
+  if (!q) { renderEvents(programs); return; }
+  const filtered = programs.filter(e =>
     (e.title + " " + e.org + " " + e.type + " " + e.description).toLowerCase().includes(q)
   );
   renderEvents(filtered);
+}
+
+function filterCommunityEvents() {
+  const input = document.getElementById("community-event-search");
+  const q = input ? (input.value || "").toLowerCase() : "";
+  const communityEvents = getCommunityEvents(lastEvents);
+  if (!q) { renderCommunityEvents(communityEvents); return; }
+  const filtered = communityEvents.filter(e =>
+    (e.title + " " + e.org + " " + e.type + " " + e.description).toLowerCase().includes(q)
+  );
+  renderCommunityEvents(filtered);
+}
+
+function renderCommunityEvents(events) {
+  document.getElementById("community-event-count").textContent = "(" + events.length + ")";
+  const body = document.getElementById("community-event-body");
+  const empty = document.getElementById("community-event-empty");
+  if (events.length === 0) { body.innerHTML = ""; empty.style.display = "block"; return; }
+  empty.style.display = "none";
+  body.innerHTML = events.map(e => {
+    if (editingEventId === e.id) {
+      return `<div class="opp-card editing">
+        <div class="opp-edit-grid">
+          <div class="field"><label>Title</label><input id="edit-evt-title" value="${attr(e.title)}"></div>
+          <div class="field"><label>Organization</label><input id="edit-evt-org" value="${attr(e.org || '')}"></div>
+          <div class="field"><label>Type</label>
+            <select id="edit-evt-type">
+              <option value="">Select...</option>
+              ${EVENT_TYPES.map(t => '<option' + (t === e.type ? ' selected' : '') + '>' + t + '</option>').join('')}
+            </select>
+          </div>
+          <div class="field"><label>Date</label><input id="edit-evt-date" type="date" min="${todayISO()}" value="${e.date || ''}"></div>
+          <div class="field"><label>URL</label><input id="edit-evt-url" value="${attr(e.url || '')}"></div>
+          <div class="field"><label>Image Path</label><input id="edit-evt-img" value="${attr(e.img || '')}"></div>
+        </div>
+        <div class="opp-edit-full field">
+          <label>Description</label>
+          <textarea id="edit-evt-desc" style="min-height:60px">${esc(e.description || '')}</textarea>
+        </div>
+        <div class="opp-edit-full field">
+          <label>Page Description (shown on Learn More page)</label>
+          <div class="detail-toolbar">
+            <button type="button" onclick="applyDetailFormat('edit-evt-detail','bold')">Bold</button>
+            <button type="button" onclick="applyDetailFormat('edit-evt-detail','italic')">Italic</button>
+            <button type="button" onclick="applyDetailFormat('edit-evt-detail','bullet')">Bullets</button>
+            <button type="button" onclick="applyDetailFormat('edit-evt-detail','number')">Numbered</button>
+            <select onchange="if(this.value){applyDetailFormat('edit-evt-detail', this.value); this.selectedIndex=0;}">
+              <option value="">Font Size</option>
+              <option value="h2">Large</option>
+              <option value="h3">Medium</option>
+              <option value="h4">Small</option>
+              <option value="paragraph">Body</option>
+            </select>
+          </div>
+          <textarea id="edit-evt-detail" style="min-height:90px">${esc(e.detail_content || '')}</textarea>
+          <div class="detail-help">Use the toolbar to style content. Blank lines separate paragraphs.</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-gold" onclick="saveEventEdit(${e.id})">Save</button>
+          <button class="btn btn-outline" onclick="cancelEventEdit()">Cancel</button>
+        </div>
+      </div>`;
+    }
+    return `<div class="opp-card">
+      <div class="opp-card-header">
+        <div class="opp-card-info">
+          <div class="opp-card-title">${esc(e.title)}</div>
+          <div class="opp-card-org">${esc(e.org || '')}</div>
+          <div class="opp-card-meta">
+            ${e.type ? '<span>' + esc(e.type) + '</span>' : ''}
+            <span>${e.date ? formatDate(e.date) : 'No date'}</span>
+            <span style="color:#4a7c59;font-weight:600">Community</span>
+            ${e.url ? '<span><a href="' + attr(e.url) + '" target="_blank" style="color:#c9a84c;text-decoration:none">Link &rarr;</a></span>' : ''}
+          </div>
+          ${e.description ? '<div class="opp-card-desc">' + esc(e.description).substring(0, 200) + (e.description.length > 200 ? '...' : '') + '</div>' : ''}
+        </div>
+        ${e.img ? '<img src="' + attr(e.img) + '" style="width:48px;height:48px;border-radius:4px;object-fit:contain;background:#1a2332;flex-shrink:0" onerror="this.style.display=\'none\'">' : ''}
+      </div>
+      <div class="opp-card-actions">
+        <button class="btn btn-outline" onclick="startEventEdit(${e.id})">Edit</button>
+        <button class="btn btn-danger" onclick="deleteEventAdmin(${e.id})">Delete</button>
+      </div>
+    </div>`;
+  }).join("");
+  setEventDateMinimums();
 }
 
 function renderEvents(events) {
@@ -1265,13 +1503,31 @@ function renderEvents(events) {
               ${EVENT_TYPES.map(t => '<option' + (t === e.type ? ' selected' : '') + '>' + t + '</option>').join('')}
             </select>
           </div>
-          <div class="field"><label>Date</label><input id="edit-evt-date" type="date" value="${e.date || ''}"></div>
+          <div class="field"><label>Date</label><input id="edit-evt-date" type="date" min="${todayISO()}" value="${e.date || ''}"></div>
           <div class="field"><label>URL</label><input id="edit-evt-url" value="${attr(e.url || '')}"></div>
           <div class="field"><label>Image Path</label><input id="edit-evt-img" value="${attr(e.img || '')}"></div>
         </div>
         <div class="opp-edit-full field">
           <label>Description</label>
           <textarea id="edit-evt-desc" style="min-height:60px">${esc(e.description || '')}</textarea>
+        </div>
+        <div class="opp-edit-full field">
+          <label>Page Description (shown on Learn More page)</label>
+          <div class="detail-toolbar">
+            <button type="button" onclick="applyDetailFormat('edit-evt-detail','bold')">Bold</button>
+            <button type="button" onclick="applyDetailFormat('edit-evt-detail','italic')">Italic</button>
+            <button type="button" onclick="applyDetailFormat('edit-evt-detail','bullet')">Bullets</button>
+            <button type="button" onclick="applyDetailFormat('edit-evt-detail','number')">Numbered</button>
+            <select onchange="if(this.value){applyDetailFormat('edit-evt-detail', this.value); this.selectedIndex=0;}">
+              <option value="">Font Size</option>
+              <option value="h2">Large</option>
+              <option value="h3">Medium</option>
+              <option value="h4">Small</option>
+              <option value="paragraph">Body</option>
+            </select>
+          </div>
+          <textarea id="edit-evt-detail" style="min-height:90px">${esc(e.detail_content || '')}</textarea>
+          <div class="detail-help">Use the toolbar to style content. Blank lines separate paragraphs.</div>
         </div>
         <div style="display:flex;gap:8px">
           <button class="btn btn-gold" onclick="saveEventEdit(${e.id})">Save</button>
@@ -1299,12 +1555,14 @@ function renderEvents(events) {
       </div>
     </div>`;
   }).join("");
+  setEventDateMinimums();
 }
 
-function startEventEdit(id) { editingEventId = id; renderEvents(lastEvents); }
-function cancelEventEdit() { editingEventId = null; renderEvents(lastEvents); }
+function startEventEdit(id) { editingEventId = id; filterEvents(); filterCommunityEvents(); }
+function cancelEventEdit() { editingEventId = null; filterEvents(); filterCommunityEvents(); }
 
 async function saveEventEdit(id) {
+  const existing = lastEvents.find(e => e.id === id) || {};
   const event = {
     title: document.getElementById("edit-evt-title").value.trim(),
     org: document.getElementById("edit-evt-org").value.trim(),
@@ -1313,8 +1571,11 @@ async function saveEventEdit(id) {
     url: document.getElementById("edit-evt-url").value.trim(),
     img: document.getElementById("edit-evt-img").value.trim() || null,
     description: document.getElementById("edit-evt-desc").value.trim(),
+    detail_content: document.getElementById("edit-evt-detail").value.trim(),
+    is_community: !!existing.is_community,
   };
   if (!event.title) return toast("Title is required", true);
+  if (isPastDateOnly(event.date)) return toast("Event date cannot be in the past", true);
   const res = await fetch("/api/admin/events/" + id, {
     method: "PUT", headers: {"Content-Type":"application/json"},
     body: JSON.stringify({ event })
@@ -1322,8 +1583,9 @@ async function saveEventEdit(id) {
   const data = await res.json();
   if (!res.ok) return toast(data.error, true);
   editingEventId = null;
-  lastEvents = data.events;
-  renderEvents(data.events);
+  lastEvents = data.events || [];
+  filterEvents();
+  filterCommunityEvents();
   toast("Event updated");
 }
 
@@ -1336,28 +1598,112 @@ async function createEventAdmin() {
     url: document.getElementById("evt-url").value.trim(),
     img: document.getElementById("evt-img").value.trim() || null,
     description: document.getElementById("evt-desc").value.trim(),
+    detail_content: document.getElementById("evt-detail").value.trim(),
+    is_community: false,
   };
   if (!event.title) return toast("Title is required", true);
+  if (isPastDateOnly(event.date)) return toast("Event date cannot be in the past", true);
   const res = await fetch("/api/admin/events", {
     method: "POST", headers: {"Content-Type":"application/json"},
     body: JSON.stringify({ event })
   });
   const data = await res.json();
   if (!res.ok) return toast(data.error, true);
-  ["evt-title","evt-org","evt-date","evt-url","evt-img","evt-desc"].forEach(id => document.getElementById(id).value = "");
+  ["evt-title","evt-org","evt-date","evt-url","evt-img","evt-desc","evt-detail"].forEach(id => document.getElementById(id).value = "");
   document.getElementById("evt-type").selectedIndex = 0;
-  lastEvents = data.events;
-  renderEvents(data.events);
-  toast("Event created");
+  lastEvents = data.events || [];
+  filterEvents();
+  filterCommunityEvents();
+  toast("Program/travel event created");
+}
+
+async function createCommunityEventAdmin() {
+  const event = {
+    title: document.getElementById("comm-evt-title").value.trim(),
+    org: document.getElementById("comm-evt-org").value.trim(),
+    type: document.getElementById("comm-evt-type").value,
+    date: document.getElementById("comm-evt-date").value || null,
+    url: document.getElementById("comm-evt-url").value.trim(),
+    img: document.getElementById("comm-evt-img").value.trim() || null,
+    description: document.getElementById("comm-evt-desc").value.trim(),
+    detail_content: document.getElementById("comm-evt-detail").value.trim(),
+    is_community: true,
+  };
+  if (!event.title) return toast("Title is required", true);
+  if (isPastDateOnly(event.date)) return toast("Event date cannot be in the past", true);
+  const res = await fetch("/api/admin/events", {
+    method: "POST", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ event })
+  });
+  const data = await res.json();
+  if (!res.ok) return toast(data.error, true);
+  ["comm-evt-title","comm-evt-org","comm-evt-date","comm-evt-url","comm-evt-img","comm-evt-desc","comm-evt-detail"].forEach(id => document.getElementById(id).value = "");
+  document.getElementById("comm-evt-type").selectedIndex = 0;
+  lastEvents = data.events || [];
+  setCommunityCreateMode("community-event");
+  filterEvents();
+  filterCommunityEvents();
+  toast("Community event created");
 }
 
 async function deleteEventAdmin(id) {
   if (!confirm("Delete this event?")) return;
   const res = await fetch("/api/admin/events/" + id, { method: "DELETE" });
   const data = await res.json();
-  lastEvents = data.events;
-  renderEvents(data.events);
+  lastEvents = data.events || [];
+  filterEvents();
+  filterCommunityEvents();
   toast("Event deleted");
+}
+
+// ─── EXPIRED OPPORTUNITIES ───
+
+function getExpiredOpps() {
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  return lastCustomOpps.filter(o => o.deadline && new Date(o.deadline) < now);
+}
+
+function filterExpired() {
+  const q = (document.getElementById("expired-search").value || "").toLowerCase();
+  let expired = getExpiredOpps();
+  if (q) {
+    expired = expired.filter(o =>
+      (o.org + " " + o.title + " " + o.industry + " " + o.type + " " + o.location + " " + o.description).toLowerCase().includes(q)
+    );
+  }
+  renderExpired(expired);
+}
+
+function renderExpired(opps) {
+  document.getElementById("expired-count").textContent = "(" + opps.length + ")";
+  const body = document.getElementById("expired-body");
+  const empty = document.getElementById("expired-empty");
+  if (opps.length === 0) { body.innerHTML = ""; empty.style.display = "block"; return; }
+  empty.style.display = "none";
+  body.innerHTML = opps.map(o => `<div class="opp-card" style="opacity:0.75">
+    <div class="opp-card-header">
+      <div class="opp-card-info">
+        <div class="opp-card-title">${esc(o.title)}</div>
+        <div class="opp-card-org">${esc(o.org)}</div>
+        <div class="opp-card-meta">
+          ${o.industry ? '<span>' + esc(o.industry) + '</span>' : ''}
+          ${o.type ? '<span>' + esc(o.type) + '</span>' : ''}
+          ${o.location ? '<span>' + esc(o.location) + '</span>' : ''}
+          <span style="color:#c75c3a">Expired ${formatDate(o.deadline)}</span>
+        </div>
+        <div class="opp-card-badges">
+          ${o.paid ? '<span class="badge-paid">Paid</span>' : ''}
+          ${o.featured ? '<span class="badge-featured">Featured</span>' : ''}
+        </div>
+        ${o.description ? '<div class="opp-card-desc">' + esc(o.description).substring(0, 200) + (o.description.length > 200 ? '...' : '') + '</div>' : ''}
+      </div>
+    </div>
+    <div class="opp-card-actions">
+      <button class="btn btn-outline" onclick="startOppEdit(${o.id});document.querySelector('[data-tab=opportunities]').click()">Edit</button>
+      <button class="btn btn-danger" onclick="deleteOpp(${o.id})">Delete</button>
+    </div>
+  </div>`).join("");
 }
 
 // ─── HELPERS ───

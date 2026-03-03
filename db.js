@@ -103,9 +103,22 @@ db.exec(`
     type TEXT NOT NULL DEFAULT '',
     org TEXT NOT NULL DEFAULT '',
     description TEXT NOT NULL DEFAULT '',
+    detail_content TEXT NOT NULL DEFAULT '',
     url TEXT NOT NULL DEFAULT '',
     img TEXT,
+    is_community INTEGER NOT NULL DEFAULT 0,
     sub_page TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS club_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    activity_id INTEGER NOT NULL REFERENCES activities(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    date TEXT,
+    location TEXT NOT NULL DEFAULT '',
+    description TEXT NOT NULL DEFAULT '',
+    detail_content TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
@@ -143,6 +156,9 @@ try { db.exec("ALTER TABLE activities ADD COLUMN event_title TEXT NOT NULL DEFAU
 try { db.exec("ALTER TABLE activities ADD COLUMN event_date TEXT NOT NULL DEFAULT ''"); } catch (e) {}
 try { db.exec("ALTER TABLE activities ADD COLUMN event_location TEXT NOT NULL DEFAULT ''"); } catch (e) {}
 try { db.exec("ALTER TABLE activities ADD COLUMN event_description TEXT NOT NULL DEFAULT ''"); } catch (e) {}
+try { db.exec("ALTER TABLE events ADD COLUMN is_community INTEGER NOT NULL DEFAULT 0"); } catch (e) {}
+try { db.exec("ALTER TABLE events ADD COLUMN detail_content TEXT NOT NULL DEFAULT ''"); } catch (e) {}
+try { db.exec("ALTER TABLE club_events ADD COLUMN detail_content TEXT NOT NULL DEFAULT ''"); } catch (e) {}
 
 // ─── ROSTER ───
 
@@ -443,28 +459,98 @@ function getActivitiesByPresidentEmail(email) {
 
 // ─── EVENTS ───
 
+const clubEventsAll = db.prepare(`
+  SELECT ce.*
+  FROM club_events ce
+  JOIN activities a ON a.id = ce.activity_id
+  WHERE a.status = 'approved'
+  ORDER BY
+    CASE WHEN ce.date IS NULL OR ce.date = '' THEN 1 ELSE 0 END,
+    ce.date ASC,
+    ce.created_at DESC
+`);
+const clubEventsByActivity = db.prepare(`
+  SELECT ce.*
+  FROM club_events ce
+  WHERE ce.activity_id = ?
+  ORDER BY
+    CASE WHEN ce.date IS NULL OR ce.date = '' THEN 1 ELSE 0 END,
+    ce.date ASC,
+    ce.created_at DESC
+`);
+const clubEventById = db.prepare("SELECT * FROM club_events WHERE id = ?");
+const clubEventInsert = db.prepare(`
+  INSERT INTO club_events (activity_id, title, date, location, description, detail_content)
+  VALUES (?, ?, ?, ?, ?, ?)
+`);
+const clubEventUpdate = db.prepare(`
+  UPDATE club_events
+  SET title = ?, date = ?, location = ?, description = ?, detail_content = ?
+  WHERE id = ?
+`);
+const clubEventDelete = db.prepare("DELETE FROM club_events WHERE id = ?");
+
+function getAllClubEvents() {
+  return clubEventsAll.all();
+}
+
+function getClubEventsByActivity(activityId) {
+  return clubEventsByActivity.all(activityId);
+}
+
+function getClubEventById(id) {
+  return clubEventById.get(id);
+}
+
+function createClubEvent(e) {
+  const info = clubEventInsert.run(
+    e.activity_id,
+    e.title,
+    e.date || null,
+    e.location || "",
+    e.description || "",
+    e.detail_content || ""
+  );
+  return info.lastInsertRowid;
+}
+
+function updateClubEvent(id, e) {
+  return clubEventUpdate.run(
+    e.title,
+    e.date || null,
+    e.location || "",
+    e.description || "",
+    e.detail_content || "",
+    id
+  );
+}
+
+function deleteClubEvent(id) {
+  return clubEventDelete.run(id);
+}
+
 const eventsAll = db.prepare(
   "SELECT * FROM events ORDER BY date ASC"
 );
 const eventInsert = db.prepare(`
-  INSERT INTO events (title, date, type, org, description, url, img, sub_page)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO events (title, date, type, org, description, detail_content, url, img, is_community, sub_page)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 const eventDelete = db.prepare("DELETE FROM events WHERE id = ?");
 const eventUpdate = db.prepare(`
-  UPDATE events SET title=?, date=?, type=?, org=?, description=?, url=?, img=?, sub_page=?
+  UPDATE events SET title=?, date=?, type=?, org=?, description=?, detail_content=?, url=?, img=?, is_community=?, sub_page=?
   WHERE id=?
 `);
 
 function getAllEvents() {
-  return eventsAll.all();
+  return eventsAll.all().map((e) => ({ ...e, is_community: !!e.is_community }));
 }
 
 function createEvent(e) {
   const info = eventInsert.run(
     e.title, e.date || null, e.type || "",
-    e.org || "", e.description || "", e.url || "",
-    e.img || null, e.sub_page || ""
+    e.org || "", e.description || "", e.detail_content || "", e.url || "",
+    e.img || null, e.is_community ? 1 : 0, e.sub_page || ""
   );
   return info.lastInsertRowid;
 }
@@ -472,8 +558,8 @@ function createEvent(e) {
 function updateEvent(id, e) {
   return eventUpdate.run(
     e.title, e.date || null, e.type || "",
-    e.org || "", e.description || "", e.url || "",
-    e.img || null, e.sub_page || "", id
+    e.org || "", e.description || "", e.detail_content || "", e.url || "",
+    e.img || null, e.is_community ? 1 : 0, e.sub_page || "", id
   );
 }
 
@@ -488,8 +574,8 @@ function seedEvents(events) {
     for (const e of entries) {
       eventInsert.run(
         e.title, e.date || null, e.type || "",
-        e.org || "", e.description || e.desc || "", e.url || "",
-        e.img || null, e.sub_page || e.subPage || ""
+        e.org || "", e.description || e.desc || "", e.detail_content || "", e.url || "",
+        e.img || null, e.is_community ? 1 : 0, e.sub_page || e.subPage || ""
       );
     }
   });
@@ -685,6 +771,12 @@ module.exports = {
   seedActivities,
   getClubMembers,
   getActivitiesByPresidentEmail,
+  getAllClubEvents,
+  getClubEventsByActivity,
+  getClubEventById,
+  createClubEvent,
+  updateClubEvent,
+  deleteClubEvent,
   getAllEvents,
   createEvent,
   updateEvent,

@@ -34,6 +34,12 @@ const {
   seedActivities,
   getClubMembers,
   getActivitiesByPresidentEmail,
+  getAllClubEvents,
+  getClubEventsByActivity,
+  getClubEventById,
+  createClubEvent,
+  updateClubEvent,
+  deleteClubEvent,
   getAllEvents,
   createEvent,
   updateEvent,
@@ -213,6 +219,26 @@ function normalizeClubEmailPrefs(value) {
     out[key] = !!raw;
   }
   return out;
+}
+
+function getTodayISODate() {
+  const now = new Date();
+  const tzOffsetMs = now.getTimezoneOffset() * 60000;
+  return new Date(now.getTime() - tzOffsetMs).toISOString().split("T")[0];
+}
+
+function isPastDateOnly(value) {
+  if (!value || typeof value !== "string") return false;
+  const dateOnly = value.trim().split("T")[0];
+  if (!dateOnly) return false;
+  return dateOnly < getTodayISODate();
+}
+
+function isOpportunityDeadlineHit(value) {
+  if (!value || typeof value !== "string") return false;
+  const dateOnly = value.trim().split("T")[0];
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) return false;
+  return dateOnly <= getTodayISODate();
 }
 
 // ─── PUBLIC CONFIG (exposes Google Client ID to frontend) ───
@@ -448,7 +474,8 @@ app.put("/api/preferences", requireAuth, (req, res) => {
 // ─── OPPORTUNITIES ROUTES ───
 
 app.get("/api/opportunities", requireAuth, (req, res) => {
-  res.json({ opportunities: getAllOpportunities() });
+  const opportunities = getAllOpportunities().filter((opp) => !isOpportunityDeadlineHit(opp.deadline));
+  res.json({ opportunities });
 });
 
 // ─── EVENTS ROUTES ───
@@ -487,6 +514,86 @@ app.get("/api/my-clubs", requireAuth, (req, res) => {
   const user = getUserById(req.session.userId);
   const clubs = getActivitiesByPresidentEmail(user.email);
   res.json({ clubs });
+});
+
+// Club events shown in profile/community/calendar
+app.get("/api/club-events", requireAuth, (req, res) => {
+  res.json({ club_events: getAllClubEvents() });
+});
+
+// Events for a specific club
+app.get("/api/activities/:id/events", requireAuth, (req, res) => {
+  const activityId = parseInt(req.params.id, 10);
+  if (!Number.isInteger(activityId)) return res.status(400).json({ error: "Invalid activity id" });
+  res.json({ events: getClubEventsByActivity(activityId) });
+});
+
+// President creates club event
+app.post("/api/activities/:id/events", requireAuth, (req, res) => {
+  const activityId = parseInt(req.params.id, 10);
+  if (!Number.isInteger(activityId)) return res.status(400).json({ error: "Invalid activity id" });
+
+  const user = getUserById(req.session.userId);
+  const club = getActivitiesByPresidentEmail(user.email).find(a => a.id === activityId);
+  if (!club) return res.status(403).json({ error: "You are not the president of this club" });
+
+  const event = req.body || {};
+  const title = String(event.title || "").trim();
+  if (!title) return res.status(400).json({ error: "Event title is required" });
+  if (isPastDateOnly(event.date)) return res.status(400).json({ error: "Event date cannot be in the past" });
+
+  createClubEvent({
+    activity_id: activityId,
+    title,
+    date: event.date || null,
+    location: String(event.location || "").trim(),
+    description: String(event.description || "").trim(),
+    detail_content: String(event.detail_content || "").trim(),
+  });
+  res.json({ ok: true, events: getClubEventsByActivity(activityId) });
+});
+
+// President edits club event
+app.put("/api/club-events/:id", requireAuth, (req, res) => {
+  const eventId = parseInt(req.params.id, 10);
+  if (!Number.isInteger(eventId)) return res.status(400).json({ error: "Invalid event id" });
+
+  const existing = getClubEventById(eventId);
+  if (!existing) return res.status(404).json({ error: "Event not found" });
+
+  const user = getUserById(req.session.userId);
+  const club = getActivitiesByPresidentEmail(user.email).find(a => a.id === existing.activity_id);
+  if (!club) return res.status(403).json({ error: "You are not the president of this club" });
+
+  const event = req.body || {};
+  const title = String(event.title || "").trim();
+  if (!title) return res.status(400).json({ error: "Event title is required" });
+  if (isPastDateOnly(event.date)) return res.status(400).json({ error: "Event date cannot be in the past" });
+
+  updateClubEvent(eventId, {
+    title,
+    date: event.date || null,
+    location: String(event.location || "").trim(),
+    description: String(event.description || "").trim(),
+    detail_content: String(event.detail_content || "").trim(),
+  });
+  res.json({ ok: true, events: getClubEventsByActivity(existing.activity_id) });
+});
+
+// President deletes club event
+app.delete("/api/club-events/:id", requireAuth, (req, res) => {
+  const eventId = parseInt(req.params.id, 10);
+  if (!Number.isInteger(eventId)) return res.status(400).json({ error: "Invalid event id" });
+
+  const existing = getClubEventById(eventId);
+  if (!existing) return res.status(404).json({ error: "Event not found" });
+
+  const user = getUserById(req.session.userId);
+  const club = getActivitiesByPresidentEmail(user.email).find(a => a.id === existing.activity_id);
+  if (!club) return res.status(403).json({ error: "You are not the president of this club" });
+
+  deleteClubEvent(eventId);
+  res.json({ ok: true, events: getClubEventsByActivity(existing.activity_id) });
 });
 
 // President sends email to all club members
@@ -647,6 +754,7 @@ app.get("/api/admin/activities", requireAdmin, (req, res) => {
 app.post("/api/admin/activities", requireAdmin, (req, res) => {
   const { activity } = req.body;
   if (!activity || !activity.title) return res.status(400).json({ error: "Title is required" });
+  if (isPastDateOnly(activity.event_date)) return res.status(400).json({ error: "Event date cannot be in the past" });
   createActivity(activity);
   res.json({ ok: true, activities: getAllActivities() });
 });
@@ -654,6 +762,7 @@ app.post("/api/admin/activities", requireAdmin, (req, res) => {
 app.put("/api/admin/activities/:id", requireAdmin, (req, res) => {
   const { activity } = req.body;
   if (!activity || !activity.title) return res.status(400).json({ error: "Title is required" });
+  if (isPastDateOnly(activity.event_date)) return res.status(400).json({ error: "Event date cannot be in the past" });
   updateActivity(req.params.id, activity);
   res.json({ ok: true, activities: getAllActivities() });
 });
@@ -676,6 +785,7 @@ app.get("/api/admin/events", requireAdmin, (req, res) => {
 app.post("/api/admin/events", requireAdmin, (req, res) => {
   const { event } = req.body;
   if (!event || !event.title) return res.status(400).json({ error: "Title is required" });
+  if (isPastDateOnly(event.date)) return res.status(400).json({ error: "Event date cannot be in the past" });
   createEvent(event);
   res.json({ ok: true, events: getAllEvents() });
 });
@@ -683,6 +793,7 @@ app.post("/api/admin/events", requireAdmin, (req, res) => {
 app.put("/api/admin/events/:id", requireAdmin, (req, res) => {
   const { event } = req.body;
   if (!event || !event.title) return res.status(400).json({ error: "Title is required" });
+  if (isPastDateOnly(event.date)) return res.status(400).json({ error: "Event date cannot be in the past" });
   updateEvent(req.params.id, event);
   res.json({ ok: true, events: getAllEvents() });
 });

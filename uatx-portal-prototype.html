@@ -17,19 +17,13 @@
   #root { min-height: 100vh; display: flex; flex-direction: column; }
   html { scrollbar-width: none; }
   body::-webkit-scrollbar { display: none; }
-  [data-lenis-prevent]::-webkit-scrollbar { width: 4px; }
-  [data-lenis-prevent]::-webkit-scrollbar-track { background: transparent; }
-  [data-lenis-prevent]::-webkit-scrollbar-thumb { background: #c9a84c44; border-radius: 2px; }
+  [data-lenis-prevent] { scrollbar-width: none; }
+  [data-lenis-prevent]::-webkit-scrollbar { display: none; }
+  input.no-time-icon::-webkit-calendar-picker-indicator { display: none; -webkit-appearance: none; }
+  input.no-time-icon::-webkit-clear-button { display: none; }
+  input.no-time-icon::-webkit-inner-spin-button { display: none; }
   select:focus, input:focus, textarea:focus { outline: 2px solid #c9a84c; outline-offset: -1px; }
   button:hover { opacity: 0.88; }
-  .opp-detail-rich h2 { font-family: Georgia, serif; font-size: 30px; line-height: 1.2; color: #1a2332; margin: 8px 0 12px; font-weight: 700; }
-  .opp-detail-rich h3 { font-family: Georgia, serif; font-size: 24px; line-height: 1.25; color: #1a2332; margin: 18px 0 10px; font-weight: 700; }
-  .opp-detail-rich h4 { font-family: Georgia, serif; font-size: 20px; line-height: 1.3; color: #1a2332; margin: 16px 0 8px; font-weight: 700; }
-  .opp-detail-rich p { font-size: 15px; line-height: 1.8; color: #2c2c2c; margin: 0 0 12px; }
-  .opp-detail-rich ul { margin: 0 0 16px 20px; padding: 0; }
-  .opp-detail-rich li { font-size: 15px; line-height: 1.8; color: #2c2c2c; margin-bottom: 4px; }
-  .opp-detail-rich strong { font-weight: 700; color: #1a2332; }
-  .opp-detail-rich em { font-style: italic; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   @keyframes toastIn { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: translateX(0); } }
   @keyframes bounce { 0%, 20%, 50%, 80%, 100% { transform: translateY(0); } 40% { transform: translateY(6px); } 60% { transform: translateY(3px); } }
@@ -56,98 +50,195 @@ const api = (path, opts) => fetch(path, { headers: {"Content-Type":"application/
 // Debounce helper for preference sync
 const debounce = (fn, ms) => { let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); }; };
 
-const escapeHtml = (value) => String(value || "")
-  .replace(/&/g, "&amp;")
-  .replace(/</g, "&lt;")
-  .replace(/>/g, "&gt;")
-  .replace(/"/g, "&quot;")
-  .replace(/'/g, "&#39;");
-
-const normalizePublicUrl = (value, allowRelative = false) => {
-  if (typeof value !== "string") return "";
-  let v = value.trim();
-  if (!v) return "";
-
-  const driveMatch = v.match(/drive\.google\.com\/file\/d\/([^/]+)/i);
-  if (driveMatch) return "https://drive.google.com/uc?export=view&id=" + driveMatch[1];
-
-  if (v.startsWith("data:image/")) return v;
-  if (v.startsWith("//")) return "https:" + v;
-  if (v.startsWith("http://")) return "https://" + v.slice(7);
-  if (/^https?:\/\//i.test(v)) return v;
-  if (/^[a-z0-9.-]+\.[a-z]{2,}(\/|$)/i.test(v)) return "https://" + v;
-
-  if (v.startsWith("UATX Portal Images/")) return "/images/" + v.slice("UATX Portal Images/".length);
-  if (v.startsWith("images/")) return "/" + v;
-  if (allowRelative && v.startsWith("/")) return v;
-  if (allowRelative && /^[^:]+$/.test(v)) return "/" + v.replace(/^\/+/, "");
-  return "";
+const normalizeClubId = (value) => {
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? n : null;
 };
 
-const isPastDeadline = (deadline) => {
+const normalizeJoinedClubIds = (value) => {
+  if (!Array.isArray(value)) return [];
+  const out = [];
+  const seen = new Set();
+  value.forEach((id) => {
+    const normalized = normalizeClubId(id);
+    if (normalized === null || seen.has(normalized)) return;
+    seen.add(normalized);
+    out.push(normalized);
+  });
+  return out;
+};
+
+const getTodayISODate = () => {
+  const now = new Date();
+  const tzOffsetMs = now.getTimezoneOffset() * 60000;
+  return new Date(now.getTime() - tzOffsetMs).toISOString().split("T")[0];
+};
+
+const isOpportunityExpired = (deadline) => {
   if (!deadline) return false;
-  const d = new Date(deadline);
-  if (isNaN(d.getTime())) return false;
-  d.setHours(23, 59, 59, 999);
-  return d.getTime() < Date.now();
+  const dateOnly = String(deadline).trim().split("T")[0];
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) return false;
+  return dateOnly <= getTodayISODate();
 };
 
-const renderInlineMarkdown = (text) => {
-  let html = escapeHtml(text || "");
-  html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-  html = html.replace(/\*([^*\n]+)\*/g, "<em>$1</em>");
-  return html;
+const formatInlineDetailMarkup = (text) => {
+  if (!text) return "";
+  let out = String(text);
+  out = out.replace(/\*\*([^*][\s\S]*?)\*\*/g, "<strong>$1</strong>");
+  out = out.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>");
+  out = out.replace(/\n/g, "<br/>");
+  return out;
 };
 
-const renderDetailMarkdown = (rawText) => {
-  const lines = String(rawText || "").replace(/\r/g, "").split("\n");
-  const blocks = [];
-  let paragraph = [];
-  let bullets = [];
+const parseRichDetailContent = (rawText) => {
+  const text = String(rawText || "").replace(/\r/g, "").trim();
+  if (!text) return [];
+  const items = [];
+  const paragraphLines = [];
+  let listMode = null;
+  let listItems = [];
 
   const flushParagraph = () => {
-    if (!paragraph.length) return;
-    blocks.push("<p>" + renderInlineMarkdown(paragraph.join(" ")) + "</p>");
-    paragraph = [];
+    if (!paragraphLines.length) return;
+    const para = paragraphLines.join("\n").trim();
+    if (para) items.push({ p: formatInlineDetailMarkup(para) });
+    paragraphLines.length = 0;
   };
 
-  const flushBullets = () => {
-    if (!bullets.length) return;
-    blocks.push("<ul>" + bullets.map((line) => "<li>" + renderInlineMarkdown(line) + "</li>").join("") + "</ul>");
-    bullets = [];
+  const flushList = () => {
+    if (!listMode || !listItems.length) {
+      listMode = null;
+      listItems = [];
+      return;
+    }
+    const payload = listItems.map((li) => formatInlineDetailMarkup(li));
+    if (listMode === "ul") items.push({ ul: payload });
+    if (listMode === "ol") items.push({ ol: payload });
+    listMode = null;
+    listItems = [];
   };
 
+  const lines = text.split("\n");
   lines.forEach((line) => {
     const trimmed = line.trim();
     if (!trimmed) {
       flushParagraph();
-      flushBullets();
+      flushList();
       return;
     }
 
-    const headingMatch = trimmed.match(/^(#{1,3})\s*(.+)$/);
-    if (headingMatch) {
+    let m = trimmed.match(/^####\s+(.+)$/);
+    if (m) {
       flushParagraph();
-      flushBullets();
-      const level = headingMatch[1].length === 1 ? 2 : headingMatch[1].length === 2 ? 3 : 4;
-      blocks.push("<h" + level + ">" + renderInlineMarkdown(headingMatch[2]) + "</h" + level + ">");
+      flushList();
+      items.push({ h4: formatInlineDetailMarkup(m[1]) });
       return;
     }
-
-    const bulletMatch = trimmed.match(/^[-*]\s+(.+)$/);
-    if (bulletMatch) {
+    m = trimmed.match(/^###\s+(.+)$/);
+    if (m) {
       flushParagraph();
-      bullets.push(bulletMatch[1]);
+      flushList();
+      items.push({ h3: formatInlineDetailMarkup(m[1]) });
+      return;
+    }
+    m = trimmed.match(/^##\s+(.+)$/);
+    if (m) {
+      flushParagraph();
+      flushList();
+      items.push({ h2: formatInlineDetailMarkup(m[1]) });
       return;
     }
 
-    flushBullets();
-    paragraph.push(trimmed);
+    m = trimmed.match(/^-\s+(.+)$/);
+    if (m) {
+      flushParagraph();
+      if (listMode && listMode !== "ul") flushList();
+      listMode = "ul";
+      listItems.push(m[1]);
+      return;
+    }
+
+    m = trimmed.match(/^\d+\.\s+(.+)$/);
+    if (m) {
+      flushParagraph();
+      if (listMode && listMode !== "ol") flushList();
+      listMode = "ol";
+      listItems.push(m[1]);
+      return;
+    }
+
+    flushList();
+    paragraphLines.push(trimmed);
   });
 
   flushParagraph();
-  flushBullets();
-  return blocks.join("");
+  flushList();
+  return items;
+};
+
+const applyTextareaDetailFormat = (textareaRef, currentValue, setValue, format) => {
+  const el = textareaRef && textareaRef.current;
+  if (!el) return;
+  const value = String(currentValue || "");
+  const start = el.selectionStart || 0;
+  const end = el.selectionEnd || 0;
+  const selected = value.slice(start, end);
+  let replacement = "";
+  let selectionStart = start;
+  let selectionEnd = end;
+
+  if (format === "bold") {
+    const inner = selected || "bold text";
+    replacement = "**" + inner + "**";
+    selectionStart = start + 2;
+    selectionEnd = selectionStart + inner.length;
+  } else if (format === "italic") {
+    const inner = selected || "italic text";
+    replacement = "*" + inner + "*";
+    selectionStart = start + 1;
+    selectionEnd = selectionStart + inner.length;
+  } else if (format === "bullet") {
+    const lines = (selected || "").split("\n");
+    replacement = lines.map((line) => {
+      if (!line.trim()) return line;
+      return "- " + line.replace(/^-\s+/, "");
+    }).join("\n");
+    if (!replacement) replacement = "- ";
+    selectionStart = start;
+    selectionEnd = start + replacement.length;
+  } else if (format === "number") {
+    const lines = (selected || "").split("\n");
+    let idx = 1;
+    replacement = lines.map((line) => {
+      if (!line.trim()) return line;
+      return String(idx++) + ". " + line.replace(/^\d+\.\s+/, "");
+    }).join("\n");
+    if (!replacement) replacement = "1. ";
+    selectionStart = start;
+    selectionEnd = start + replacement.length;
+  } else if (format === "h2" || format === "h3" || format === "h4") {
+    const prefix = format === "h2" ? "## " : format === "h3" ? "### " : "#### ";
+    const heading = (selected || "Heading").replace(/^\s*#{2,4}\s+/, "");
+    replacement = prefix + heading;
+    selectionStart = start + prefix.length;
+    selectionEnd = selectionStart + heading.length;
+  } else if (format === "paragraph") {
+    const body = (selected || "Body text").replace(/^\s*#{2,4}\s+/, "");
+    replacement = body;
+    selectionStart = start;
+    selectionEnd = start + body.length;
+  } else {
+    return;
+  }
+
+  const nextValue = value.slice(0, start) + replacement + value.slice(end);
+  setValue(nextValue);
+  requestAnimationFrame(() => {
+    const nextEl = textareaRef && textareaRef.current;
+    if (!nextEl) return;
+    nextEl.focus();
+    nextEl.setSelectionRange(selectionStart, selectionEnd);
+  });
 };
 
 // ─── CONSTANTS ───
@@ -160,9 +251,30 @@ const C = {
 };
 
 const INDUSTRIES = [
-  "Finance & Banking","Technology","Law & Policy","Government","Nonprofit","Media & Journalism","Consulting","Healthcare","Education","Energy","Real Estate","Defense & Security",
-  "Artificial Intelligence","Product Management","Marketing & Communications","Entrepreneurship","Manufacturing","Public Relations","Sports & Entertainment","Agriculture & Food",
-  "Environment & Sustainability","Human Resources","Sales & Business Development"
+  "Finance & Banking",
+  "Technology",
+  "Law & Policy",
+  "Government",
+  "Nonprofit",
+  "Media & Journalism",
+  "Consulting",
+  "Healthcare",
+  "Education",
+  "Energy",
+  "Real Estate",
+  "Defense & Security",
+  "AI & Data Science",
+  "Biotech & Life Sciences",
+  "Cybersecurity",
+  "Manufacturing",
+  "Consumer Goods",
+  "Venture Capital",
+  "Entrepreneurship & Startups",
+  "International Affairs",
+  "Public Relations",
+  "Sales & Business Development",
+  "Sports & Entertainment",
+  "Transportation & Logistics"
 ];
 
 const AREAS_OF_INTEREST = ["Research","Policy Analysis","Journalism","Financial Modeling","Legal Research","Data Analytics","Entrepreneurship","Public Speaking","Creative Writing","International Relations","Community Organizing","Campaign Strategy","Nonprofit Management","Technology & Innovation","Education Reform"];
@@ -211,18 +323,22 @@ const ACTIVITIES = [];
 const ds = {
   h2:{fontFamily:"Georgia, serif",fontSize:20,color:C.navy,margin:"28px 0 12px",fontWeight:700},
   h3:{fontFamily:"Georgia, serif",fontSize:16,color:C.navy,margin:"24px 0 8px",fontWeight:700},
+  h4:{fontFamily:"Georgia, serif",fontSize:15,color:C.navy,margin:"20px 0 8px",fontWeight:700},
   p:{fontSize:14,lineHeight:1.75,color:C.text,margin:"0 0 12px"},
   ul:{margin:"0 0 16px 20px",padding:0},
+  ol:{margin:"0 0 16px 20px",padding:0},
   li:{fontSize:14,lineHeight:1.75,color:C.text,marginBottom:4},
   hr:{border:"none",borderTop:"1px solid "+C.border,margin:"24px 0"},
   note:{fontSize:13,fontStyle:"italic",color:C.textLight,marginTop:24,paddingTop:16,borderTop:"1px solid "+C.border},
 };
 
 const Section = ({items}) => items.map((item, i) => {
-  if (item.h2) return <h2 key={i} style={{...ds.h2,...(i===0?{marginTop:0}:{})}}>{item.h2}</h2>;
-  if (item.h3) return <h3 key={i} style={ds.h3}>{item.h3}</h3>;
+  if (item.h2) return <h2 key={i} style={{...ds.h2,...(i===0?{marginTop:0}:{})}} dangerouslySetInnerHTML={{__html:item.h2}}/>;
+  if (item.h3) return <h3 key={i} style={ds.h3} dangerouslySetInnerHTML={{__html:item.h3}}/>;
+  if (item.h4) return <h4 key={i} style={ds.h4} dangerouslySetInnerHTML={{__html:item.h4}}/>;
   if (item.p) return <p key={i} style={ds.p} dangerouslySetInnerHTML={{__html:item.p}}/>;
   if (item.ul) return <ul key={i} style={ds.ul}>{item.ul.map((li,j) => <li key={j} style={ds.li} dangerouslySetInnerHTML={{__html:li}}/>)}</ul>;
+  if (item.ol) return <ol key={i} style={ds.ol}>{item.ol.map((li,j) => <li key={j} style={ds.li} dangerouslySetInnerHTML={{__html:li}}/>)}</ol>;
   if (item.hr) return <hr key={i} style={ds.hr}/>;
   if (item.note) return <p key={i} style={ds.note}>{item.note}</p>;
   return null;
@@ -1182,46 +1298,20 @@ const SUBPAGE_CONTENT = {
   },
   "submit-activity": {
     title: "List a Club or Activity",
-    backTo: "community",
-    backLabel: "Back to Community",
+    backTo: "clubs",
+    backLabel: "Back to Clubs",
     render: () => {
       const inputStyle = {width:"100%",padding:"10px 12px",border:"1px solid "+C.border,fontSize:13,boxSizing:"border-box",fontFamily:"'Libre Franklin', sans-serif",backgroundColor:C.white};
       const labelStyle = {fontSize:11,fontWeight:600,color:C.textLight,textTransform:"uppercase",letterSpacing:"0.5px",display:"block",marginBottom:6};
-      const [form, setForm] = React.useState({
-        title:"",
-        category:"Academic",
-        meetDay:"",
-        desc:"",
-        presidentEmail:"",
-        showEvent:false,
-        eventTitle:"",
-        eventDate:"",
-        eventLocation:"",
-        eventDescription:""
-      });
+      const [form, setForm] = React.useState({title:"",category:"Academic",desc:"",presidentEmail:""});
       const [submitted, setSubmitted] = React.useState(false);
-      const eventReady = !form.showEvent || (form.eventTitle && form.eventDescription);
-      const allFilled = form.title && form.category && form.meetDay && form.desc && form.presidentEmail && eventReady;
+      const allFilled = form.title && form.category && form.desc && form.presidentEmail;
       const handleSubmit = async () => {
         if (!allFilled) return;
         try {
           await fetch("/api/activities", {
             method:"POST", headers:{"Content-Type":"application/json"},
-            body: JSON.stringify({
-              activity: {
-                title: form.title,
-                category: form.category,
-                meet_day: form.meetDay,
-                description: form.desc,
-                president_email: form.presidentEmail,
-                members: 0,
-                show_as_event: !!form.showEvent,
-                event_title: form.eventTitle,
-                event_date: form.eventDate,
-                event_location: form.eventLocation,
-                event_description: form.eventDescription
-              }
-            })
+            body: JSON.stringify({ activity: { title:form.title, category:form.category, meet_day:"", description:form.desc, president_email:form.presidentEmail, members:0 }})
           });
         } catch(e) {}
         setSubmitted(true);
@@ -1231,10 +1321,10 @@ const SUBPAGE_CONTENT = {
           React.createElement("div", {style:{width:24,height:12,borderLeft:"3px solid #4a7c59",borderBottom:"3px solid #4a7c59",transform:"rotate(-45deg)",marginTop:-4}})
         ),
         React.createElement("h2", {style:{fontFamily:"Georgia, serif",fontSize:22,color:C.navy,margin:"0 0 12px"}}, "Submitted for Review"),
-        React.createElement("p", {style:{fontSize:14,color:C.textLight,lineHeight:1.6,maxWidth:420,margin:"0 auto"}}, "Your club has been submitted and is pending approval. It will appear on the Community page once reviewed by an administrator.")
+        React.createElement("p", {style:{fontSize:14,color:C.textLight,lineHeight:1.6,maxWidth:420,margin:"0 auto"}}, "Your club has been submitted and is pending approval. It will appear in the Clubs tab once reviewed by an administrator.")
       );
       return React.createElement("div", {style:{maxWidth:560}},
-        React.createElement("p", {style:{fontSize:14,color:C.text,lineHeight:1.7,margin:"0 0 24px"}}, "Submit your club or activity for review. Once approved, it will appear on the Community page for other students to find and join. All fields are required."),
+        React.createElement("p", {style:{fontSize:14,color:C.text,lineHeight:1.7,margin:"0 0 24px"}}, "Submit your club or activity for review. Once approved, it will appear in the Clubs tab for other students to find and join. All fields are required."),
         React.createElement("div", {style:{display:"flex",flexDirection:"column",gap:16}},
           React.createElement("div", null,
             React.createElement("label", {style:labelStyle}, "Club / Activity Name"),
@@ -1247,36 +1337,8 @@ const SUBPAGE_CONTENT = {
             )
           ),
           React.createElement("div", null,
-            React.createElement("label", {style:labelStyle}, "Meeting Day / Time"),
-            React.createElement("input", {type:"text",placeholder:"e.g. Wednesdays at 6pm",value:form.meetDay,onChange:e=>setForm({...form,meetDay:e.target.value}),style:inputStyle})
-          ),
-          React.createElement("div", null,
             React.createElement("label", {style:labelStyle}, "Description"),
             React.createElement("textarea", {rows:3,placeholder:"What does this club do? What should members expect?",value:form.desc,onChange:e=>setForm({...form,desc:e.target.value}),style:{...inputStyle,resize:"vertical"}})
-          ),
-          React.createElement("div", {style:{display:"flex",alignItems:"center",gap:8,padding:"4px 0"}},
-            React.createElement("input", {type:"checkbox",checked:!!form.showEvent,onChange:e=>setForm({...form,showEvent:e.target.checked}),id:"submit-club-show-event"}),
-            React.createElement("label", {htmlFor:"submit-club-show-event",style:{fontSize:12,color:C.text}}, "Also list a community event for this club")
-          ),
-          form.showEvent && React.createElement(React.Fragment, null,
-            React.createElement("div", null,
-              React.createElement("label", {style:labelStyle}, "Event Title"),
-              React.createElement("input", {type:"text",placeholder:"e.g. Debate Night",value:form.eventTitle,onChange:e=>setForm({...form,eventTitle:e.target.value}),style:inputStyle})
-            ),
-            React.createElement("div", {style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}},
-              React.createElement("div", null,
-                React.createElement("label", {style:labelStyle}, "Event Date"),
-                React.createElement("input", {type:"date",value:form.eventDate,onChange:e=>setForm({...form,eventDate:e.target.value}),style:inputStyle})
-              ),
-              React.createElement("div", null,
-                React.createElement("label", {style:labelStyle}, "Event Location"),
-                React.createElement("input", {type:"text",placeholder:"e.g. Room 201",value:form.eventLocation,onChange:e=>setForm({...form,eventLocation:e.target.value}),style:inputStyle})
-              )
-            ),
-            React.createElement("div", null,
-              React.createElement("label", {style:labelStyle}, "Event Description Page Content"),
-              React.createElement("textarea", {rows:4,placeholder:"Add details shown on the event page.",value:form.eventDescription,onChange:e=>setForm({...form,eventDescription:e.target.value}),style:{...inputStyle,resize:"vertical"}})
-            )
           ),
           React.createElement("div", null,
             React.createElement("label", {style:labelStyle}, "President / Contact Email"),
@@ -1323,6 +1385,10 @@ const TopNav = ({activeTab, subPage, navigate, onSignOut, currentUser}) => {
   const [homeOpen, setHomeOpen] = useState(false);
   const [eventsOpen, setEventsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [bugModal, setBugModal] = useState(false);
+  const [bugText, setBugText] = useState("");
+  const [bugSending, setBugSending] = useState(false);
+  const [bugSent, setBugSent] = useState(false);
   const dropdownRef = useRef(null);
 
   useEffect(() => {
@@ -1342,7 +1408,8 @@ const TopNav = ({activeTab, subPage, navigate, onSignOut, currentUser}) => {
     {id:"opportunities",label:"Opportunities"},
     {id:"calendar",label:"Calendar"},
     {id:"profile",label:"My Profile"},
-    {id:"community",label:"Community"},
+    {id:"community-events",label:"Community Events"},
+    {id:"clubs",label:"Clubs"},
     {id:"events",label:"Programs & Travel",hasDropdown:true,hideArrow:true},
   ];
 
@@ -1366,6 +1433,8 @@ const TopNav = ({activeTab, subPage, navigate, onSignOut, currentUser}) => {
   const isActive = (id) => {
     if (id === "home") return activeTab === "home";
     if (id === "events") return activeTab === "events";
+    if (id === "community-events") return activeTab === "community-events";
+    if (id === "clubs") return activeTab === "clubs";
     return activeTab === id && !subPage;
   };
 
@@ -1409,7 +1478,7 @@ const TopNav = ({activeTab, subPage, navigate, onSignOut, currentUser}) => {
     fontWeight:active?600:400,transition:"all 0.15s ease",borderBottom:"1px solid "+C.navyLight,
   });
 
-  return (
+  return (<React.Fragment>
     <div ref={dropdownRef} style={{position:"fixed",top:0,left:0,right:0,height:72,backgroundColor:"#0e162a",display:"flex",alignItems:"center",zIndex:10,borderBottom:"1px solid #1a2332",padding:"0 28px"}}>
       {/* Left: Crest + Title */}
       <div style={{display:"flex",alignItems:"center",marginRight:32,flexShrink:0,cursor:"pointer"}} onClick={()=>navigate("home")}>
@@ -1467,12 +1536,43 @@ const TopNav = ({activeTab, subPage, navigate, onSignOut, currentUser}) => {
         {profileOpen && (
           <div style={{position:"absolute",top:"100%",right:0,marginTop:4,backgroundColor:C.navy,border:"1px solid "+C.navyLight,minWidth:180,zIndex:20,boxShadow:"0 4px 16px rgba(0,0,0,0.3)"}}>
             <div onClick={()=>{setProfileOpen(false);navigate("profile");}} style={{padding:"10px 20px",cursor:"pointer",fontSize:13,color:C.cream+"cc",borderBottom:"1px solid "+C.navyLight,transition:"all 0.15s ease"}} onMouseEnter={e=>e.target.style.backgroundColor=C.navyLight} onMouseLeave={e=>e.target.style.backgroundColor="transparent"}>My Profile</div>
+            <div onClick={()=>{setProfileOpen(false);setBugModal(true);setBugText("");setBugSent(false);}} style={{padding:"10px 20px",cursor:"pointer",fontSize:13,color:C.cream+"cc",borderBottom:"1px solid "+C.navyLight,transition:"all 0.15s ease"}} onMouseEnter={e=>e.target.style.backgroundColor=C.navyLight} onMouseLeave={e=>e.target.style.backgroundColor="transparent"}>Report a Bug</div>
             <div onClick={()=>{setProfileOpen(false);onSignOut();}} style={{padding:"10px 20px",cursor:"pointer",fontSize:13,color:C.alert,transition:"all 0.15s ease"}} onMouseEnter={e=>e.target.style.backgroundColor=C.navyLight} onMouseLeave={e=>e.target.style.backgroundColor="transparent"}>Sign Out</div>
           </div>
         )}
       </div>
     </div>
-  );
+    {bugModal && (
+      <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,backgroundColor:"rgba(0,0,0,0.6)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setBugModal(false)}>
+        <div style={{backgroundColor:C.navy,border:"1px solid "+C.navyLight,borderRadius:12,padding:28,width:380,maxWidth:"90vw",boxShadow:"0 8px 32px rgba(0,0,0,0.4)"}} onClick={e=>e.stopPropagation()}>
+          <h3 style={{margin:"0 0 6px",color:C.cream,fontSize:18,fontFamily:"Georgia, serif"}}>Report a Bug</h3>
+          <p style={{margin:"0 0 16px",color:C.cream+"88",fontSize:12}}>Your report will be sent anonymously.</p>
+          {bugSent ? (
+            <div style={{textAlign:"center",padding:"20px 0"}}>
+              <div style={{fontSize:28,marginBottom:8}}>&#10003;</div>
+              <p style={{color:C.gold,fontSize:14,fontWeight:600,margin:"0 0 4px"}}>Thanks for the report!</p>
+              <p style={{color:C.cream+"88",fontSize:12,margin:0}}>We'll look into it.</p>
+              <div onClick={()=>setBugModal(false)} style={{marginTop:16,padding:"8px 24px",backgroundColor:C.navyLight,color:C.cream,fontSize:13,borderRadius:6,cursor:"pointer",display:"inline-block"}}>Close</div>
+            </div>
+          ) : (
+            <React.Fragment>
+              <textarea value={bugText} onChange={e=>setBugText(e.target.value)} placeholder="Describe the bug you found..." rows={5} style={{width:"100%",padding:12,backgroundColor:C.navyLight,border:"1px solid "+C.navyLight,borderRadius:8,color:C.cream,fontSize:13,resize:"vertical",outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}/>
+              <div style={{display:"flex",justifyContent:"flex-end",gap:10,marginTop:14}}>
+                <div onClick={()=>setBugModal(false)} style={{padding:"8px 18px",backgroundColor:"transparent",border:"1px solid "+C.navyLight,color:C.cream+"aa",fontSize:13,borderRadius:6,cursor:"pointer"}}>Cancel</div>
+                <div onClick={()=>{
+                  if(!bugText.trim()||bugSending)return;
+                  setBugSending(true);
+                  fetch("/api/bug-report",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:bugText.trim()})})
+                    .then(r=>r.json()).then(()=>{setBugSent(true);setBugSending(false);})
+                    .catch(()=>{setBugSending(false);alert("Failed to send. Try again.");});
+                }} style={{padding:"8px 18px",backgroundColor:bugText.trim()&&!bugSending?C.gold:"#555",color:bugText.trim()&&!bugSending?C.navy:"#999",fontSize:13,fontWeight:600,borderRadius:6,cursor:bugText.trim()&&!bugSending?"pointer":"default",opacity:bugSending?0.6:1}}>{bugSending?"Sending...":"Submit"}</div>
+              </div>
+            </React.Fragment>
+          )}
+        </div>
+      </div>
+    )}
+  </React.Fragment>);
 };
 
 // ─── DETAIL PAGE ───
@@ -1507,10 +1607,6 @@ const HomePage = ({navigate}) => {
             <Btn onClick={()=>navigate("opportunities")}>Browse Opportunities</Btn>
             <Btn variant="secondary" onClick={()=>navigate("events")}>Programs & Travel</Btn>
           </div>
-        </div>
-        <div style={{position:"absolute",bottom:24,left:"50%",transform:"translateX(-50%)",display:"flex",flexDirection:"column",alignItems:"center",gap:4,opacity:0.6}}>
-          <span style={{color:C.cream,fontSize:11,letterSpacing:"1px",textTransform:"uppercase"}}>Scroll for more</span>
-          <span style={{color:C.cream,fontSize:18,animation:"bounce 2s infinite"}}>&#9660;</span>
         </div>
       </div>
       <div style={{backgroundColor:C.cream,padding:"48px 40px 48px"}}>
@@ -1563,14 +1659,10 @@ const OpportunitiesPage = ({navigate, showToast, savedOpps, setSavedOpps, select
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({org:"",title:"",description:"",industry:"Finance & Banking",type:"Internship",location:"",deadline:"",paid:false,contactEmail:""});
   const [visibleIds, setVisibleIds] = useState(new Set());
-  const [brokenLogos, setBrokenLogos] = useState({});
   const cardRefs = useRef({});
   const sidebarItemRefs = useRef({});
 
-  const allItemsRaw = [...serverOpps, ...INTERNSHIPS].map(item => ({
-    ...item,
-    logo: normalizePublicUrl(item.logo || "", true) || null,
-  })).filter(item => !isPastDeadline(item.deadline));
+  const allItemsRaw = [...serverOpps, ...INTERNSHIPS].filter((o) => !isOpportunityExpired(o.deadline));
   const seenKeys = new Set();
   const allItems = allItemsRaw.filter(o => {
     const key = (o.org + "|" + o.title).toLowerCase();
@@ -1587,11 +1679,7 @@ const OpportunitiesPage = ({navigate, showToast, savedOpps, setSavedOpps, select
     const mt = filterType==="All" || i.type===filterType;
     return ms && mi && mt;
   }).sort((a,b) => {
-    if (sortBy==="deadline") {
-      const ad = a.deadline ? new Date(a.deadline).getTime() : Number.MAX_SAFE_INTEGER;
-      const bd = b.deadline ? new Date(b.deadline).getTime() : Number.MAX_SAFE_INTEGER;
-      return ad - bd;
-    }
+    if (sortBy==="deadline") return new Date(a.deadline) - new Date(b.deadline);
     if (sortBy==="org") return a.org.localeCompare(b.org);
     if (sortBy==="title") return a.title.localeCompare(b.title);
     if (sortBy==="type") return a.type.localeCompare(b.type);
@@ -1601,11 +1689,6 @@ const OpportunitiesPage = ({navigate, showToast, savedOpps, setSavedOpps, select
   const toggleSave = (id) => setSavedOpps(prev => prev.includes(id) ? prev.filter(x=>x!==id) : [...prev, id]);
   const isSaved = (id) => savedOpps.includes(id);
   const matches = (ind) => selectedIndustries.includes(ind);
-  const markLogoBroken = (id, slot) => setBrokenLogos(prev => ({ ...prev, [id + ":" + slot]: true }));
-  const hasLogo = (item, slot) => {
-    if (!item.logo) return false;
-    return !brokenLogos[item.id + ":" + slot];
-  };
 
   const submitListing = () => {
     if (!form.org || !form.title) return;
@@ -1664,8 +1747,8 @@ const OpportunitiesPage = ({navigate, showToast, savedOpps, setSavedOpps, select
             const isVis = visibleIds.has(String(item.id));
             return (
             <div key={item.id} ref={el=>sidebarItemRefs.current[item.id]=el} onClick={()=>item.subPage?navigate(item.subPage):scrollToCard(item.id)} style={{padding:"9px 20px",cursor:"pointer",transition:"all 0.2s",display:"flex",alignItems:"center",gap:10,backgroundColor:isVis?C.navyLight:"transparent",borderLeft:isVis?"3px solid "+C.gold:"3px solid transparent"}} onMouseEnter={e=>{if(!isVis)e.currentTarget.style.backgroundColor=C.navyLight+"88";}} onMouseLeave={e=>{if(!isVis)e.currentTarget.style.backgroundColor="transparent";}}>
-              {hasLogo(item, "sidebar") ? (
-                <img src={item.logo} alt="" style={{width:26,height:26,borderRadius:4,objectFit:"contain",backgroundColor:"#fff",flexShrink:0}} onError={()=>markLogoBroken(item.id, "sidebar")}/>
+              {item.logo ? (
+                <img src={item.logo} alt="" style={{width:26,height:26,borderRadius:4,objectFit:"contain",backgroundColor:"#fff",flexShrink:0}} onError={e=>{e.target.style.display="none";}}/>
               ) : (
                 <div style={{width:26,height:26,borderRadius:4,backgroundColor:C.navyDark,display:"flex",alignItems:"center",justifyContent:"center",color:C.gold,fontSize:11,fontWeight:700,fontFamily:"Georgia, serif",flexShrink:0}}>{item.org.charAt(0)}</div>
               )}
@@ -1707,8 +1790,8 @@ const OpportunitiesPage = ({navigate, showToast, savedOpps, setSavedOpps, select
               <div key={item.id} ref={el=>{if(el){el.dataset.oppId=String(item.id);cardRefs.current[item.id]=el;}}} style={{backgroundColor:C.white,border:"1px solid "+C.border,cursor:item.subPage?"pointer":"default",transition:"box-shadow 0.2s ease, transform 0.2s ease",borderLeft:matches(item.industry)?"3px solid "+C.gold:"3px solid transparent",display:"flex",flexDirection:"column",overflow:"hidden",scrollMarginTop:"88px"}} onClick={()=>item.subPage&&navigate(item.subPage)} onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 6px 24px rgba(0,0,0,0.1)";e.currentTarget.style.transform="translateY(-2px)";}} onMouseLeave={e=>{e.currentTarget.style.boxShadow="none";e.currentTarget.style.transform="translateY(0)";}}>
                 <div style={{padding:"24px 28px 20px",flex:1}}>
                   <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:16}}>
-                    {hasLogo(item, "card") ? (
-                      <img src={item.logo} alt={item.org} style={{width:48,height:48,borderRadius:6,objectFit:"contain",backgroundColor:C.white,border:"1px solid "+C.border,flexShrink:0}} onError={()=>markLogoBroken(item.id, "card")}/>
+                    {item.logo ? (
+                      <img src={item.logo} alt={item.org} style={{width:48,height:48,borderRadius:6,objectFit:"contain",backgroundColor:C.white,border:"1px solid "+C.border,flexShrink:0}} onError={e=>{e.target.style.display="none";}}/>
                     ) : (
                       <div style={{width:48,height:48,borderRadius:6,backgroundColor:C.navyDark,display:"flex",alignItems:"center",justifyContent:"center",color:C.gold,fontSize:18,fontWeight:700,fontFamily:"Georgia, serif",flexShrink:0}}>{item.org.charAt(0)}</div>
                     )}
@@ -1728,9 +1811,7 @@ const OpportunitiesPage = ({navigate, showToast, savedOpps, setSavedOpps, select
                   </div>
                 </div>
                 <div style={{padding:"12px 28px",borderTop:"1px solid "+C.border,backgroundColor:C.cream,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                  <div style={{fontSize:12,color:C.alert,fontWeight:600}}>
-                    Deadline: {item.deadline ? new Date(item.deadline).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"}) : "Rolling"}
-                  </div>
+                  <div style={{fontSize:12,color:C.alert,fontWeight:600}}>Deadline: {new Date(item.deadline).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"})}</div>
                   {item.subPage && <span style={{fontSize:12,fontWeight:600,color:C.navy}}>View Details &rarr;</span>}
                 </div>
               </div>
@@ -1744,7 +1825,7 @@ const OpportunitiesPage = ({navigate, showToast, savedOpps, setSavedOpps, select
 };
 
 // ─── CALENDAR ───
-const CalendarPage = ({allInternships, navigate}) => {
+const CalendarPage = ({allInternships, navigate, serverActivities=[], allClubEvents=[]}) => {
   const [calMonth, setCalMonth] = useState(() => new Date().getMonth());
   const [calYear, setCalYear] = useState(() => new Date().getFullYear());
 
@@ -1759,6 +1840,11 @@ const CalendarPage = ({allInternships, navigate}) => {
   const deadlines = allInternships.map(i=>({...i,dateObj:new Date(i.deadline)}));
   const events = EVENTS.map(e=>({...e,dateObj:new Date(e.date)}));
 
+  const clubEvtsParsed = allClubEvents.filter(ce => ce.date).map(ce => {
+    const club = serverActivities.find(a => a.id === ce.activity_id);
+    return {...ce, dateObj: new Date(ce.date), clubName: club ? club.title : "Club"};
+  });
+
   const getItems = (day) => {
     if (!day) return [];
     const items = [];
@@ -1769,6 +1855,10 @@ const CalendarPage = ({allInternships, navigate}) => {
     events.forEach(ev => {
       if (ev.dateObj.getFullYear()===calYear && ev.dateObj.getMonth()===calMonth && ev.dateObj.getDate()===day)
         items.push({type:"event",label:ev.title,subPage:ev.subPage});
+    });
+    clubEvtsParsed.forEach(ce => {
+      if (ce.dateObj.getFullYear()===calYear && ce.dateObj.getMonth()===calMonth && ce.dateObj.getDate()===day)
+        items.push({type:"club",label:ce.title,subPage:ce.subPage});
     });
     return items;
   };
@@ -1782,6 +1872,7 @@ const CalendarPage = ({allInternships, navigate}) => {
   const allUpcoming = [
     ...deadlines.filter(d=>d.dateObj>now).map(d=>({...d,itemType:"deadline"})),
     ...events.filter(e=>e.dateObj>now).map(e=>({...e,itemType:"event",title:e.title,org:e.org})),
+    ...clubEvtsParsed.filter(ce=>ce.dateObj>now).map(ce=>({...ce,itemType:"club",title:ce.title,org:ce.clubName})),
   ].sort((a,b) => a.dateObj - b.dateObj);
 
   // Next 7 days deadlines
@@ -1819,7 +1910,7 @@ const CalendarPage = ({allInternships, navigate}) => {
                 <div style={{fontSize:11,fontWeight:700,color:C.gold,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:6}}>{dateStr}</div>
                 {items.map((item,j) => (
                   <div key={j} style={{display:"flex",alignItems:"flex-start",gap:8,marginBottom:j<items.length-1?8:0}}>
-                    <div style={{width:3,minHeight:14,borderRadius:2,backgroundColor:item.itemType==="deadline"?C.alert:C.success,marginTop:3,flexShrink:0}}/>
+                    <div style={{width:3,minHeight:14,borderRadius:2,backgroundColor:item.itemType==="deadline"?C.alert:item.itemType==="club"?C.gold:C.success,marginTop:3,flexShrink:0}}/>
                     <div>
                       <div style={{fontSize:12,fontWeight:600,lineHeight:1.3}}>{item.itemType==="deadline"?item.title:item.title}</div>
                       <div style={{fontSize:10,color:"#8899aa",marginTop:1}}>{item.org}</div>
@@ -1834,40 +1925,44 @@ const CalendarPage = ({allInternships, navigate}) => {
           </div>
         </div>
 
-        {/* Calendar grid */}
-        <div style={{flex:1,backgroundColor:C.white,border:"1px solid "+C.border,borderRadius:10,overflow:"hidden"}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px 24px",backgroundColor:C.cream}}>
-            <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <div onClick={prevMonth} style={{cursor:"pointer",width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:6,backgroundColor:C.white,border:"1px solid "+C.border,fontSize:13,color:C.navy,fontWeight:700}}>{"\u25C0"}</div>
-              <div onClick={nextMonth} style={{cursor:"pointer",width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:6,backgroundColor:C.white,border:"1px solid "+C.border,fontSize:13,color:C.navy,fontWeight:700}}>{"\u25B6"}</div>
-              <span style={{fontFamily:"Georgia, serif",fontSize:18,fontWeight:700,color:C.navy,marginLeft:8}}>{monthName}</span>
+        {/* Calendar grid + club events */}
+        <div style={{flex:1}}>
+          <div style={{backgroundColor:C.white,border:"1px solid "+C.border,borderRadius:10,overflow:"hidden"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px 24px",backgroundColor:C.cream}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <div onClick={prevMonth} style={{cursor:"pointer",width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:6,backgroundColor:C.white,border:"1px solid "+C.border,fontSize:13,color:C.navy,fontWeight:700}}>{"\u25C0"}</div>
+                <div onClick={nextMonth} style={{cursor:"pointer",width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:6,backgroundColor:C.white,border:"1px solid "+C.border,fontSize:13,color:C.navy,fontWeight:700}}>{"\u25B6"}</div>
+                <span style={{fontFamily:"Georgia, serif",fontSize:18,fontWeight:700,color:C.navy,marginLeft:8}}>{monthName}</span>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:16}}>
+                <span style={{fontSize:11,color:C.alert,fontWeight:600}}>{"\u25CF"} Deadlines</span>
+                <span style={{fontSize:11,color:C.success,fontWeight:600}}>{"\u25CF"} Events</span>
+                <span style={{fontSize:11,color:C.gold,fontWeight:600}}>{"\u25CF"} Clubs</span>
+                <Btn size="sm" variant="ghost" onClick={goToday}>Today</Btn>
+              </div>
             </div>
-            <div style={{display:"flex",alignItems:"center",gap:16}}>
-              <span style={{fontSize:11,color:C.alert,fontWeight:600}}>{"\u25CF"} Deadlines</span>
-              <span style={{fontSize:11,color:C.success,fontWeight:600}}>{"\u25CF"} Events</span>
-              <Btn size="sm" variant="ghost" onClick={goToday}>Today</Btn>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(7, 1fr)"}}>
+              {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d => (
+                <div key={d} style={{padding:"10px 0",textAlign:"center",fontSize:11,fontWeight:600,color:C.textLight,textTransform:"uppercase",letterSpacing:"0.5px",borderBottom:"1px solid "+C.border}}>{d}</div>
+              ))}
+              {days.map((day,i) => {
+                const items = getItems(day);
+                const isToday = day && calYear===now.getFullYear() && calMonth===now.getMonth() && day===now.getDate();
+                return (
+                  <div key={i} style={{height:100,padding:"6px 8px",backgroundColor:day?(isToday?C.gold+"08":C.white):"#fafaf8",borderRight:i%7<6?"1px solid #f0ece4":"none",borderBottom:"1px solid #f0ece4",overflow:"hidden"}}>
+                    {day && <>
+                      <div style={{fontSize:12,fontWeight:isToday?700:400,color:isToday?C.gold:items.length?C.navy:C.textLight,marginBottom:4,textAlign:"right"}}>{isToday ? <span style={{backgroundColor:C.gold,color:C.white,borderRadius:"50%",width:24,height:24,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:11}}>{day}</span> : day}</div>
+                      {items.slice(0,3).map((item,j) => (
+                        <div key={j} onClick={item.subPage?()=>navigate(item.subPage):undefined} style={{fontSize:10,padding:"3px 6px",marginTop:2,borderRadius:4,borderLeft:"3px solid "+(item.type==="deadline"?C.alert:item.type==="club"?C.gold:C.success),backgroundColor:(item.type==="deadline"?C.alert:item.type==="club"?C.gold:C.success)+"10",color:item.type==="deadline"?C.alert:item.type==="club"?C.gold:C.success,fontWeight:600,lineHeight:1.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",cursor:item.subPage?"pointer":"default"}}>{item.label}</div>
+                      ))}
+                      {items.length>3 && <div style={{fontSize:9,color:C.textLight,marginTop:2,textAlign:"center"}}>+{items.length-3} more</div>}
+                    </>}
+                  </div>
+                );
+              })}
             </div>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(7, 1fr)"}}>
-            {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d => (
-              <div key={d} style={{padding:"10px 0",textAlign:"center",fontSize:11,fontWeight:600,color:C.textLight,textTransform:"uppercase",letterSpacing:"0.5px",borderBottom:"1px solid "+C.border}}>{d}</div>
-            ))}
-            {days.map((day,i) => {
-              const items = getItems(day);
-              const isToday = day && calYear===now.getFullYear() && calMonth===now.getMonth() && day===now.getDate();
-              return (
-                <div key={i} style={{height:100,padding:"6px 8px",backgroundColor:day?(isToday?C.gold+"08":C.white):"#fafaf8",borderRight:i%7<6?"1px solid #f0ece4":"none",borderBottom:"1px solid #f0ece4",overflow:"hidden"}}>
-                  {day && <>
-                    <div style={{fontSize:12,fontWeight:isToday?700:400,color:isToday?C.gold:items.length?C.navy:C.textLight,marginBottom:4,textAlign:"right"}}>{isToday ? <span style={{backgroundColor:C.gold,color:C.white,borderRadius:"50%",width:24,height:24,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:11}}>{day}</span> : day}</div>
-                    {items.slice(0,3).map((item,j) => (
-                      <div key={j} onClick={item.subPage?()=>navigate(item.subPage):undefined} style={{fontSize:10,padding:"3px 6px",marginTop:2,borderRadius:4,borderLeft:"3px solid "+(item.type==="deadline"?C.alert:C.success),backgroundColor:item.type==="deadline"?C.alert+"10":C.success+"10",color:item.type==="deadline"?C.alert:C.success,fontWeight:600,lineHeight:1.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",cursor:item.subPage?"pointer":"default"}}>{item.label}</div>
-                    ))}
-                    {items.length>3 && <div style={{fontSize:9,color:C.textLight,marginTop:2,textAlign:"center"}}>+{items.length-3} more</div>}
-                  </>}
-                </div>
-              );
-            })}
-          </div>
+
         </div>
       </div>
     </div>
@@ -1875,13 +1970,136 @@ const CalendarPage = ({allInternships, navigate}) => {
 };
 
 // ─── CLUB PRESIDENT CARD ───
-const ClubPresidentCard = ({club, showToast, navigate}) => {
+const ClubPresidentCard = ({club, showToast, onEventUpdated}) => {
   const [showCompose, setShowCompose] = useState(false);
+  const [clubEvents, setClubEvents] = useState([]);
+  const [newEvt, setNewEvt] = useState({title:"",date:"",location:"",description:"",detail_content:""});
+  const [editingEvtId, setEditingEvtId] = useState(null);
+  const [editEvt, setEditEvt] = useState({title:"",date:"",location:"",description:"",detail_content:""});
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [memberEmails, setMemberEmails] = useState(null);
   const inputStyle = {width:"100%",padding:8,border:"1px solid "+C.border,fontSize:13,boxSizing:"border-box",fontFamily:"'Libre Franklin', sans-serif"};
+  const toolbarWrapStyle = {display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",marginTop:2};
+  const toolbarBtnStyle = {fontSize:10,padding:"4px 8px",border:"1px solid "+C.border,backgroundColor:C.white,color:C.textLight,cursor:"pointer",fontFamily:"'Libre Franklin', sans-serif",fontWeight:600};
+  const toolbarSelectStyle = {fontSize:10,padding:"4px 8px",border:"1px solid "+C.border,backgroundColor:C.white,color:C.textLight,cursor:"pointer",fontFamily:"'Libre Franklin', sans-serif",fontWeight:600};
+  const newEvtDetailRef = useRef(null);
+  const editEvtDetailRef = useRef(null);
+  const todayISO = (() => {
+    const now = new Date();
+    const tzOffsetMs = now.getTimezoneOffset() * 60000;
+    return new Date(now.getTime() - tzOffsetMs).toISOString().split("T")[0];
+  })();
+  const renderDetailToolbar = (ref, value, setValue) => (
+    <div style={toolbarWrapStyle}>
+      <button type="button" style={toolbarBtnStyle} onClick={()=>applyTextareaDetailFormat(ref, value, setValue, "bold")}>Bold</button>
+      <button type="button" style={toolbarBtnStyle} onClick={()=>applyTextareaDetailFormat(ref, value, setValue, "italic")}>Italic</button>
+      <button type="button" style={toolbarBtnStyle} onClick={()=>applyTextareaDetailFormat(ref, value, setValue, "bullet")}>Bullets</button>
+      <button type="button" style={toolbarBtnStyle} onClick={()=>applyTextareaDetailFormat(ref, value, setValue, "number")}>Numbered</button>
+      <select
+        style={toolbarSelectStyle}
+        defaultValue=""
+        onChange={(e) => {
+          const nextFormat = e.target.value;
+          if (!nextFormat) return;
+          applyTextareaDetailFormat(ref, value, setValue, nextFormat);
+          e.target.value = "";
+        }}
+      >
+        <option value="">Font Size</option>
+        <option value="h2">Large</option>
+        <option value="h3">Medium</option>
+        <option value="h4">Small</option>
+        <option value="paragraph">Body</option>
+      </select>
+    </div>
+  );
+
+  const loadEvents = async () => {
+    try {
+      const res = await fetch("/api/activities/" + club.id + "/events");
+      const data = await res.json();
+      if (data.events) setClubEvents(data.events.filter(e => {
+        if (!e.date) return true;
+        const d = e.date.includes("T") ? new Date(e.date) : new Date(e.date+"T23:59:59");
+        return d >= new Date(new Date().toDateString());
+      }));
+    } catch(e) {}
+  };
+  useEffect(() => { loadEvents(); }, [club.id]);
+
+  const addEvent = async () => {
+    if (!newEvt.title) return;
+    if (isPastDateOnly(newEvt.date)) {
+      showToast("Event date cannot be in the past");
+      return;
+    }
+    try {
+      const res = await fetch("/api/activities/" + club.id + "/events", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify(newEvt)
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error || "Failed to add event");
+        return;
+      }
+      setClubEvents((data.events || []).filter(e => {
+        if (!e.date) return true;
+        const d = e.date.includes("T") ? new Date(e.date) : new Date(e.date+"T23:59:59");
+        return d >= new Date(new Date().toDateString());
+      }));
+      setNewEvt({title:"",date:"",location:"",description:"",detail_content:""});
+      showToast("Event added");
+      if (onEventUpdated) onEventUpdated();
+    } catch(e) { showToast("Failed to add event"); }
+  };
+
+  const saveEdit = async (id) => {
+    if (!editEvt.title) return;
+    if (isPastDateOnly(editEvt.date)) {
+      showToast("Event date cannot be in the past");
+      return;
+    }
+    try {
+      const res = await fetch("/api/club-events/" + id, {
+        method:"PUT", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify(editEvt)
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error || "Failed to update");
+        return;
+      }
+      setClubEvents((data.events || []).filter(e => {
+        if (!e.date) return true;
+        const d = e.date.includes("T") ? new Date(e.date) : new Date(e.date+"T23:59:59");
+        return d >= new Date(new Date().toDateString());
+      }));
+      setEditingEvtId(null);
+      showToast("Event updated");
+      if (onEventUpdated) onEventUpdated();
+    } catch(e) { showToast("Failed to update"); }
+  };
+
+  const removeEvent = async (id) => {
+    try {
+      const res = await fetch("/api/club-events/" + id, { method:"DELETE" });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error || "Failed to remove");
+        return;
+      }
+      setClubEvents((data.events || []).filter(e => {
+        if (!e.date) return true;
+        const d = e.date.includes("T") ? new Date(e.date) : new Date(e.date+"T23:59:59");
+        return d >= new Date(new Date().toDateString());
+      }));
+      showToast("Event removed");
+      if (onEventUpdated) onEventUpdated();
+    } catch(e) { showToast("Failed to remove"); }
+  };
 
   const sendEmail = async () => {
     if (!subject || !message) return;
@@ -1923,35 +2141,129 @@ const ClubPresidentCard = ({club, showToast, navigate}) => {
     }
   };
 
-  const eventTitle = club.event_title || club.eventTitle || "";
-  const eventDate = club.event_date || club.eventDate || "";
-  const eventLocation = club.event_location || club.eventLocation || "";
-  const eventSubPage = club.event_sub_page || club.eventSubPage || "";
-  const isCommunityEvent = !!club.show_as_event;
+  const [showEvents, setShowEvents] = useState(false);
+  const labelSt = {fontSize:11,fontWeight:600,color:C.textLight,textTransform:"uppercase",letterSpacing:"0.5px",display:"block",marginBottom:4};
+
+  const splitDT = (dt) => { if (!dt) return {d:"",t:""}; const p = String(dt).split("T"); return {d:p[0]||"",t:p[1]?p[1].substring(0,5):""}; };
+  const joinDT = (d,t) => d && t ? d+"T"+t : d || "";
+  const dateOnly = (dt) => splitDT(dt).d;
+  const isPastDateOnly = (dt) => {
+    const d = dateOnly(dt);
+    return !!d && d < todayISO;
+  };
 
   return (
     <div style={{border:"1px solid "+C.border,padding:16,marginBottom:12}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
         <div>
           <div style={{fontSize:14,fontWeight:600,color:C.navy}}>{club.title}</div>
-          <div style={{fontSize:11,color:C.textLight}}>{club.category}{club.meet_day || club.meetDay ? " \u00B7 " + (club.meet_day || club.meetDay) : ""}</div>
+          <div style={{fontSize:11,color:C.textLight}}>{club.category}</div>
         </div>
         <Badge color={C.gold}>President</Badge>
       </div>
+      {clubEvents.length > 0 && (
+        <div style={{marginBottom:10,display:"flex",flexDirection:"column",gap:6}}>
+          {clubEvents.map(ev => editingEvtId === ev.id ? (
+            <div key={ev.id} style={{padding:10,border:"1px solid "+C.gold,backgroundColor:C.white,display:"flex",flexDirection:"column",gap:6}}>
+              <input type="text" value={editEvt.title} onChange={e=>setEditEvt({...editEvt,title:e.target.value})} placeholder="Event name" style={inputStyle}/>
+              <div style={{display:"flex",gap:8}}>
+                <input type="date" min={todayISO} value={splitDT(editEvt.date).d} onChange={e=>setEditEvt({...editEvt,date:joinDT(e.target.value,splitDT(editEvt.date).t)})} style={{...inputStyle,flex:1}}/>
+                <input className="no-time-icon" type="time" value={splitDT(editEvt.date).t} onChange={e=>setEditEvt({...editEvt,date:joinDT(splitDT(editEvt.date).d,e.target.value)})} style={{...inputStyle,flex:1}}/>
+                <input type="text" value={editEvt.location} onChange={e=>setEditEvt({...editEvt,location:e.target.value})} placeholder="Location" style={{...inputStyle,flex:1}}/>
+              </div>
+              <div>
+                <label style={{fontSize:10,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:"0.6px",display:"block",marginBottom:4}}>Short Description</label>
+                <textarea
+                  rows={2}
+                  value={editEvt.description || ""}
+                  onChange={e=>setEditEvt({...editEvt,description:e.target.value})}
+                  placeholder="Short summary shown in cards/lists."
+                  style={{...inputStyle,resize:"vertical"}}
+                />
+              </div>
+              <div>
+                <label style={{fontSize:10,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:"0.6px",display:"block",marginBottom:4}}>Page Description</label>
+                {renderDetailToolbar(
+                  editEvtDetailRef,
+                  editEvt.detail_content || "",
+                  (nextValue) => setEditEvt(prev => ({...prev, detail_content: nextValue}))
+                )}
+                <textarea
+                  ref={editEvtDetailRef}
+                  rows={4}
+                  value={editEvt.detail_content || ""}
+                  onChange={e=>setEditEvt({...editEvt,detail_content:e.target.value})}
+                  placeholder="Full event details for Learn More page."
+                  style={{...inputStyle,marginTop:6,resize:"vertical"}}
+                />
+              </div>
+              <div style={{display:"flex",gap:6}}>
+                <Btn size="sm" onClick={()=>saveEdit(ev.id)}>Save</Btn>
+                <Btn size="sm" variant="ghost" onClick={()=>setEditingEvtId(null)}>Cancel</Btn>
+              </div>
+            </div>
+          ) : (
+            <div key={ev.id} style={{padding:"6px 10px",backgroundColor:C.gold+"12",border:"1px solid "+C.gold+"30",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div>
+                <div style={{fontSize:12,fontWeight:600,color:C.navy}}>{ev.title}</div>
+                <div style={{fontSize:11,color:C.textLight}}>
+                  {ev.date ? new Date(ev.date).toLocaleDateString("en-US",{month:"short",day:"numeric"}) : ""}{ev.location ? " \u2014 " + ev.location : ""}
+                </div>
+              </div>
+              <div style={{display:"flex",gap:6,flexShrink:0}}>
+                <span onClick={()=>{setEditingEvtId(ev.id);setEditEvt({title:ev.title,date:ev.date||"",location:ev.location||"",description:ev.description||"",detail_content:ev.detail_content||""});}} style={{cursor:"pointer",fontSize:11,color:C.goldMuted,fontWeight:500}}>Edit</span>
+                <span onClick={()=>removeEvent(ev.id)} style={{cursor:"pointer",fontSize:11,color:C.alert,fontWeight:500}}>Delete</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-        <Btn size="sm" variant={showCompose?"ghost":"secondary"} onClick={()=>setShowCompose(!showCompose)}>
+        <Btn size="sm" variant={showCompose?"ghost":"secondary"} onClick={()=>{setShowCompose(!showCompose);setShowEvents(false);}}>
           {showCompose ? "Cancel" : "Email Members"}
         </Btn>
         <Btn size="sm" variant="ghost" onClick={copyMemberEmails}>Copy Member Emails</Btn>
+        <Btn size="sm" variant={showEvents?"ghost":"secondary"} onClick={()=>{setShowEvents(!showEvents);setShowCompose(false);}}>
+          {showEvents ? "Cancel" : "Add Event"}
+        </Btn>
       </div>
-      {isCommunityEvent && (
-        <div style={{marginTop:10,padding:10,backgroundColor:C.cream,border:"1px solid "+C.border}}>
-          <div style={{fontSize:12,fontWeight:700,color:C.navy,marginBottom:4}}>{eventTitle || "Community Event"}</div>
-          <div style={{fontSize:11,color:C.textLight,marginBottom:8}}>
-            {eventDate ? new Date(eventDate).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"}) : "Date TBD"}
-            {eventLocation ? " � " + eventLocation : ""}
+      {showEvents && (
+        <div style={{marginTop:12,padding:12,backgroundColor:C.cream,border:"1px solid "+C.border}}>
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            <input type="text" value={newEvt.title} onChange={e=>setNewEvt({...newEvt,title:e.target.value})} placeholder="Event name" style={inputStyle}/>
+            <div style={{display:"flex",gap:8}}>
+              <input type="date" min={todayISO} value={splitDT(newEvt.date).d} onChange={e=>setNewEvt({...newEvt,date:joinDT(e.target.value,splitDT(newEvt.date).t)})} style={{...inputStyle,flex:1}}/>
+              <input className="no-time-icon" type="time" value={splitDT(newEvt.date).t} onChange={e=>setNewEvt({...newEvt,date:joinDT(splitDT(newEvt.date).d,e.target.value)})} style={{...inputStyle,flex:1}}/>
+              <input type="text" value={newEvt.location} onChange={e=>setNewEvt({...newEvt,location:e.target.value})} placeholder="Location" style={{...inputStyle,flex:1}}/>
+            </div>
+            <div>
+              <label style={{fontSize:10,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:"0.6px",display:"block",marginBottom:4}}>Short Description</label>
+              <textarea
+                rows={2}
+                value={newEvt.description || ""}
+                onChange={e=>setNewEvt({...newEvt,description:e.target.value})}
+                placeholder="Short summary shown in cards/lists."
+                style={{...inputStyle,resize:"vertical"}}
+              />
+            </div>
+            <div>
+              <label style={{fontSize:10,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:"0.6px",display:"block",marginBottom:4}}>Page Description</label>
+              {renderDetailToolbar(
+                newEvtDetailRef,
+                newEvt.detail_content || "",
+                (nextValue) => setNewEvt(prev => ({...prev, detail_content: nextValue}))
+              )}
+              <textarea
+                ref={newEvtDetailRef}
+                rows={4}
+                value={newEvt.detail_content || ""}
+                onChange={e=>setNewEvt({...newEvt,detail_content:e.target.value})}
+                placeholder="Full event details for Learn More page."
+                style={{...inputStyle,marginTop:6,resize:"vertical"}}
+              />
+            </div>
+            <Btn size="sm" onClick={addEvent}>Add Event</Btn>
           </div>
-          {eventSubPage && <Btn size="sm" variant="secondary" onClick={()=>navigate(eventSubPage)}>View Event Page</Btn>}
         </div>
       )}
       {memberEmails && !showCompose && (
@@ -1980,7 +2292,7 @@ const ClubPresidentCard = ({club, showToast, navigate}) => {
 };
 
 // ─── PROFILE ───
-const ProfilePage = ({showToast, selectedIndustries, setSelectedIndustries, selectedAreas, setSelectedAreas, emailAlerts, setEmailAlerts, internshipHistory, setInternshipHistory, currentUser, serverActivities, joinedClubs, setJoinedClubs, clubEmailPrefs, setClubEmailPrefs, navigate}) => {
+const ProfilePage = ({showToast, selectedIndustries, setSelectedIndustries, selectedAreas, setSelectedAreas, emailAlerts, setEmailAlerts, internshipHistory, setInternshipHistory, currentUser, serverActivities, joinedClubs, setJoinedClubs, clubEmailPrefs={}, setClubEmailPrefs, refreshActivities, allClubEvents=[], refreshClubEvents}) => {
   const [showForm, setShowForm] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -2044,41 +2356,58 @@ const ProfilePage = ({showToast, selectedIndustries, setSelectedIndustries, sele
           </div>
 
           {/* My Clubs (president) */}
-          {currentUser && serverActivities.filter(a => (a.president_email||"").toLowerCase() === currentUser.email.toLowerCase()).length > 0 && (
+          {currentUser && serverActivities.filter(a => (a.president_email||"").toLowerCase() === currentUser.email.toLowerCase() && a.status !== "pending").length > 0 && (
             <div style={{backgroundColor:C.white,border:"1px solid "+C.border,padding:24}}>
               <h3 style={{fontFamily:"Georgia, serif",fontSize:18,color:C.navy,margin:"0 0 4px"}}>My Clubs</h3>
               <p style={{fontSize:12,color:C.textLight,margin:"0 0 16px"}}>Clubs you manage as president</p>
-              {serverActivities.filter(a => (a.president_email||"").toLowerCase() === currentUser.email.toLowerCase()).map(club => (
-                <ClubPresidentCard key={club.id} club={club} showToast={showToast} navigate={navigate}/>
+              {serverActivities.filter(a => (a.president_email||"").toLowerCase() === currentUser.email.toLowerCase() && a.status !== "pending").map(club => (
+                <ClubPresidentCard key={club.id} club={club} showToast={showToast} onEventUpdated={()=>{refreshActivities();if(refreshClubEvents)refreshClubEvents();}}/>
               ))}
             </div>
           )}
 
-            {/* Clubs Joined */}
+            {/* Emails */}
             {joinedClubs.length > 0 && (
               <div style={{backgroundColor:C.white,border:"1px solid "+C.border,padding:24}}>
-                <h3 style={{fontFamily:"Georgia, serif",fontSize:18,color:C.navy,margin:"0 0 4px"}}>Clubs Joined</h3>
-                <p style={{fontSize:12,color:C.textLight,margin:"0 0 16px"}}>Clubs you've joined</p>
+                <h3 style={{fontFamily:"Georgia, serif",fontSize:18,color:C.navy,margin:"0 0 4px"}}>Emails</h3>
+                <p style={{fontSize:12,color:C.textLight,margin:"0 0 16px"}}>Joined clubs and email preferences</p>
                 <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                  {joinedClubs.map(clubId => {
-                    const club = serverActivities.find(a => a.id === clubId);
+                  {normalizeJoinedClubIds(joinedClubs).map(clubId => {
+                    const normalizedClubId = normalizeClubId(clubId);
+                    if (normalizedClubId === null) return null;
+                    const club = serverActivities.find(a => normalizeClubId(a.id) === normalizedClubId);
                     if (!club) return null;
-                    const emailKey = String(clubId);
-                    const emailEnabled = clubEmailPrefs[emailKey] !== false;
-                    const eventSubPage = club.event_sub_page || club.eventSubPage || "";
+                    const emailPrefKey = String(normalizedClubId);
+                    const emailsEnabled = typeof clubEmailPrefs[emailPrefKey] === "boolean" ? clubEmailPrefs[emailPrefKey] : true;
                     return <div key={clubId} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 14px",border:"1px solid "+C.border}}>
                       <div>
                         <div style={{fontSize:14,fontWeight:600,color:C.navy}}>{club.title}</div>
-                        <div style={{fontSize:11,color:C.textLight}}>{club.category}{club.meet_day ? " \u00B7 "+club.meet_day : ""}</div>
-                        <div style={{display:"flex",alignItems:"center",gap:8,marginTop:8}}>
-                          <div onClick={()=>setClubEmailPrefs(prev => ({ ...prev, [emailKey]: !emailEnabled }))} style={{width:32,height:18,borderRadius:9,cursor:"pointer",backgroundColor:emailEnabled?C.gold:C.border,position:"relative",transition:"background-color 0.2s ease"}}>
-                            <div style={{width:14,height:14,borderRadius:"50%",backgroundColor:C.white,position:"absolute",top:2,left:emailEnabled?16:2,transition:"left 0.2s ease",boxShadow:"0 1px 2px rgba(0,0,0,0.2)"}}/>
-                          </div>
-                          <span style={{fontSize:11,color:C.textLight}}>Receive club emails</span>
-                          {eventSubPage && <span onClick={()=>navigate(eventSubPage)} style={{fontSize:11,color:C.goldMuted,fontWeight:600,cursor:"pointer"}}>Event Page</span>}
-                        </div>
+                        <div style={{fontSize:11,color:C.textLight}}>{club.category}</div>
                       </div>
-                      <div onClick={()=>{setJoinedClubs(prev=>prev.filter(x=>x!==clubId));setClubEmailPrefs(prev=>{const next={...prev}; delete next[emailKey]; return next;});showToast("Left "+club.title);}} style={{cursor:"pointer",fontSize:11,color:C.alert,fontWeight:500}}>Leave</div>
+                      <div style={{display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+                        <label style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:C.textLight,cursor:"pointer"}}>
+                          <input
+                            type="checkbox"
+                            checked={emailsEnabled}
+                            onChange={e=>{
+                              const enabled = e.target.checked;
+                              setClubEmailPrefs(prev => ({ ...prev, [emailPrefKey]: enabled }));
+                              showToast(enabled ? ("Email updates on for " + club.title) : ("Email updates off for " + club.title));
+                            }}
+                            style={{accentColor:C.gold,cursor:"pointer"}}
+                          />
+                          Email updates
+                        </label>
+                        <div onClick={()=>{
+                          setJoinedClubs(prev=>normalizeJoinedClubIds(prev).filter(x=>x!==normalizedClubId));
+                          setClubEmailPrefs(prev => {
+                            const next = { ...prev };
+                            delete next[emailPrefKey];
+                            return next;
+                          });
+                          showToast("Left " + club.title);
+                        }} style={{cursor:"pointer",fontSize:11,color:C.alert,fontWeight:500}}>Leave</div>
+                      </div>
                     </div>;
                   }).filter(Boolean)}
                 </div>
@@ -2167,24 +2496,48 @@ const ProfilePage = ({showToast, selectedIndustries, setSelectedIndustries, sele
 };
 
 // ─── COMMUNITY ───
-const CommunityPage = ({joinedClubs, setJoinedClubs, clubEmailPrefs, setClubEmailPrefs, showToast, serverActivities, navigate, refreshActivities}) => {
+const CommunityPage = ({mode="all", joinedClubs, setJoinedClubs, clubEmailPrefs={}, setClubEmailPrefs, showToast, serverActivities, navigate, refreshActivities, serverEvents=[], allClubEvents=[]}) => {
   useEffect(() => { refreshActivities(); }, []);
-  const isJoined = (id) => joinedClubs.includes(id);
-  const emailEnabled = (id) => clubEmailPrefs[String(id)] !== false;
+  const isJoined = (id) => {
+    const clubId = normalizeClubId(id);
+    return clubId !== null && joinedClubs.includes(clubId);
+  };
+  const isClubEmailsEnabled = (id) => {
+    const clubId = normalizeClubId(id);
+    if (clubId === null) return true;
+    const pref = clubEmailPrefs[String(clubId)];
+    return typeof pref === "boolean" ? pref : true;
+  };
+  const toggleClubEmails = (id, title) => {
+    const clubId = normalizeClubId(id);
+    if (clubId === null) return;
+    const key = String(clubId);
+    const nextVal = !isClubEmailsEnabled(id);
+    setClubEmailPrefs(prev => ({ ...prev, [key]: nextVal }));
+    showToast(nextVal ? ("Email updates on for " + title) : ("Email updates off for " + title));
+  };
   const toggleJoin = (club) => {
-    const key = String(club.id);
-    if (isJoined(club.id)) {
-      setJoinedClubs(prev => prev.filter(x=>x!==club.id));
-      setClubEmailPrefs(prev => { const next = { ...prev }; delete next[key]; return next; });
+    const clubId = normalizeClubId(club.id);
+    if (clubId === null) return;
+    if (isJoined(clubId)) {
+      setJoinedClubs(prev => normalizeJoinedClubIds(prev).filter(x=>x!==clubId));
+      setClubEmailPrefs(prev => {
+        const next = { ...prev };
+        delete next[String(clubId)];
+        return next;
+      });
       showToast("Left "+club.title);
     } else {
-      setJoinedClubs(prev => [...prev, club.id]);
-      setClubEmailPrefs(prev => ({ ...prev, [key]: true }));
-      if (club.presidentEmail || club.president_email) {
-        showToast("Joined "+club.title+"! The president has been notified at "+(club.presidentEmail || club.president_email));
-      } else {
-        showToast("Joined "+club.title+"!");
-      }
+      setJoinedClubs(prev => {
+        const normalized = normalizeJoinedClubIds(prev);
+        return normalized.includes(clubId) ? normalized : [...normalized, clubId];
+      });
+      setClubEmailPrefs(prev => {
+        const key = String(clubId);
+        if (typeof prev[key] === "boolean") return prev;
+        return { ...prev, [key]: true };
+      });
+      showToast("Joined "+club.title+"!");
     }
   };
   // Merge: server activities first (source of truth), then hardcoded fallback
@@ -2199,33 +2552,88 @@ const CommunityPage = ({joinedClubs, setJoinedClubs, clubEmailPrefs, setClubEmai
     desc: a.desc || a.description || "",
     meetDay: a.meetDay || a.meet_day || "",
     presidentEmail: a.presidentEmail || a.president_email || "",
-    eventTitle: a.event_title || a.eventTitle || "",
-    eventDate: a.event_date || a.eventDate || "",
-    eventLocation: a.event_location || a.eventLocation || "",
-    eventSubPage: a.event_sub_page || a.eventSubPage || "",
   }));
+
+  const adminCommunityEvents = serverEvents
+    .filter(e => e.is_community)
+    .map(e => ({ ...e, desc: e.description || e.desc || "", source: "community" }));
+  const clubCommunityEvents = allClubEvents.map(e => {
+    const activityId = normalizeClubId(e.activity_id);
+    const club = allActivities.find(a => normalizeClubId(a.serverId || a.id) === activityId);
+    return {
+      ...e,
+      id: "club-" + e.id,
+      title: e.title || "Club Event",
+      org: club ? club.title : "Club",
+      type: "Club Event",
+      desc: e.description || "",
+      source: "club",
+      subPage: e.subPage || "",
+    };
+  });
+  const communityEvents = [...adminCommunityEvents, ...clubCommunityEvents]
+    .filter(e => e.date && new Date(e.date) >= new Date(new Date().toDateString()))
+    .sort((a,b) => new Date(a.date) - new Date(b.date));
+
+  if (mode === "events") {
+    return (
+      <div style={{padding:"32px 40px",animation:"fadeIn 0.3s ease"}}>
+        <h1 style={{fontFamily:"Georgia, serif",fontSize:26,color:C.navy,margin:"0 0 6px"}}>Community Events</h1>
+        <p style={{color:C.textLight,fontSize:13,margin:"0 0 18px"}}>Events from the community and student clubs.</p>
+        <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          {communityEvents.map(event => {
+            const eventDate = new Date(event.date).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"});
+            const shortDesc = (event.desc || "").trim();
+            const preview = shortDesc.length > 170 ? shortDesc.slice(0, 167) + "..." : shortDesc;
+            return (
+              <div key={event.id} style={{backgroundColor:C.white,border:"1px solid "+C.border,borderLeft:"3px solid "+(event.source==="club"?C.gold:C.navy),overflow:"hidden"}}>
+                <div style={{padding:"14px 20px 12px"}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:6}}>
+                    <div style={{fontSize:15,fontWeight:700,color:C.navy,fontFamily:"Georgia, serif"}}>{event.title}</div>
+                    <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                      <Badge>{event.type || (event.source==="club" ? "Club Event" : "Community Event")}</Badge>
+                      {event.org && <span style={{fontSize:11,color:C.textLight,fontWeight:500}}>{event.org}</span>}
+                    </div>
+                  </div>
+                  <p style={{fontSize:12,color:C.text,lineHeight:1.55,margin:0}}>{preview || "Event details coming soon."}</p>
+                </div>
+                <div style={{padding:"8px 20px",borderTop:"1px solid "+C.border,backgroundColor:C.cream,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                  <div style={{fontSize:11,color:C.textLight,fontWeight:600}}>{eventDate}</div>
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>
+                    {event.url && <a href={event.url} target="_blank" rel="noopener noreferrer" style={{fontSize:11,color:C.goldMuted,textDecoration:"none",fontWeight:600}}>Website</a>}
+                    {event.subPage && <span onClick={()=>navigate(event.subPage)} style={{fontSize:12,fontWeight:600,color:C.navy,cursor:"pointer"}}>View Details &rarr;</span>}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          {communityEvents.length === 0 && (
+            <div style={{backgroundColor:C.white,border:"1px solid "+C.border,padding:"18px 20px",fontSize:13,color:C.textLight}}>
+              No upcoming community events right now.
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{padding:"32px 40px",animation:"fadeIn 0.3s ease"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-        <h1 style={{fontFamily:"Georgia, serif",fontSize:26,color:C.navy,margin:0}}>Community</h1>
-      </div>
-      <p style={{color:C.textLight,fontSize:13,margin:"0 0 24px"}}>Student activities, clubs, and campus life</p>
-      <div style={{backgroundColor:C.gold+"15",border:"1px solid "+C.gold+"40",padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,marginBottom:24}}>
-        <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <span style={{fontSize:20,flexShrink:0}}>{"\u2709"}</span>
-          <div>
-            <div style={{fontSize:14,fontWeight:600,color:C.navy,marginBottom:2}}>Run a club or activity?</div>
-            <p style={{fontSize:13,color:C.text,margin:0,lineHeight:1.5}}>List it here so other students can find and join.</p>
-          </div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:16,marginBottom:16,flexWrap:"wrap"}}>
+        <div>
+          <h1 style={{fontFamily:"Georgia, serif",fontSize:26,color:C.navy,margin:0}}>Clubs & Activities</h1>
+          <p style={{color:C.textLight,fontSize:13,margin:"6px 0 0"}}>Student activities, clubs, and campus life</p>
         </div>
-        <Btn size="sm" onClick={()=>navigate("submit-activity")}>List Your Club</Btn>
+        <div style={{backgroundColor:C.gold+"15",border:"1px solid "+C.gold+"40",padding:"12px 14px",display:"flex",alignItems:"center",gap:10,minWidth:320,maxWidth:700,flex:1}}>
+          <span style={{fontSize:18,flexShrink:0}}>{"\u2709"}</span>
+          <p style={{fontSize:13,color:C.text,margin:0,lineHeight:1.5,flex:1}}>Run a club or activity? List it here so other students can find and join.</p>
+          <Btn size="sm" onClick={()=>navigate("submit-activity")}>List Your Club</Btn>
+        </div>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:16,marginBottom:24}}>
-        {allActivities.map(club => {
-          const openEventPage = !!(club.show_as_event && club.eventSubPage);
-          return (
-          <div key={club.id} onClick={openEventPage ? ()=>navigate(club.eventSubPage) : undefined} style={{backgroundColor:C.white,border:"1px solid "+C.border,overflow:"hidden",cursor:openEventPage?"pointer":"default"}}>
+
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:16}}>
+        {allActivities.map(club => (
+          <div key={club.id} style={{backgroundColor:C.white,border:"1px solid "+C.border,overflow:"hidden"}}>
             <div style={{height:8,backgroundColor:isJoined(club.id)?C.gold:C.navy}}/>
             <div style={{padding:20}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
@@ -2235,38 +2643,27 @@ const CommunityPage = ({joinedClubs, setJoinedClubs, clubEmailPrefs, setClubEmai
               <p style={{fontSize:13,color:C.textLight,lineHeight:1.5,margin:"0 0 8px"}}>{club.desc}</p>
               {club.presidentEmail && (
                 <div style={{fontSize:11,color:C.textLight,marginBottom:8}}>
-                  President: <a href={"mailto:"+club.presidentEmail} onClick={e=>e.stopPropagation()} style={{color:C.goldMuted,fontWeight:500}}>{club.presidentEmail}</a>
-                </div>
-              )}
-              {club.show_as_event && (
-                <div style={{fontSize:11,color:C.textLight,marginBottom:8,padding:"8px 10px",border:"1px solid "+C.border,backgroundColor:C.cream}}>
-                  <div style={{fontWeight:700,color:C.navy,marginBottom:2}}>{club.eventTitle || "Community Event"}</div>
-                  <div>
-                    {club.eventDate ? new Date(club.eventDate).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"}) : "Date TBD"}
-                    {club.eventLocation ? " � " + club.eventLocation : ""}
-                  </div>
-                  {club.eventSubPage && <div onClick={e=>{e.stopPropagation();navigate(club.eventSubPage);}} style={{marginTop:6,color:C.goldMuted,fontWeight:600,cursor:"pointer"}}>Learn More</div>}
+                  President: <a href={"mailto:"+club.presidentEmail} style={{color:C.goldMuted,fontWeight:500}}>{club.presidentEmail}</a>
                 </div>
               )}
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:12,borderTop:"1px solid "+C.border}}>
-                <span style={{fontSize:11,color:C.textLight}}>{club.members} member{club.members!==1?"s":""} {club.meetDay?"\u00B7 "+club.meetDay:""}</span>
+                <span style={{fontSize:11,color:C.textLight}}>{club.members} member{club.members!==1?"s":""}{club.meetDay?" \u00B7 "+club.meetDay:""}</span>
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
                   {isJoined(club.id) && (
                     <div style={{display:"flex",alignItems:"center",gap:6}}>
-                      <div onClick={e=>{e.stopPropagation();setClubEmailPrefs(prev => ({ ...prev, [String(club.id)]: !emailEnabled(club.id) }));}} style={{width:30,height:17,borderRadius:9,cursor:"pointer",backgroundColor:emailEnabled(club.id)?C.gold:C.border,position:"relative",transition:"background-color 0.2s ease"}}>
-                        <div style={{width:13,height:13,borderRadius:"50%",backgroundColor:C.white,position:"absolute",top:2,left:emailEnabled(club.id)?15:2,transition:"left 0.2s ease"}}/>
+                      <div onClick={()=>toggleClubEmails(club.id, club.title)} style={{width:30,height:17,borderRadius:9,cursor:"pointer",backgroundColor:isClubEmailsEnabled(club.id)?C.gold:C.border,position:"relative",transition:"background-color 0.2s ease"}}>
+                        <div style={{width:13,height:13,borderRadius:"50%",backgroundColor:C.white,position:"absolute",top:2,left:isClubEmailsEnabled(club.id)?15:2,transition:"left 0.2s ease"}}/>
                       </div>
                       <span style={{fontSize:10,color:C.textLight}}>Emails</span>
                     </div>
                   )}
-                  <Btn size="sm" variant={isJoined(club.id)?"primary":"secondary"} onClick={e=>{e.stopPropagation();toggleJoin(club);}}>{isJoined(club.id)?"Joined":"Join Club"}</Btn>
+                  <Btn size="sm" variant={isJoined(club.id)?"primary":"secondary"} onClick={()=>toggleJoin(club)}>{isJoined(club.id)?"Joined":"Join Club"}</Btn>
                 </div>
               </div>
             </div>
           </div>
-        );})}
+        ))}
       </div>
-
     </div>
   );
 };
@@ -2276,7 +2673,7 @@ const EventsPage = ({navigate, serverEvents=[]}) => {
   const [eventFilter, setEventFilter] = useState("All");
   // Merge server events with hardcoded fallback, server takes precedence
   const seenEvt = new Set();
-  const mergedEvents = [...serverEvents.map(e => ({...e, desc: e.description || e.desc, subPage: e.sub_page || e.subPage})), ...EVENTS].filter(e => {
+  const mergedEvents = [...serverEvents.map(e => ({...e, desc: e.description || e.desc, subPage: e.subPage || e.sub_page})), ...EVENTS].filter(e => {
     const key = e.title.toLowerCase();
     if (seenEvt.has(key)) return false;
     seenEvt.add(key);
@@ -2322,15 +2719,15 @@ const EventsPage = ({navigate, serverEvents=[]}) => {
 };
 
 // ─── FOOTER ───
-const Footer = () => (
-  <footer style={{backgroundColor:"#0e162a",padding:"40px 40px 32px",marginTop:0}}>
-    <div style={{display:"flex",justifyContent:"space-between",gap:40,marginBottom:32}}>
+const Footer = ({onInvert}) => (
+  <footer style={{backgroundColor:"#0e162a",padding:"40px 40px 32px",marginTop:"auto"}}>
+    <div style={{display:"flex",justifyContent:"space-between",gap:40}}>
       <div style={{flex:1}}>
-        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
-          <img src="/images/Home/logo.png" alt="UATX" style={{width:32,height:32,objectFit:"contain"}}/>
-          <span style={{color:C.cream,fontFamily:"Georgia, serif",fontSize:15,fontWeight:700}}>UATX Student Portal</span>
+        <div style={{display:"flex",alignItems:"center",gap:14}}>
+          <img src="/images/Home/logo.png" alt="UATX" style={{width:48,height:48,objectFit:"contain"}}/>
+          <span style={{color:C.cream,fontFamily:"Georgia, serif",fontSize:22,fontWeight:700,lineHeight:1.2}}>UATX Student Portal</span>
         </div>
-        <p style={{fontSize:12,color:C.cream+"88",lineHeight:1.6,maxWidth:280,margin:0}}>Your gateway to internships, fellowships, events, and career development resources at the University of Austin.</p>
+        <div style={{marginTop:10,fontSize:11,color:C.cream+"55"}}><span onClick={onInvert} style={{cursor:"default"}}>&copy;</span> {new Date().getFullYear()} University of Austin. All rights reserved.</div>
       </div>
       <div>
         <div style={{fontSize:11,fontWeight:700,color:C.gold,textTransform:"uppercase",letterSpacing:"1px",marginBottom:12}}>Contact</div>
@@ -2345,12 +2742,9 @@ const Footer = () => (
           <a href="https://www.uaustin.org" target="_blank" rel="noopener noreferrer" style={{fontSize:12,color:C.cream+"bb",textDecoration:"none"}}>University of Austin</a>
           <a href="https://www.linkedin.com/groups/12870638/" target="_blank" rel="noopener noreferrer" style={{fontSize:12,color:C.cream+"bb",textDecoration:"none"}}>LinkedIn Talent Network</a>
           <a href="https://www.uaustin.org/privacy-policy" target="_blank" rel="noopener noreferrer" style={{fontSize:12,color:C.cream+"bb",textDecoration:"none"}}>Privacy Policy</a>
+          <a href="https://uaustin.speakup.report/Compliance" target="_blank" rel="noopener noreferrer" style={{fontSize:12,color:C.cream+"bb",textDecoration:"none"}}>Report a Concern</a>
         </div>
       </div>
-    </div>
-    <div style={{borderTop:"1px solid "+C.cream+"22",paddingTop:16,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-      <span style={{fontSize:11,color:C.cream+"55"}}>&copy; {new Date().getFullYear()} University of Austin. All rights reserved.</span>
-      <span style={{fontSize:11,color:C.cream+"44"}}>Student Opportunity Portal v1.0</span>
     </div>
   </footer>
 );
@@ -2359,14 +2753,9 @@ const Footer = () => (
 const SignInPage = ({onSignIn}) => {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [devEmail, setDevEmail] = useState("pvasilik@student.uaustin.org");
-  const [devName, setDevName] = useState("Local Admin");
   const btnRef = useRef(null);
-  const hasGoogleClientId = !!window.__GOOGLE_CLIENT_ID;
 
   useEffect(() => {
-    if (!hasGoogleClientId) return;
-
     const initGoogle = () => {
       if (!window.google?.accounts?.id) {
         setTimeout(initGoogle, 200);
@@ -2401,31 +2790,7 @@ const SignInPage = ({onSignIn}) => {
       }
     };
     initGoogle();
-  }, [hasGoogleClientId]);
-
-  const handleDevLogin = async () => {
-    if (!devEmail.trim()) {
-      setError("Enter an email for local sign-in.");
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await api("/api/auth/dev-login", {
-        method: "POST",
-        body: JSON.stringify({ email: devEmail.trim(), name: devName.trim() || "Local Admin" }),
-      });
-      if (data.error) {
-        setError(data.error);
-        setLoading(false);
-        return;
-      }
-      onSignIn(data.user);
-    } catch (e) {
-      setError("Local sign-in failed.");
-      setLoading(false);
-    }
-  };
+  }, []);
 
   return (
     <div style={{minHeight:"100vh",background:"linear-gradient(135deg, "+C.navy+" 0%, "+C.navyDark+" 100%)",display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -2439,38 +2804,10 @@ const SignInPage = ({onSignIn}) => {
           {loading ? (
             <p style={{fontSize:13,color:C.creamDark}}>Signing in...</p>
           ) : (
-            hasGoogleClientId ? (
-              <div ref={btnRef} style={{minHeight:44}}></div>
-            ) : (
-              <div style={{width:"100%",display:"flex",flexDirection:"column",gap:10}}>
-                <input
-                  value={devEmail}
-                  onChange={e=>setDevEmail(e.target.value)}
-                  placeholder="email@student.uaustin.org"
-                  style={{width:"100%",padding:"10px 12px",backgroundColor:C.navyDark,color:C.cream,border:"1px solid "+C.navyLight,fontSize:13,fontFamily:"'Libre Franklin', sans-serif"}}
-                />
-                <input
-                  value={devName}
-                  onChange={e=>setDevName(e.target.value)}
-                  placeholder="Name"
-                  style={{width:"100%",padding:"10px 12px",backgroundColor:C.navyDark,color:C.cream,border:"1px solid "+C.navyLight,fontSize:13,fontFamily:"'Libre Franklin', sans-serif"}}
-                />
-                <button
-                  onClick={handleDevLogin}
-                  style={{width:"100%",padding:"10px 12px",backgroundColor:C.gold,color:C.navy,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'Libre Franklin', sans-serif"}}
-                >
-                  Localhost Dev Sign In
-                </button>
-              </div>
-            )
+            <div ref={btnRef} style={{minHeight:44}}></div>
           )}
           {error && <p style={{fontSize:12,color:C.alert,textAlign:"center",margin:0,maxWidth:320}}>{error}</p>}
-          <p style={{fontSize:11,color:C.creamDark,textAlign:"center",margin:"8px 0 0"}}>
-            {hasGoogleClientId
-              ? <>Sign in with your <strong>@student.uaustin.org</strong> or <strong>@uaustin.org</strong> account</>
-              : <>Google client ID is not configured locally. Use dev sign-in above.</>
-            }
-          </p>
+          <p style={{fontSize:11,color:C.creamDark,textAlign:"center",margin:"8px 0 0"}}>Sign in with your <strong>@student.uaustin.org</strong> or <strong>@uaustin.org</strong> account</p>
           <p style={{fontSize:11,color:C.creamDark,textAlign:"center",margin:0}}>Need help? Contact <a href="mailto:pvasilik@student.uaustin.org" style={{color:C.gold,fontWeight:600}}>pvasilik@student.uaustin.org</a></p>
         </div>
       </div>
@@ -2487,7 +2824,7 @@ const App = () => {
 
   // Persisted state (localStorage as fast cache, server as source of truth)
   const [savedOpps, setSavedOpps] = useState(() => load("savedOpps", []));
-  const [joinedClubs, setJoinedClubs] = useState(() => load("joinedClubs", []));
+  const [joinedClubs, setJoinedClubs] = useState(() => normalizeJoinedClubIds(load("joinedClubs", [])));
   const [clubEmailPrefs, setClubEmailPrefs] = useState(() => load("clubEmailPrefs", {}));
   const [selectedIndustries, setSelectedIndustries] = useState(() => load("industries", []));
   const [selectedAreas, setSelectedAreas] = useState(() => load("areas", []));
@@ -2496,6 +2833,10 @@ const App = () => {
   const [serverOpps, setServerOpps] = useState([]);
   const [serverActivities, setServerActivities] = useState([]);
   const [serverEvents, setServerEvents] = useState([]);
+  const [allClubEvents, setAllClubEvents] = useState([]);
+
+  // Invert colors easter egg
+  const [inverted, setInverted] = useState(false);
 
   // Toast state
   const [toasts, setToasts] = useState([]);
@@ -2515,6 +2856,7 @@ const App = () => {
         loadServerOpps();
         loadServerActivities();
         loadServerEvents();
+        loadClubEvents();
       }
       setAuthChecked(true);
     }).catch(() => setAuthChecked(true));
@@ -2529,7 +2871,11 @@ const App = () => {
         if (p.selected_areas !== undefined) { setSelectedAreas(p.selected_areas); save("areas", p.selected_areas); }
         if (p.email_alerts !== undefined) { setEmailAlerts(p.email_alerts); save("emailAlerts", p.email_alerts); }
         if (p.saved_opps !== undefined) { setSavedOpps(p.saved_opps); save("savedOpps", p.saved_opps); }
-        if (p.joined_clubs !== undefined) { setJoinedClubs(p.joined_clubs); save("joinedClubs", p.joined_clubs); }
+        if (p.joined_clubs !== undefined) {
+          const normalizedJoined = normalizeJoinedClubIds(p.joined_clubs);
+          setJoinedClubs(normalizedJoined);
+          save("joinedClubs", normalizedJoined);
+        }
         if (p.club_email_prefs !== undefined) { setClubEmailPrefs(p.club_email_prefs || {}); save("clubEmailPrefs", p.club_email_prefs || {}); }
         if (p.internship_history !== undefined) { setInternshipHistory(p.internship_history); save("history", p.internship_history); }
       }
@@ -2540,44 +2886,25 @@ const App = () => {
   const loadServerOpps = () => {
     api("/api/opportunities").then(data => {
       if (data.opportunities) {
-        const opps = data.opportunities.map((rawOpp) => {
-          const o = { ...rawOpp };
-          o.logo = normalizePublicUrl(o.logo || "", true) || null;
-          o.apply_url = normalizePublicUrl(o.apply_url || "", false) || "";
-
+        const opps = data.opportunities.map(o => {
           if (o.detail_content) {
             const pageKey = "opp-server-" + o.id;
             o.subPage = pageKey;
+            // Register dynamic detail page
             const deadlineStr = o.deadline ? new Date(o.deadline).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"}) : "Rolling";
-            const detailHtml = renderDetailMarkdown(o.detail_content);
+            const content = [];
+            content.push({p:'<strong style="color:#c9a84c">' + (o.type||"Internship") + '</strong>' + (o.location ? ' &middot; ' + o.location : '') + ' &middot; Deadline: ' + deadlineStr + (o.paid ? ' &middot; <span style="color:#4a7c59;font-weight:600">Paid</span>' : '')});
+            content.push({hr:true});
+            content.push(...parseRichDetailContent(o.detail_content));
+            if (o.apply_url) {
+              content.push({hr:true});
+              content.push({p:'<a href="' + o.apply_url + '" target="_blank" rel="noopener" style="display:inline-block;padding:10px 24px;background:#c9a84c;color:#1a2332;font-weight:700;text-decoration:none;border-radius:4px;font-size:14px;">Apply Now &rarr;</a>'});
+            }
             SUBPAGE_CONTENT[pageKey] = {
-              title: o.org + " - " + o.title,
+              title: o.org + " — " + o.title,
               backTo: "opportunities",
               backLabel: "Back to Opportunities",
-              render: () => (
-                <div>
-                  <p style={ds.p}>
-                    <strong style={{color:C.gold}}>{o.type || "Internship"}</strong>
-                    {o.location ? " - " + o.location : ""}
-                    {" - Deadline: " + deadlineStr}
-                    {o.paid ? <span style={{color:C.success,fontWeight:600}}> - Paid</span> : null}
-                  </p>
-                  <hr style={ds.hr}/>
-                  <div className="opp-detail-rich" dangerouslySetInnerHTML={{__html:detailHtml}}/>
-                  {o.apply_url ? (
-                    <p style={{...ds.p,marginTop:20}}>
-                      <a
-                        href={o.apply_url}
-                        target="_blank"
-                        rel="noopener"
-                        style={{display:"inline-block",padding:"10px 24px",background:"#c9a84c",color:"#1a2332",fontWeight:700,textDecoration:"none",borderRadius:4,fontSize:14}}
-                      >
-                        Apply Now ->
-                      </a>
-                    </p>
-                  ) : null}
-                </div>
-              ),
+              content: content,
             };
           } else {
             // Inherit subPage from hardcoded INTERNSHIPS if this opp matches one
@@ -2587,7 +2914,7 @@ const App = () => {
           }
           return o;
         });
-        setServerOpps(opps.filter(o => !isPastDeadline(o.deadline)));
+        setServerOpps(opps.filter((o) => !isOpportunityExpired(o.deadline)));
       }
     }).catch(() => {});
   };
@@ -2595,46 +2922,80 @@ const App = () => {
   // Load server activities
   const loadServerActivities = () => {
     api("/api/activities").then(data => {
-      if (data.activities) {
-        const activities = data.activities.map((raw) => {
-          const a = { ...raw };
-          a.show_as_event = !!a.show_as_event;
-          a.event_title = a.event_title || "";
-          a.event_date = a.event_date || "";
-          a.event_location = a.event_location || "";
-          a.event_description = a.event_description || a.detail_content || a.description || "";
-          if (a.show_as_event && a.event_description.trim()) {
-            const pageKey = "club-event-" + a.id;
-            a.event_sub_page = pageKey;
-            const detailHtml = renderDetailMarkdown(a.event_description);
-            SUBPAGE_CONTENT[pageKey] = {
-              title: a.event_title || (a.title + " Event"),
-              backTo: "community",
-              backLabel: "Back to Community",
-              render: () => (
-                <div>
-                  <p style={ds.p}>
-                    <strong style={{color:C.gold}}>{a.title}</strong>
-                    {a.event_date ? " - " + new Date(a.event_date).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"}) : ""}
-                    {a.event_location ? " - " + a.event_location : ""}
-                  </p>
-                  <hr style={ds.hr}/>
-                  <div className="opp-detail-rich" dangerouslySetInnerHTML={{__html:detailHtml}}/>
-                </div>
-              ),
-            };
-          }
-          return a;
-        });
-        setServerActivities(activities);
-      }
+      if (data.activities) setServerActivities(data.activities);
     }).catch(() => {});
   };
 
   // Load server events
   const loadServerEvents = () => {
     api("/api/events").then(data => {
-      if (data.events) setServerEvents(data.events);
+      if (data.events) {
+        const events = data.events.map((raw) => {
+          const e = { ...raw };
+          e.desc = e.description || e.desc || "";
+          const detailText = (e.detail_content || "").trim();
+          const pageKey = "event-server-" + e.id;
+
+          if (detailText || !e.sub_page) {
+            const content = [];
+            const dateStr = e.date ? new Date(e.date).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"}) : "Date TBD";
+            content.push({p:'<strong style="color:#c9a84c">' + (e.type || "Event") + "</strong>" + (e.org ? " &middot; " + e.org : "") + " &middot; " + dateStr});
+            content.push({hr:true});
+            const sourceText = detailText || e.desc || "";
+            content.push(...parseRichDetailContent(sourceText));
+            if (e.url) {
+              content.push({hr:true});
+              content.push({p:'<a href="' + e.url + '" target="_blank" rel="noopener" style="display:inline-block;padding:10px 24px;background:#c9a84c;color:#1a2332;font-weight:700;text-decoration:none;border-radius:4px;font-size:14px;">Visit Event Website &rarr;</a>'});
+            }
+            SUBPAGE_CONTENT[pageKey] = {
+              title: e.title,
+              backTo: "events",
+              backLabel: "Back to Programs & Travel",
+              content: content,
+            };
+            e.subPage = pageKey;
+          } else {
+            e.subPage = e.sub_page || e.subPage;
+          }
+          return e;
+        });
+        setServerEvents(events);
+      }
+    }).catch(() => {});
+  };
+
+  const loadClubEvents = () => {
+    api("/api/club-events").then(data => {
+      const evts = data.club_events || data.events || [];
+      const mapped = evts.map((raw) => {
+        const e = { ...raw };
+        const detailText = String(e.detail_content || "").trim();
+        if (detailText) {
+          const pageKey = "club-event-" + e.id;
+          const dateStr = e.date ? new Date(e.date).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"}) : "Date TBD";
+          const content = [];
+          content.push({
+            p:
+              '<strong style="color:#c9a84c">Club Event</strong>' +
+              (e.location ? " &middot; " + e.location : "") +
+              " &middot; " +
+              dateStr
+          });
+          content.push({hr:true});
+          content.push(...parseRichDetailContent(detailText));
+          SUBPAGE_CONTENT[pageKey] = {
+            title: e.title || "Club Event",
+            backTo: "community-events",
+            backLabel: "Back to Community Events",
+            content
+          };
+          e.subPage = pageKey;
+        } else {
+          e.subPage = "";
+        }
+        return e;
+      });
+      setAllClubEvents(mapped.filter(e => !e.date || new Date(e.date) >= new Date(new Date().toDateString())));
     }).catch(() => {});
   };
 
@@ -2648,15 +3009,7 @@ const App = () => {
 
   // Keep a ref to latest prefs so sync always reads fresh values
   const prefsRef = useRef({});
-  prefsRef.current = {
-    selected_industries: selectedIndustries,
-    selected_areas: selectedAreas,
-    email_alerts: emailAlerts,
-    saved_opps: savedOpps,
-    joined_clubs: joinedClubs,
-    club_email_prefs: clubEmailPrefs,
-    internship_history: internshipHistory
-  };
+  prefsRef.current = { selected_industries: selectedIndustries, selected_areas: selectedAreas, email_alerts: emailAlerts, saved_opps: savedOpps, joined_clubs: normalizeJoinedClubIds(joinedClubs), club_email_prefs: clubEmailPrefs, internship_history: internshipHistory };
 
   const syncToServer = () => {
     if (!currentUser) return;
@@ -2665,7 +3018,7 @@ const App = () => {
 
   // Auto-save effects (localStorage + server sync)
   useEffect(() => { save("savedOpps", savedOpps); syncToServer(); }, [savedOpps]);
-  useEffect(() => { save("joinedClubs", joinedClubs); syncToServer(); }, [joinedClubs]);
+  useEffect(() => { save("joinedClubs", normalizeJoinedClubIds(joinedClubs)); syncToServer(); }, [joinedClubs]);
   useEffect(() => { save("clubEmailPrefs", clubEmailPrefs); syncToServer(); }, [clubEmailPrefs]);
   useEffect(() => { save("industries", selectedIndustries); syncToServer(); }, [selectedIndustries]);
   useEffect(() => { save("areas", selectedAreas); syncToServer(); }, [selectedAreas]);
@@ -2680,6 +3033,7 @@ const App = () => {
     loadServerOpps();
     loadServerActivities();
     loadServerEvents();
+    loadClubEvents();
   };
 
   // Handle sign-out
@@ -2691,7 +3045,7 @@ const App = () => {
   };
 
   // Navigation with browser history support
-  const mainTabs = ["home","opportunities","calendar","profile","community","events"];
+  const mainTabs = ["home","opportunities","calendar","profile","community-events","clubs","events"];
   const navigateTo = (tab, sub) => {
     if (mainTabs.includes(tab)) {
       setActiveTab(tab);
@@ -2699,8 +3053,9 @@ const App = () => {
     } else {
       setSubPage(tab);
       if (tab.startsWith("event-")) setActiveTab("events");
+      else if (tab.startsWith("club-event-")) setActiveTab("community-events");
+      else if (tab === "submit-activity") setActiveTab("clubs");
       else if (tab.startsWith("opp-")) setActiveTab("opportunities");
-      else if (tab.startsWith("club-event-")) setActiveTab("community");
       else setActiveTab("home");
     }
     window.scrollTo(0, 0);
@@ -2728,19 +3083,20 @@ const App = () => {
   // Merge opportunities: server DB is source of truth, then custom user listings
   // Server opps first so admin edits take precedence over hardcoded INTERNSHIPS
   const seen = new Set();
-  const allInternships = [...serverOpps, ...INTERNSHIPS].filter(o => {
+  const allInternships = [...serverOpps, ...INTERNSHIPS].filter((o) => !isOpportunityExpired(o.deadline)).filter(o => {
     const key = (o.org + "|" + o.title).toLowerCase();
     if (seen.has(key)) return false;
     seen.add(key);
-    return !isPastDeadline(o.deadline);
+    return true;
   });
 
   const pages = {
     home: <HomePage navigate={navigate}/>,
     opportunities: <OpportunitiesPage navigate={navigate} showToast={showToast} savedOpps={savedOpps} setSavedOpps={setSavedOpps} selectedIndustries={selectedIndustries} serverOpps={serverOpps}/>,
-    calendar: <CalendarPage allInternships={allInternships} navigate={navigate}/>,
-    profile: <ProfilePage showToast={showToast} selectedIndustries={selectedIndustries} setSelectedIndustries={setSelectedIndustries} selectedAreas={selectedAreas} setSelectedAreas={setSelectedAreas} emailAlerts={emailAlerts} setEmailAlerts={setEmailAlerts} internshipHistory={internshipHistory} setInternshipHistory={setInternshipHistory} currentUser={currentUser} serverActivities={serverActivities} joinedClubs={joinedClubs} setJoinedClubs={setJoinedClubs} clubEmailPrefs={clubEmailPrefs} setClubEmailPrefs={setClubEmailPrefs} navigate={navigate}/>,
-    community: <CommunityPage joinedClubs={joinedClubs} setJoinedClubs={setJoinedClubs} clubEmailPrefs={clubEmailPrefs} setClubEmailPrefs={setClubEmailPrefs} showToast={showToast} serverActivities={serverActivities} navigate={navigate} refreshActivities={loadServerActivities}/>,
+    calendar: <CalendarPage allInternships={allInternships} navigate={navigate} serverActivities={serverActivities} allClubEvents={allClubEvents}/>,
+    profile: <ProfilePage showToast={showToast} selectedIndustries={selectedIndustries} setSelectedIndustries={setSelectedIndustries} selectedAreas={selectedAreas} setSelectedAreas={setSelectedAreas} emailAlerts={emailAlerts} setEmailAlerts={setEmailAlerts} internshipHistory={internshipHistory} setInternshipHistory={setInternshipHistory} currentUser={currentUser} serverActivities={serverActivities} joinedClubs={joinedClubs} setJoinedClubs={setJoinedClubs} clubEmailPrefs={clubEmailPrefs} setClubEmailPrefs={setClubEmailPrefs} refreshActivities={loadServerActivities} allClubEvents={allClubEvents} refreshClubEvents={loadClubEvents}/>,
+    "community-events": <CommunityPage mode="events" joinedClubs={joinedClubs} setJoinedClubs={setJoinedClubs} clubEmailPrefs={clubEmailPrefs} setClubEmailPrefs={setClubEmailPrefs} showToast={showToast} serverActivities={serverActivities} serverEvents={serverEvents} navigate={navigate} refreshActivities={loadServerActivities} allClubEvents={allClubEvents}/>,
+    clubs: <CommunityPage mode="clubs" joinedClubs={joinedClubs} setJoinedClubs={setJoinedClubs} clubEmailPrefs={clubEmailPrefs} setClubEmailPrefs={setClubEmailPrefs} showToast={showToast} serverActivities={serverActivities} serverEvents={serverEvents} navigate={navigate} refreshActivities={loadServerActivities} allClubEvents={allClubEvents}/>,
     events: <EventsPage navigate={navigate} serverEvents={serverEvents}/>,
   };
 
@@ -2754,16 +3110,16 @@ const App = () => {
   if (!currentUser) return <SignInPage onSignIn={handleSignIn}/>;
 
   return (
-    <>
+    <div style={{minHeight:"100vh", ...(inverted ? {filter:"invert(1) hue-rotate(180deg)"} : {})}}>
       <TopNav activeTab={activeTab} subPage={subPage} navigate={navigate} onSignOut={handleSignOut} currentUser={currentUser}/>
-      <div style={{marginTop:72,flex:1,display:"flex",flexDirection:"column"}}>
+      <div style={{marginTop:72,minHeight:"calc(100vh - 72px)",display:"flex",flexDirection:"column"}}>
         <div style={{flex:"1 0 auto"}}>
           {subPage ? <DetailPage subPage={subPage} navigate={navigate}/> : pages[activeTab]}
         </div>
-        <Footer/>
+        <Footer onInvert={()=>setInverted(v=>!v)}/>
       </div>
       <Toast toasts={toasts}/>
-    </>
+    </div>
   );
 };
 
@@ -2773,6 +3129,7 @@ ReactDOM.render(<App/>, document.getElementById("root"));
 const lenis = new Lenis({ duration: 0.7, easing: t => Math.min(1, 1.001 - Math.pow(2, -10 * t)) });
 function raf(time) { lenis.raf(time); requestAnimationFrame(raf); }
 requestAnimationFrame(raf);
+
 </script>
 </body>
 </html>
