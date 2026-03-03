@@ -963,6 +963,7 @@ async function saveProfileEdit(email, rosterId) {
     email_alerts: existing.email_alerts !== undefined ? existing.email_alerts : true,
     saved_opps: existing.saved_opps || [],
     joined_clubs: existing.joined_clubs || [],
+    club_email_prefs: existing.club_email_prefs || {},
     internship_history: internshipHistory
   };
 

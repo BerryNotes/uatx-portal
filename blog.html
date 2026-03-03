@@ -418,7 +418,11 @@
   }
 
   function formatDate(dateStr) {
-    const d = new Date(dateStr + 'Z');
+    const raw = String(dateStr || '').trim();
+    if (!raw) return 'Unknown date';
+    const normalized = raw.includes('T') ? raw : raw.replace(' ', 'T');
+    const d = new Date(normalized.endsWith('Z') ? normalized : normalized + 'Z');
+    if (Number.isNaN(d.getTime())) return 'Unknown date';
     return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   }
 

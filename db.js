@@ -295,15 +295,36 @@ function getPreferences(userId) {
 }
 
 function setPreferences(userId, prefs) {
+  const current = getPreferences(userId) || {
+    selected_industries: [],
+    selected_areas: [],
+    email_alerts: true,
+    saved_opps: [],
+    joined_clubs: [],
+    club_email_prefs: {},
+    internship_history: [],
+  };
+  const has = (key) => Object.prototype.hasOwnProperty.call(prefs || {}, key);
+  const toArray = (value, fallback) => (Array.isArray(value) ? value : fallback);
+  const toObject = (value, fallback) => (value && typeof value === "object" && !Array.isArray(value) ? value : fallback);
+
+  const selectedIndustries = has("selected_industries") ? toArray(prefs.selected_industries, current.selected_industries) : current.selected_industries;
+  const selectedAreas = has("selected_areas") ? toArray(prefs.selected_areas, current.selected_areas) : current.selected_areas;
+  const emailAlerts = has("email_alerts") ? !!prefs.email_alerts : !!current.email_alerts;
+  const savedOpps = has("saved_opps") ? toArray(prefs.saved_opps, current.saved_opps) : current.saved_opps;
+  const joinedClubs = has("joined_clubs") ? toArray(prefs.joined_clubs, current.joined_clubs) : current.joined_clubs;
+  const clubEmailPrefs = has("club_email_prefs") ? toObject(prefs.club_email_prefs, current.club_email_prefs) : current.club_email_prefs;
+  const internshipHistory = has("internship_history") ? toArray(prefs.internship_history, current.internship_history) : current.internship_history;
+
   prefsUpsert.run(
     userId,
-    JSON.stringify(prefs.selected_industries || []),
-    JSON.stringify(prefs.selected_areas || []),
-    prefs.email_alerts ? 1 : 0,
-    JSON.stringify(prefs.saved_opps || []),
-    JSON.stringify(prefs.joined_clubs || []),
-    JSON.stringify(prefs.club_email_prefs || {}),
-    JSON.stringify(prefs.internship_history || [])
+    JSON.stringify(selectedIndustries),
+    JSON.stringify(selectedAreas),
+    emailAlerts ? 1 : 0,
+    JSON.stringify(savedOpps),
+    JSON.stringify(joinedClubs),
+    JSON.stringify(clubEmailPrefs),
+    JSON.stringify(internshipHistory)
   );
 }
 
