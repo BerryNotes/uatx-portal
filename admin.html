@@ -539,9 +539,21 @@ function todayISO() {
   return new Date(now.getTime() - tzOffsetMs).toISOString().split("T")[0];
 }
 
+function normalizeDateOnly(value) {
+  if (!value) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+  const dateOnly = raw.split("T")[0].trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) return dateOnly;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return null;
+  const tzOffsetMs = parsed.getTimezoneOffset() * 60000;
+  return new Date(parsed.getTime() - tzOffsetMs).toISOString().split("T")[0];
+}
+
 function isPastDateOnly(value) {
-  if (!value) return false;
-  const dateOnly = String(value).split("T")[0];
+  const dateOnly = normalizeDateOnly(value);
+  if (!dateOnly) return false;
   return dateOnly < todayISO();
 }
 
@@ -1659,9 +1671,11 @@ async function deleteEventAdmin(id) {
 // ─── EXPIRED OPPORTUNITIES ───
 
 function getExpiredOpps() {
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  return lastCustomOpps.filter(o => o.deadline && new Date(o.deadline) < now);
+  const today = todayISO();
+  return lastCustomOpps.filter(o => {
+    const dateOnly = normalizeDateOnly(o.deadline);
+    return !!dateOnly && dateOnly <= today;
+  });
 }
 
 function filterExpired() {
@@ -1708,7 +1722,12 @@ function renderExpired(opps) {
 
 // ─── HELPERS ───
 function esc(str) { if (!str) return ""; const d = document.createElement("div"); d.textContent = str; return d.innerHTML; }
-function formatDate(d) { if (!d) return "—"; return new Date(d).toLocaleDateString("en-US", { month:"short", day:"numeric", year:"numeric" }); }
+function formatDate(d) {
+  if (!d) return "—";
+  const dateOnly = normalizeDateOnly(d);
+  if (!dateOnly) return String(d);
+  return new Date(dateOnly + "T00:00:00").toLocaleDateString("en-US", { month:"short", day:"numeric", year:"numeric" });
+}
 
 function toast(msg, isError) {
   const el = document.createElement("div");

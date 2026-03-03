@@ -227,17 +227,27 @@ function getTodayISODate() {
   return new Date(now.getTime() - tzOffsetMs).toISOString().split("T")[0];
 }
 
+function normalizeDateOnly(value) {
+  if (!value || typeof value !== "string") return null;
+  const raw = value.trim();
+  if (!raw) return null;
+  const dateOnly = raw.split("T")[0].trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) return dateOnly;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return null;
+  const tzOffsetMs = parsed.getTimezoneOffset() * 60000;
+  return new Date(parsed.getTime() - tzOffsetMs).toISOString().split("T")[0];
+}
+
 function isPastDateOnly(value) {
-  if (!value || typeof value !== "string") return false;
-  const dateOnly = value.trim().split("T")[0];
+  const dateOnly = normalizeDateOnly(value);
   if (!dateOnly) return false;
   return dateOnly < getTodayISODate();
 }
 
 function isOpportunityDeadlineHit(value) {
-  if (!value || typeof value !== "string") return false;
-  const dateOnly = value.trim().split("T")[0];
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) return false;
+  const dateOnly = normalizeDateOnly(value);
+  if (!dateOnly) return false;
   return dateOnly <= getTodayISODate();
 }
 
