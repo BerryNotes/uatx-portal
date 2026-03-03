@@ -63,6 +63,17 @@ const app = express();
 
 if (IS_PROD) app.set("trust proxy", 1);
 
+// Canonicalize host in production to avoid OAuth origin mismatches on www.
+if (IS_PROD) {
+  app.use((req, res, next) => {
+    const host = String(req.headers.host || "").toLowerCase();
+    if (host.startsWith("www.uaustinportal.org")) {
+      return res.redirect(301, "https://uaustinportal.org" + req.originalUrl);
+    }
+    next();
+  });
+}
+
 app.use(express.json({ limit: "100kb" }));
 app.use(express.urlencoded({ extended: false, limit: "100kb" }));
 
