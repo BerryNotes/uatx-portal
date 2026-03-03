@@ -151,7 +151,7 @@
     <button class="tab-btn" data-tab="opportunities">Opportunities</button>
     <button class="tab-btn" data-tab="community">Community</button>
     <button class="tab-btn" data-tab="events">Programs & Travel</button>
-    <button class="tab-btn" data-tab="expired">Expired Opps</button>
+    <button class="tab-btn" data-tab="expired">Expired</button>
   </div>
 
   <!-- ROSTER TAB -->
@@ -512,16 +512,20 @@
     <div class="content">
       <div class="section-header">
         <div style="display:flex;align-items:center">
-          <h2>Expired Opportunities</h2>
+          <h2 id="expired-title">Expired Opportunities</h2>
           <span class="count" id="expired-count"></span>
         </div>
       </div>
-      <p style="font-size:12px;color:#6b7280;margin-bottom:16px">Opportunities with past deadlines. Not visible to students — for admin record-keeping only.</p>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <button id="expired-view-opportunities" class="btn btn-gold" type="button" onclick="setExpiredView('opportunities')">Opportunities</button>
+        <button id="expired-view-programs" class="btn btn-outline" type="button" onclick="setExpiredView('programs')">Programs & Travel</button>
+      </div>
+      <p id="expired-note" style="font-size:12px;color:#6b7280;margin-bottom:16px">Opportunities with past deadlines. Not visible to students — for admin record-keeping only.</p>
       <div style="margin-bottom:12px">
         <input id="expired-search" placeholder="Search expired opportunities..." oninput="filterExpired()" style="width:100%;background:#111a26;color:#f5f0e8;border:1px solid #243044;padding:10px 14px;font-size:13px;font-family:inherit;border-radius:3px;outline:none">
       </div>
       <div id="expired-body"></div>
-      <div class="empty" id="expired-empty" style="display:none">No expired opportunities.</div>
+      <div class="empty" id="expired-empty" style="display:none">No expired records.</div>
     </div>
   </div>
 
@@ -648,6 +652,7 @@ async function init() {
     document.getElementById("user-info").textContent = currentUser.email;
     setEventDateMinimums();
     setCommunityCreateMode("club");
+    setExpiredView("opportunities");
     loadRoster();
     loadOpportunities();
     loadActivities();
@@ -1052,7 +1057,7 @@ async function loadOpportunities() {
   const data = await res.json();
   lastCustomOpps = data.opportunities;
   renderOpportunities(data.opportunities);
-  renderExpired(getExpiredOpps());
+  filterExpired();
 }
 
 function filterOpps() {
@@ -1192,7 +1197,7 @@ async function saveOppEdit(id) {
   editingOppId = null;
   lastCustomOpps = data.opportunities;
   renderOpportunities(data.opportunities);
-  renderExpired(getExpiredOpps());
+  filterExpired();
   toast("Opportunity updated");
 }
 
@@ -1225,7 +1230,7 @@ async function createOpp(notify) {
   document.getElementById("opp-featured").checked = false;
   lastCustomOpps = data.opportunities;
   renderOpportunities(data.opportunities);
-  renderExpired(getExpiredOpps());
+  filterExpired();
   toast(notify ? `Opportunity created, ${data.notified} student(s) notified` : "Opportunity created");
 }
 
@@ -1235,7 +1240,7 @@ async function deleteOpp(id) {
   const data = await res.json();
   lastCustomOpps = data.opportunities;
   renderOpportunities(data.opportunities);
-  renderExpired(getExpiredOpps());
+  filterExpired();
   toast("Opportunity deleted");
 }
 
@@ -1401,6 +1406,7 @@ async function loadEvents() {
   lastEvents = data.events || [];
   filterEvents();
   filterCommunityEvents();
+  filterExpired();
 }
 
 function filterEvents() {
@@ -1599,6 +1605,7 @@ async function saveEventEdit(id) {
   lastEvents = data.events || [];
   filterEvents();
   filterCommunityEvents();
+  filterExpired();
   toast("Event updated");
 }
 
@@ -1627,6 +1634,7 @@ async function createEventAdmin() {
   lastEvents = data.events || [];
   filterEvents();
   filterCommunityEvents();
+  filterExpired();
   toast("Program/travel event created");
 }
 
@@ -1656,6 +1664,7 @@ async function createCommunityEventAdmin() {
   setCommunityCreateMode("community-event");
   filterEvents();
   filterCommunityEvents();
+  filterExpired();
   toast("Community event created");
 }
 
@@ -1666,6 +1675,7 @@ async function deleteEventAdmin(id) {
   lastEvents = data.events || [];
   filterEvents();
   filterCommunityEvents();
+  filterExpired();
   toast("Event deleted");
 }
 
@@ -1679,18 +1689,64 @@ function getExpiredOpps() {
   });
 }
 
+let expiredView = "opportunities";
+
+function setExpiredView(view) {
+  expiredView = view === "programs" ? "programs" : "opportunities";
+  const oppBtn = document.getElementById("expired-view-opportunities");
+  const progBtn = document.getElementById("expired-view-programs");
+  if (oppBtn) oppBtn.className = "btn " + (expiredView === "opportunities" ? "btn-gold" : "btn-outline");
+  if (progBtn) progBtn.className = "btn " + (expiredView === "programs" ? "btn-gold" : "btn-outline");
+
+  const title = document.getElementById("expired-title");
+  const note = document.getElementById("expired-note");
+  const search = document.getElementById("expired-search");
+  const empty = document.getElementById("expired-empty");
+  if (expiredView === "programs") {
+    if (title) title.textContent = "Expired Programs & Travel";
+    if (note) note.textContent = "Programs/travel events with past dates. Not visible to students — for admin record-keeping only.";
+    if (search) search.placeholder = "Search expired programs and travel...";
+    if (empty) empty.textContent = "No expired programs and travel.";
+  } else {
+    if (title) title.textContent = "Expired Opportunities";
+    if (note) note.textContent = "Opportunities with past deadlines. Not visible to students — for admin record-keeping only.";
+    if (search) search.placeholder = "Search expired opportunities...";
+    if (empty) empty.textContent = "No expired opportunities.";
+  }
+  filterExpired();
+}
+
+function getExpiredProgramEvents() {
+  const today = todayISO();
+  return getProgramEvents(lastEvents).filter(e => {
+    const dateOnly = normalizeDateOnly(e.date);
+    return !!dateOnly && dateOnly <= today;
+  });
+}
+
 function filterExpired() {
   const q = (document.getElementById("expired-search").value || "").toLowerCase();
+  if (expiredView === "programs") {
+    let expiredPrograms = getExpiredProgramEvents();
+    if (q) {
+      expiredPrograms = expiredPrograms.filter(e =>
+        (e.title + " " + e.org + " " + e.type + " " + e.description + " " + e.url).toLowerCase().includes(q)
+      );
+    }
+    renderExpiredPrograms(expiredPrograms);
+    return;
+  }
+
   let expired = getExpiredOpps();
   if (q) {
     expired = expired.filter(o =>
       (o.org + " " + o.title + " " + o.industry + " " + o.type + " " + o.location + " " + o.description).toLowerCase().includes(q)
     );
   }
-  renderExpired(expired);
+  renderExpiredOpps(expired);
 }
 
-function renderExpired(opps) {
+function renderExpiredOpps(opps) {
   document.getElementById("expired-count").textContent = "(" + opps.length + ")";
   const body = document.getElementById("expired-body");
   const empty = document.getElementById("expired-empty");
@@ -1722,6 +1778,33 @@ function renderExpired(opps) {
 }
 
 // ─── HELPERS ───
+function renderExpiredPrograms(events) {
+  document.getElementById("expired-count").textContent = "(" + events.length + ")";
+  const body = document.getElementById("expired-body");
+  const empty = document.getElementById("expired-empty");
+  if (events.length === 0) { body.innerHTML = ""; empty.style.display = "block"; return; }
+  empty.style.display = "none";
+  body.innerHTML = events.map(e => `<div class="opp-card" style="opacity:0.75">
+    <div class="opp-card-header">
+      <div class="opp-card-info">
+        <div class="opp-card-title">${esc(e.title)}</div>
+        <div class="opp-card-org">${esc(e.org || "UATX")}</div>
+        <div class="opp-card-meta">
+          ${e.type ? '<span>' + esc(e.type) + '</span>' : ''}
+          <span style="color:#c75c3a">Expired ${formatDate(e.date)}</span>
+          ${e.url ? '<span><a href="' + attr(e.url) + '" target="_blank" style="color:#c9a84c;text-decoration:none">Link &rarr;</a></span>' : ''}
+        </div>
+        ${e.description ? '<div class="opp-card-desc">' + esc(e.description).substring(0, 200) + (e.description.length > 200 ? '...' : '') + '</div>' : ''}
+      </div>
+      ${e.img ? '<img src="' + attr(e.img) + '" style="width:48px;height:48px;border-radius:4px;object-fit:contain;background:#1a2332;flex-shrink:0" onerror="this.style.display=\'none\'">' : ''}
+    </div>
+    <div class="opp-card-actions">
+      <button class="btn btn-outline" onclick="startEventEdit(${e.id});document.querySelector('[data-tab=events]').click()">Edit</button>
+      <button class="btn btn-danger" onclick="deleteEventAdmin(${e.id})">Delete</button>
+    </div>
+  </div>`).join("");
+}
+
 function esc(str) { if (!str) return ""; const d = document.createElement("div"); d.textContent = str; return d.innerHTML; }
 function formatDate(d) {
   if (!d) return "—";

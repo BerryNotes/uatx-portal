@@ -92,6 +92,12 @@ const isOpportunityExpired = (deadline) => {
   return dateOnly <= getTodayISODate();
 };
 
+const isEventExpired = (dateValue) => {
+  const dateOnly = normalizeDateOnly(dateValue);
+  if (!dateOnly) return false;
+  return dateOnly <= getTodayISODate();
+};
+
 const formatInlineDetailMarkup = (text) => {
   if (!text) return "";
   let out = String(text);
@@ -2694,7 +2700,7 @@ const EventsPage = ({navigate, serverEvents=[]}) => {
     if (seenEvt.has(key)) return false;
     seenEvt.add(key);
     return true;
-  });
+  }).filter(e => !e.is_community && !isEventExpired(e.date));
   const types = ["All", ...Array.from(new Set(mergedEvents.map(e=>e.type)))];
   const filtered = eventFilter==="All" ? mergedEvents : mergedEvents.filter(e=>e.type===eventFilter);
 

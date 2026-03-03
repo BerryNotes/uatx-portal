@@ -251,6 +251,12 @@ function isOpportunityDeadlineHit(value) {
   return dateOnly <= getTodayISODate();
 }
 
+function isEventDateHit(value) {
+  const dateOnly = normalizeDateOnly(value);
+  if (!dateOnly) return false;
+  return dateOnly <= getTodayISODate();
+}
+
 // ─── PUBLIC CONFIG (exposes Google Client ID to frontend) ───
 
 app.get("/api/config", (req, res) => {
@@ -491,7 +497,8 @@ app.get("/api/opportunities", requireAuth, (req, res) => {
 // ─── EVENTS ROUTES ───
 
 app.get("/api/events", requireAuth, (req, res) => {
-  res.json({ events: getAllEvents() });
+  const events = getAllEvents().filter((event) => event.is_community || !isEventDateHit(event.date));
+  res.json({ events });
 });
 
 // ─── ACTIVITIES ROUTES ───
