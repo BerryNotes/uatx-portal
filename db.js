@@ -158,6 +158,7 @@ try { db.exec("ALTER TABLE activities ADD COLUMN event_location TEXT NOT NULL DE
 try { db.exec("ALTER TABLE activities ADD COLUMN event_description TEXT NOT NULL DEFAULT ''"); } catch (e) {}
 try { db.exec("ALTER TABLE events ADD COLUMN is_community INTEGER NOT NULL DEFAULT 0"); } catch (e) {}
 try { db.exec("ALTER TABLE events ADD COLUMN detail_content TEXT NOT NULL DEFAULT ''"); } catch (e) {}
+try { db.exec("ALTER TABLE club_events ADD COLUMN description TEXT NOT NULL DEFAULT ''"); } catch (e) {}
 try { db.exec("ALTER TABLE club_events ADD COLUMN detail_content TEXT NOT NULL DEFAULT ''"); } catch (e) {}
 
 // ─── ROSTER ───
