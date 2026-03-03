@@ -32,6 +32,9 @@
 <body>
 <div id="root"></div>
 <script>
+  if (window.location.hostname === "www.uaustinportal.org") {
+    window.location.replace("https://uaustinportal.org" + window.location.pathname + window.location.search + window.location.hash);
+  }
   // Fetch Google Client ID from server config
   fetch("/api/config").then(r=>r.json()).then(c=>{window.__GOOGLE_CLIENT_ID=c.googleClientId||"";}).catch(()=>{});
 </script>
@@ -2805,9 +2808,23 @@ const SignInPage = ({onSignIn}) => {
         callback: async (response) => {
           setLoading(true);
           setError(null);
+          if (!response || !response.credential) {
+            setError("Google sign-in token was blocked. Use https://uaustinportal.org (without www) and disable content/network blockers.");
+            setLoading(false);
+            return;
+          }
           try {
-            const data = await api("/api/auth/google", { method: "POST", body: JSON.stringify({ credential: response.credential }) });
-            if (data.error) { setError(data.error); setLoading(false); return; }
+            const authRes = await fetch("/api/auth/google", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ credential: response.credential }),
+            });
+            const data = await authRes.json().catch(() => ({}));
+            if (!authRes.ok) {
+              setError(data.error || ("Authentication failed (HTTP " + authRes.status + ")"));
+              setLoading(false);
+              return;
+            }
             onSignIn(data.user);
           } catch (e) {
             setError("Sign-in failed. Please try again.");
