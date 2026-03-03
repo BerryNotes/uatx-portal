@@ -1187,15 +1187,41 @@ const SUBPAGE_CONTENT = {
     render: () => {
       const inputStyle = {width:"100%",padding:"10px 12px",border:"1px solid "+C.border,fontSize:13,boxSizing:"border-box",fontFamily:"'Libre Franklin', sans-serif",backgroundColor:C.white};
       const labelStyle = {fontSize:11,fontWeight:600,color:C.textLight,textTransform:"uppercase",letterSpacing:"0.5px",display:"block",marginBottom:6};
-      const [form, setForm] = React.useState({title:"",category:"Academic",meetDay:"",desc:"",presidentEmail:""});
+      const [form, setForm] = React.useState({
+        title:"",
+        category:"Academic",
+        meetDay:"",
+        desc:"",
+        presidentEmail:"",
+        showEvent:false,
+        eventTitle:"",
+        eventDate:"",
+        eventLocation:"",
+        eventDescription:""
+      });
       const [submitted, setSubmitted] = React.useState(false);
-      const allFilled = form.title && form.category && form.meetDay && form.desc && form.presidentEmail;
+      const eventReady = !form.showEvent || (form.eventTitle && form.eventDescription);
+      const allFilled = form.title && form.category && form.meetDay && form.desc && form.presidentEmail && eventReady;
       const handleSubmit = async () => {
         if (!allFilled) return;
         try {
           await fetch("/api/activities", {
             method:"POST", headers:{"Content-Type":"application/json"},
-            body: JSON.stringify({ activity: { title:form.title, category:form.category, meet_day:form.meetDay, description:form.desc, president_email:form.presidentEmail, members:0 }})
+            body: JSON.stringify({
+              activity: {
+                title: form.title,
+                category: form.category,
+                meet_day: form.meetDay,
+                description: form.desc,
+                president_email: form.presidentEmail,
+                members: 0,
+                show_as_event: !!form.showEvent,
+                event_title: form.eventTitle,
+                event_date: form.eventDate,
+                event_location: form.eventLocation,
+                event_description: form.eventDescription
+              }
+            })
           });
         } catch(e) {}
         setSubmitted(true);
@@ -1227,6 +1253,30 @@ const SUBPAGE_CONTENT = {
           React.createElement("div", null,
             React.createElement("label", {style:labelStyle}, "Description"),
             React.createElement("textarea", {rows:3,placeholder:"What does this club do? What should members expect?",value:form.desc,onChange:e=>setForm({...form,desc:e.target.value}),style:{...inputStyle,resize:"vertical"}})
+          ),
+          React.createElement("div", {style:{display:"flex",alignItems:"center",gap:8,padding:"4px 0"}},
+            React.createElement("input", {type:"checkbox",checked:!!form.showEvent,onChange:e=>setForm({...form,showEvent:e.target.checked}),id:"submit-club-show-event"}),
+            React.createElement("label", {htmlFor:"submit-club-show-event",style:{fontSize:12,color:C.text}}, "Also list a community event for this club")
+          ),
+          form.showEvent && React.createElement(React.Fragment, null,
+            React.createElement("div", null,
+              React.createElement("label", {style:labelStyle}, "Event Title"),
+              React.createElement("input", {type:"text",placeholder:"e.g. Debate Night",value:form.eventTitle,onChange:e=>setForm({...form,eventTitle:e.target.value}),style:inputStyle})
+            ),
+            React.createElement("div", {style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}},
+              React.createElement("div", null,
+                React.createElement("label", {style:labelStyle}, "Event Date"),
+                React.createElement("input", {type:"date",value:form.eventDate,onChange:e=>setForm({...form,eventDate:e.target.value}),style:inputStyle})
+              ),
+              React.createElement("div", null,
+                React.createElement("label", {style:labelStyle}, "Event Location"),
+                React.createElement("input", {type:"text",placeholder:"e.g. Room 201",value:form.eventLocation,onChange:e=>setForm({...form,eventLocation:e.target.value}),style:inputStyle})
+              )
+            ),
+            React.createElement("div", null,
+              React.createElement("label", {style:labelStyle}, "Event Description Page Content"),
+              React.createElement("textarea", {rows:4,placeholder:"Add details shown on the event page.",value:form.eventDescription,onChange:e=>setForm({...form,eventDescription:e.target.value}),style:{...inputStyle,resize:"vertical"}})
+            )
           ),
           React.createElement("div", null,
             React.createElement("label", {style:labelStyle}, "President / Contact Email"),
@@ -1899,7 +1949,7 @@ const ClubPresidentCard = ({club, showToast, navigate}) => {
           <div style={{fontSize:12,fontWeight:700,color:C.navy,marginBottom:4}}>{eventTitle || "Community Event"}</div>
           <div style={{fontSize:11,color:C.textLight,marginBottom:8}}>
             {eventDate ? new Date(eventDate).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"}) : "Date TBD"}
-            {eventLocation ? " · " + eventLocation : ""}
+            {eventLocation ? " � " + eventLocation : ""}
           </div>
           {eventSubPage && <Btn size="sm" variant="secondary" onClick={()=>navigate(eventSubPage)}>View Event Page</Btn>}
         </div>
@@ -2172,8 +2222,10 @@ const CommunityPage = ({joinedClubs, setJoinedClubs, clubEmailPrefs, setClubEmai
         <Btn size="sm" onClick={()=>navigate("submit-activity")}>List Your Club</Btn>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:16,marginBottom:24}}>
-        {allActivities.map(club => (
-          <div key={club.id} style={{backgroundColor:C.white,border:"1px solid "+C.border,overflow:"hidden"}}>
+        {allActivities.map(club => {
+          const openEventPage = !!(club.show_as_event && club.eventSubPage);
+          return (
+          <div key={club.id} onClick={openEventPage ? ()=>navigate(club.eventSubPage) : undefined} style={{backgroundColor:C.white,border:"1px solid "+C.border,overflow:"hidden",cursor:openEventPage?"pointer":"default"}}>
             <div style={{height:8,backgroundColor:isJoined(club.id)?C.gold:C.navy}}/>
             <div style={{padding:20}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
@@ -2183,7 +2235,7 @@ const CommunityPage = ({joinedClubs, setJoinedClubs, clubEmailPrefs, setClubEmai
               <p style={{fontSize:13,color:C.textLight,lineHeight:1.5,margin:"0 0 8px"}}>{club.desc}</p>
               {club.presidentEmail && (
                 <div style={{fontSize:11,color:C.textLight,marginBottom:8}}>
-                  President: <a href={"mailto:"+club.presidentEmail} style={{color:C.goldMuted,fontWeight:500}}>{club.presidentEmail}</a>
+                  President: <a href={"mailto:"+club.presidentEmail} onClick={e=>e.stopPropagation()} style={{color:C.goldMuted,fontWeight:500}}>{club.presidentEmail}</a>
                 </div>
               )}
               {club.show_as_event && (
@@ -2191,9 +2243,9 @@ const CommunityPage = ({joinedClubs, setJoinedClubs, clubEmailPrefs, setClubEmai
                   <div style={{fontWeight:700,color:C.navy,marginBottom:2}}>{club.eventTitle || "Community Event"}</div>
                   <div>
                     {club.eventDate ? new Date(club.eventDate).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"}) : "Date TBD"}
-                    {club.eventLocation ? " · " + club.eventLocation : ""}
+                    {club.eventLocation ? " � " + club.eventLocation : ""}
                   </div>
-                  {club.eventSubPage && <div onClick={()=>navigate(club.eventSubPage)} style={{marginTop:6,color:C.goldMuted,fontWeight:600,cursor:"pointer"}}>Learn More</div>}
+                  {club.eventSubPage && <div onClick={e=>{e.stopPropagation();navigate(club.eventSubPage);}} style={{marginTop:6,color:C.goldMuted,fontWeight:600,cursor:"pointer"}}>Learn More</div>}
                 </div>
               )}
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:12,borderTop:"1px solid "+C.border}}>
@@ -2201,18 +2253,18 @@ const CommunityPage = ({joinedClubs, setJoinedClubs, clubEmailPrefs, setClubEmai
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
                   {isJoined(club.id) && (
                     <div style={{display:"flex",alignItems:"center",gap:6}}>
-                      <div onClick={()=>setClubEmailPrefs(prev => ({ ...prev, [String(club.id)]: !emailEnabled(club.id) }))} style={{width:30,height:17,borderRadius:9,cursor:"pointer",backgroundColor:emailEnabled(club.id)?C.gold:C.border,position:"relative",transition:"background-color 0.2s ease"}}>
+                      <div onClick={e=>{e.stopPropagation();setClubEmailPrefs(prev => ({ ...prev, [String(club.id)]: !emailEnabled(club.id) }));}} style={{width:30,height:17,borderRadius:9,cursor:"pointer",backgroundColor:emailEnabled(club.id)?C.gold:C.border,position:"relative",transition:"background-color 0.2s ease"}}>
                         <div style={{width:13,height:13,borderRadius:"50%",backgroundColor:C.white,position:"absolute",top:2,left:emailEnabled(club.id)?15:2,transition:"left 0.2s ease"}}/>
                       </div>
                       <span style={{fontSize:10,color:C.textLight}}>Emails</span>
                     </div>
                   )}
-                  <Btn size="sm" variant={isJoined(club.id)?"primary":"secondary"} onClick={()=>toggleJoin(club)}>{isJoined(club.id)?"Joined":"Join Club"}</Btn>
+                  <Btn size="sm" variant={isJoined(club.id)?"primary":"secondary"} onClick={e=>{e.stopPropagation();toggleJoin(club);}}>{isJoined(club.id)?"Joined":"Join Club"}</Btn>
                 </div>
               </div>
             </div>
           </div>
-        ))}
+        );})}
       </div>
 
     </div>
@@ -2550,7 +2602,7 @@ const App = () => {
           a.event_title = a.event_title || "";
           a.event_date = a.event_date || "";
           a.event_location = a.event_location || "";
-          a.event_description = a.event_description || a.detail_content || "";
+          a.event_description = a.event_description || a.detail_content || a.description || "";
           if (a.show_as_event && a.event_description.trim()) {
             const pageKey = "club-event-" + a.id;
             a.event_sub_page = pageKey;
