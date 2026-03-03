@@ -1862,7 +1862,7 @@ const OpportunitiesPage = ({navigate, showToast, savedOpps, setSavedOpps, select
 };
 
 // ─── CALENDAR ───
-const CalendarPage = ({allInternships, navigate, serverActivities=[], allClubEvents=[]}) => {
+const CalendarPage = ({allInternships, navigate, serverActivities=[], serverEvents=[], allClubEvents=[]}) => {
   const [calMonth, setCalMonth] = useState(() => new Date().getMonth());
   const [calYear, setCalYear] = useState(() => new Date().getFullYear());
 
@@ -1875,7 +1875,21 @@ const CalendarPage = ({allInternships, navigate, serverActivities=[], allClubEve
   for (let d = 1; d <= daysInMonth; d++) days.push(d);
 
   const deadlines = allInternships.map(i => ({ ...i, dateObj: getOpportunityDeadlineDate(i.deadline) })).filter(i => !!i.dateObj);
-  const events = EVENTS.map(e=>({...e,dateObj:new Date(e.date)}));
+
+  const seenEvents = new Set();
+  const events = [
+    ...serverEvents.map(e => ({ ...e, desc: e.description || e.desc || "", subPage: e.subPage || e.sub_page || "" })),
+    ...EVENTS
+  ].filter((e) => {
+    const key = ((e.title || "").trim().toLowerCase()) + "|" + (normalizeDateOnly(e.date) || "");
+    if (seenEvents.has(key)) return false;
+    seenEvents.add(key);
+    return true;
+  }).map((e) => {
+    const dateOnly = normalizeDateOnly(e.date);
+    if (!dateOnly) return null;
+    return { ...e, dateObj: new Date(dateOnly + "T00:00:00") };
+  }).filter(Boolean);
 
   const clubEvtsParsed = allClubEvents.filter(ce => ce.date).map(ce => {
     const club = serverActivities.find(a => a.id === ce.activity_id);
@@ -3149,7 +3163,7 @@ const App = () => {
   const pages = {
     home: <HomePage navigate={navigate}/>,
     opportunities: <OpportunitiesPage navigate={navigate} showToast={showToast} savedOpps={savedOpps} setSavedOpps={setSavedOpps} selectedIndustries={selectedIndustries} serverOpps={serverOpps}/>,
-    calendar: <CalendarPage allInternships={allInternships} navigate={navigate} serverActivities={serverActivities} allClubEvents={allClubEvents}/>,
+    calendar: <CalendarPage allInternships={allInternships} navigate={navigate} serverActivities={serverActivities} serverEvents={serverEvents} allClubEvents={allClubEvents}/>,
     profile: <ProfilePage showToast={showToast} selectedIndustries={selectedIndustries} setSelectedIndustries={setSelectedIndustries} selectedAreas={selectedAreas} setSelectedAreas={setSelectedAreas} emailAlerts={emailAlerts} setEmailAlerts={setEmailAlerts} internshipHistory={internshipHistory} setInternshipHistory={setInternshipHistory} currentUser={currentUser} serverActivities={serverActivities} joinedClubs={joinedClubs} setJoinedClubs={setJoinedClubs} clubEmailPrefs={clubEmailPrefs} setClubEmailPrefs={setClubEmailPrefs} refreshActivities={loadServerActivities} allClubEvents={allClubEvents} refreshClubEvents={loadClubEvents}/>,
     "community-events": <CommunityPage mode="events" joinedClubs={joinedClubs} setJoinedClubs={setJoinedClubs} clubEmailPrefs={clubEmailPrefs} setClubEmailPrefs={setClubEmailPrefs} showToast={showToast} serverActivities={serverActivities} serverEvents={serverEvents} navigate={navigate} refreshActivities={loadServerActivities} allClubEvents={allClubEvents}/>,
     clubs: <CommunityPage mode="clubs" joinedClubs={joinedClubs} setJoinedClubs={setJoinedClubs} clubEmailPrefs={clubEmailPrefs} setClubEmailPrefs={setClubEmailPrefs} showToast={showToast} serverActivities={serverActivities} serverEvents={serverEvents} navigate={navigate} refreshActivities={loadServerActivities} allClubEvents={allClubEvents}/>,
