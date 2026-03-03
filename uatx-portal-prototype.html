@@ -1865,6 +1865,7 @@ const OpportunitiesPage = ({navigate, showToast, savedOpps, setSavedOpps, select
 const CalendarPage = ({allInternships, navigate, serverActivities=[], serverEvents=[], allClubEvents=[]}) => {
   const [calMonth, setCalMonth] = useState(() => new Date().getMonth());
   const [calYear, setCalYear] = useState(() => new Date().getFullYear());
+  const [selectedDayItems, setSelectedDayItems] = useState(null);
 
   const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
   const firstDay = new Date(calYear, calMonth, 1).getDay();
@@ -1917,6 +1918,20 @@ const CalendarPage = ({allInternships, navigate, serverActivities=[], serverEven
   const prevMonth = () => { if (calMonth===0) { setCalMonth(11); setCalYear(calYear-1); } else setCalMonth(calMonth-1); };
   const nextMonth = () => { if (calMonth===11) { setCalMonth(0); setCalYear(calYear+1); } else setCalMonth(calMonth+1); };
   const goToday = () => { const n=new Date(); setCalMonth(n.getMonth()); setCalYear(n.getFullYear()); };
+  const closeDayModal = () => setSelectedDayItems(null);
+  const openDayModal = (day, items) => {
+    if (!day || !items || !items.length) return;
+    setSelectedDayItems({ day, month: calMonth, year: calYear, items });
+  };
+
+  useEffect(() => {
+    if (!selectedDayItems) return;
+    const onEsc = (e) => {
+      if (e.key === "Escape") closeDayModal();
+    };
+    window.addEventListener("keydown", onEsc);
+    return () => window.removeEventListener("keydown", onEsc);
+  }, [selectedDayItems]);
 
   // All upcoming items sorted
   const now = new Date();
@@ -1999,12 +2014,13 @@ const CalendarPage = ({allInternships, navigate, serverActivities=[], serverEven
               {days.map((day,i) => {
                 const items = getItems(day);
                 const isToday = day && calYear===now.getFullYear() && calMonth===now.getMonth() && day===now.getDate();
+                const canOpen = day && items.length>0;
                 return (
-                  <div key={i} style={{height:100,padding:"6px 8px",backgroundColor:day?(isToday?C.gold+"08":C.white):"#fafaf8",borderRight:i%7<6?"1px solid #f0ece4":"none",borderBottom:"1px solid #f0ece4",overflow:"hidden"}}>
+                  <div key={i} onClick={canOpen?()=>openDayModal(day,items):undefined} onKeyDown={canOpen?(e)=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();openDayModal(day,items);}}:undefined} role={canOpen?"button":undefined} tabIndex={canOpen?0:-1} style={{height:100,padding:"6px 8px",backgroundColor:day?(isToday?C.gold+"08":C.white):"#fafaf8",borderRight:i%7<6?"1px solid #f0ece4":"none",borderBottom:"1px solid #f0ece4",overflow:"hidden",cursor:canOpen?"pointer":"default"}}>
                     {day && <>
                       <div style={{fontSize:12,fontWeight:isToday?700:400,color:isToday?C.gold:items.length?C.navy:C.textLight,marginBottom:4,textAlign:"right"}}>{isToday ? <span style={{backgroundColor:C.gold,color:C.white,borderRadius:"50%",width:24,height:24,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:11}}>{day}</span> : day}</div>
                       {items.slice(0,3).map((item,j) => (
-                        <div key={j} onClick={item.subPage?()=>navigate(item.subPage):undefined} style={{fontSize:10,padding:"3px 6px",marginTop:2,borderRadius:4,borderLeft:"3px solid "+(item.type==="deadline"?C.alert:item.type==="club"?C.gold:C.success),backgroundColor:(item.type==="deadline"?C.alert:item.type==="club"?C.gold:C.success)+"10",color:item.type==="deadline"?C.alert:item.type==="club"?C.gold:C.success,fontWeight:600,lineHeight:1.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",cursor:item.subPage?"pointer":"default"}}>{item.label}</div>
+                        <div key={j} style={{fontSize:10,padding:"3px 6px",marginTop:2,borderRadius:4,borderLeft:"3px solid "+(item.type==="deadline"?C.alert:item.type==="club"?C.gold:C.success),backgroundColor:(item.type==="deadline"?C.alert:item.type==="club"?C.gold:C.success)+"10",color:item.type==="deadline"?C.alert:item.type==="club"?C.gold:C.success,fontWeight:600,lineHeight:1.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{item.label}</div>
                       ))}
                       {items.length>3 && <div style={{fontSize:9,color:C.textLight,marginTop:2,textAlign:"center"}}>+{items.length-3} more</div>}
                     </>}
@@ -2016,6 +2032,32 @@ const CalendarPage = ({allInternships, navigate, serverActivities=[], serverEven
 
         </div>
       </div>
+      {selectedDayItems && (
+        <div onClick={closeDayModal} style={{position:"fixed",inset:0,backgroundColor:"rgba(15,20,32,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999,padding:16}}>
+          <div onClick={(e)=>e.stopPropagation()} style={{width:"100%",maxWidth:460,backgroundColor:C.white,border:"1px solid "+C.border,borderRadius:10,boxShadow:"0 12px 36px rgba(0,0,0,0.18)",overflow:"hidden"}}>
+            <div style={{padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid "+C.border,backgroundColor:C.cream}}>
+              <div style={{fontSize:15,fontWeight:700,color:C.navy,fontFamily:"Georgia, serif"}}>
+                {new Date(selectedDayItems.year, selectedDayItems.month, selectedDayItems.day).toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric",year:"numeric"})}
+              </div>
+              <button onClick={closeDayModal} style={{border:"1px solid "+C.border,backgroundColor:C.white,color:C.textLight,cursor:"pointer",fontSize:12,fontWeight:700,padding:"4px 8px"}}>Close</button>
+            </div>
+            <div data-lenis-prevent style={{maxHeight:320,overflowY:"auto",padding:12}}>
+              {selectedDayItems.items.map((item, idx) => {
+                const color = item.type==="deadline" ? C.alert : item.type==="club" ? C.gold : C.success;
+                return (
+                  <div key={idx} onClick={item.subPage?()=>{closeDayModal();navigate(item.subPage);}:undefined} style={{padding:"10px 12px",border:"1px solid "+C.border,borderLeft:"4px solid "+color,borderRadius:6,marginBottom:8,backgroundColor:C.white,cursor:item.subPage?"pointer":"default"}}>
+                    <div style={{fontSize:11,fontWeight:700,color:color,textTransform:"uppercase",letterSpacing:"0.4px",marginBottom:4}}>
+                      {item.type==="deadline" ? "Deadline" : item.type==="club" ? "Club Event" : "Event"}
+                    </div>
+                    <div style={{fontSize:13,fontWeight:600,color:C.navy,lineHeight:1.35}}>{item.label}</div>
+                    {item.subPage && <div style={{fontSize:11,color:C.textLight,marginTop:4}}>View details</div>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
