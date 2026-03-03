@@ -63,7 +63,6 @@
     .badge-registered { color: #4a7c59; background: rgba(74,124,89,0.15); font-size: 9px; font-weight: 700; text-transform: uppercase; padding: 2px 6px; border-radius: 3px; }
     .badge-pending { color: #6b7280; background: rgba(107,114,128,0.12); font-size: 9px; font-weight: 700; text-transform: uppercase; padding: 2px 6px; border-radius: 3px; }
     .badge-paid { color: #4a7c59; font-size: 11px; font-weight: 600; }
-    .badge-featured { color: #c9a84c; font-size: 11px; font-weight: 600; }
 
     /* Buttons */
     .btn { border: none; padding: 6px 14px; border-radius: 3px; font-size: 12px; font-weight: 600; font-family: inherit; cursor: pointer; transition: opacity 0.15s; }
@@ -274,7 +273,6 @@
           <div class="field"><label>Location</label><input id="opp-location" style="width:180px"></div>
           <div class="field"><label>Deadline</label><input id="opp-deadline" type="date" style="width:160px"></div>
           <div class="check-row" style="padding-bottom:2px"><input type="checkbox" id="opp-paid"><label for="opp-paid">Paid</label></div>
-          <div class="check-row" style="padding-bottom:2px"><input type="checkbox" id="opp-featured"><label for="opp-featured">Featured</label></div>
         </div>
         <div class="field" style="margin-bottom:12px">
           <label>Description (short summary shown in list)</label>
@@ -1100,7 +1098,6 @@ function renderOpportunities(opps) {
           <div class="field"><label>Logo URL</label><input id="edit-logo" value="${attr(o.logo || '')}"></div>
           <div style="display:flex;align-items:flex-end;gap:16px;padding-bottom:6px">
             <label style="font-size:12px;color:#c4c4d4;cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" id="edit-paid" ${o.paid ? 'checked' : ''} style="accent-color:#c9a84c"> Paid</label>
-            <label style="font-size:12px;color:#c4c4d4;cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" id="edit-featured" ${o.featured ? 'checked' : ''} style="accent-color:#c9a84c"> Featured</label>
           </div>
         </div>
         <div class="opp-edit-full field">
@@ -1147,7 +1144,6 @@ function renderOpportunities(opps) {
           </div>
           <div class="opp-card-badges">
             ${o.paid ? '<span class="badge-paid">Paid</span>' : ''}
-            ${o.featured ? '<span class="badge-featured">Featured</span>' : ''}
             ${o.detail_content ? '<span style="color:#6b7280;font-size:10px">Has detail page</span>' : ''}
           </div>
           ${o.description ? '<div class="opp-card-desc">' + esc(o.description).substring(0, 200) + (o.description.length > 200 ? '...' : '') + '</div>' : ''}
@@ -1184,7 +1180,6 @@ async function saveOppEdit(id) {
     location: document.getElementById("edit-location").value.trim(),
     deadline: document.getElementById("edit-deadline").value || null,
     paid: document.getElementById("edit-paid").checked,
-    featured: document.getElementById("edit-featured").checked,
     description: document.getElementById("edit-desc").value.trim(),
     detail_content: document.getElementById("edit-detail").value.trim(),
     apply_url: document.getElementById("edit-apply-url").value.trim(),
@@ -1213,7 +1208,6 @@ async function createOpp(notify) {
     location: document.getElementById("opp-location").value.trim(),
     deadline: document.getElementById("opp-deadline").value || null,
     paid: document.getElementById("opp-paid").checked,
-    featured: document.getElementById("opp-featured").checked,
     description: document.getElementById("opp-desc").value.trim(),
     detail_content: document.getElementById("opp-detail").value.trim(),
     apply_url: document.getElementById("opp-apply-url").value.trim(),
@@ -1230,7 +1224,6 @@ async function createOpp(notify) {
   document.getElementById("opp-industry").selectedIndex = 0;
   document.getElementById("opp-type").selectedIndex = 0;
   document.getElementById("opp-paid").checked = false;
-  document.getElementById("opp-featured").checked = false;
   lastCustomOpps = data.opportunities;
   renderOpportunities(data.opportunities);
   filterExpired();
@@ -1768,7 +1761,6 @@ function renderExpiredOpps(opps) {
         </div>
         <div class="opp-card-badges">
           ${o.paid ? '<span class="badge-paid">Paid</span>' : ''}
-          ${o.featured ? '<span class="badge-featured">Featured</span>' : ''}
         </div>
         ${o.description ? '<div class="opp-card-desc">' + esc(o.description).substring(0, 200) + (o.description.length > 200 ? '...' : '') + '</div>' : ''}
       </div>

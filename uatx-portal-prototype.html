@@ -1729,7 +1729,7 @@ const OpportunitiesPage = ({navigate, showToast, savedOpps, setSavedOpps, select
 
   const submitListing = () => {
     if (!form.org || !form.title) return;
-    const newItem = {...form, featured:false, deadline:form.deadline||"2026-06-01"};
+    const newItem = {...form, deadline:form.deadline||"2026-06-01"};
     api("/api/admin/opportunities", { method: "POST", body: JSON.stringify({ opportunity: newItem }) })
       .then(() => showToast("Your listing has been submitted!"))
       .catch(() => showToast("Submission failed — you may need admin access"));
@@ -1843,7 +1843,6 @@ const OpportunitiesPage = ({navigate, showToast, savedOpps, setSavedOpps, select
                   <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
                     <span title={typeTip[item.type]||""}><Badge>{item.type}</Badge></span>
                     {item.paid && <Badge color={C.success}>Paid</Badge>}
-                    {item.featured && <Badge color={C.gold}>Featured</Badge>}
                     {item.industry && <span style={{fontSize:11,color:C.textLight,fontWeight:500}}>{item.industry}</span>}
                   </div>
                 </div>
@@ -2392,14 +2391,32 @@ const ProfilePage = ({showToast, selectedIndustries, setSelectedIndustries, sele
   const [showForm, setShowForm] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const emptyEntry = {org:"",role:"",industry:"Finance & Banking",startDate:"",endDate:"",description:"",summary:"",careerNotes:""};
+  const emptyEntry = {org:"",role:"",industry:"Finance & Banking",startDate:"",endDate:"",isCurrent:false,description:"",summary:"",careerNotes:""};
   const [entry, setEntry] = useState(emptyEntry);
 
   const toggleInd = (ind) => setSelectedIndustries(prev => prev.includes(ind) ? prev.filter(i=>i!==ind) : [...prev,ind]);
   const toggleArea = (area) => setSelectedAreas(prev => prev.includes(area) ? prev.filter(a=>a!==area) : [...prev,area]);
 
+  const formatMonthYear = (value) => {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toLocaleDateString("en-US",{month:"short",year:"numeric"});
+  };
+
   const startEdit = (h) => {
-    setEntry({org:h.org||"",role:h.role||"",industry:h.industry||"Finance & Banking",startDate:h.startDate||"",endDate:h.endDate||"",description:h.description||"",summary:h.summary||"",careerNotes:h.careerNotes||""});
+    const inferredCurrent = !!h.isCurrent || String(h.endDate || "").toLowerCase() === "present" || /(^|\W)present(\W|$)/i.test(String(h.dates || ""));
+    setEntry({
+      org:h.org||"",
+      role:h.role||"",
+      industry:h.industry||"Finance & Banking",
+      startDate:h.startDate||"",
+      endDate:inferredCurrent ? "" : (h.endDate||""),
+      isCurrent:inferredCurrent,
+      description:h.description||"",
+      summary:h.summary||"",
+      careerNotes:h.careerNotes||""
+    });
     setEditingId(h.id);
     setShowForm(true);
   };
@@ -2412,14 +2429,19 @@ const ProfilePage = ({showToast, selectedIndustries, setSelectedIndustries, sele
 
   const submitEntry = () => {
     if (!entry.org || !entry.role) return;
-    const dates = (entry.startDate && entry.endDate) ?
-      new Date(entry.startDate).toLocaleDateString("en-US",{month:"short",year:"numeric"})+" \u2013 "+new Date(entry.endDate).toLocaleDateString("en-US",{month:"short",year:"numeric"}) :
-      "Dates TBD";
+    const startLabel = formatMonthYear(entry.startDate);
+    const endLabel = entry.isCurrent ? "Present" : formatMonthYear(entry.endDate);
+    const dates = (startLabel && endLabel) ? (startLabel + " \u2013 " + endLabel) : "Dates TBD";
+    const normalizedEntry = {
+      ...entry,
+      endDate: entry.isCurrent ? "" : entry.endDate,
+      isCurrent: !!entry.isCurrent,
+    };
     if (editingId) {
-      setInternshipHistory(prev => prev.map(h => h.id === editingId ? {...entry, dates, id:editingId} : h));
+      setInternshipHistory(prev => prev.map(h => h.id === editingId ? {...normalizedEntry, dates, id:editingId} : h));
       showToast("Internship entry updated!");
     } else {
-      setInternshipHistory(prev => [{...entry, dates, id:Date.now()}, ...prev]);
+      setInternshipHistory(prev => [{...normalizedEntry, dates, id:Date.now()}, ...prev]);
       showToast("Internship entry added!");
     }
     setEntry(emptyEntry);
@@ -2532,7 +2554,6 @@ const ProfilePage = ({showToast, selectedIndustries, setSelectedIndustries, sele
                 {label:"Role Title",key:"role",placeholder:"e.g. Policy Research Intern"},
                 {label:"Industry",key:"industry",type:"select"},
                 {label:"Start Date",key:"startDate",type:"date"},
-                {label:"End Date",key:"endDate",type:"date"},
               ].map((f,i) => (
                 <div key={i}>
                   <label style={{fontSize:11,fontWeight:600,color:C.textLight,textTransform:"uppercase",letterSpacing:"0.5px",display:"block",marginBottom:4}}>{f.label}</label>
@@ -2545,6 +2566,26 @@ const ProfilePage = ({showToast, selectedIndustries, setSelectedIndustries, sele
                   )}
                 </div>
               ))}
+              <div>
+                <label style={{fontSize:11,fontWeight:600,color:C.textLight,textTransform:"uppercase",letterSpacing:"0.5px",display:"block",marginBottom:4}}>End Date</label>
+                <input
+                  type={entry.isCurrent ? "text" : "date"}
+                  placeholder={entry.isCurrent ? "Present" : ""}
+                  value={entry.isCurrent ? "Present" : entry.endDate}
+                  disabled={entry.isCurrent}
+                  onChange={e=>setEntry({...entry,endDate:e.target.value})}
+                  style={{...inputStyle,backgroundColor:entry.isCurrent?C.creamDark:C.white,color:entry.isCurrent?C.textLight:C.text}}
+                />
+                <label style={{display:"flex",alignItems:"center",gap:8,fontSize:12,color:C.textLight,marginTop:8,cursor:"pointer"}}>
+                  <input
+                    type="checkbox"
+                    checked={!!entry.isCurrent}
+                    onChange={e=>setEntry({...entry,isCurrent:e.target.checked,endDate:e.target.checked?"":entry.endDate})}
+                    style={{accentColor:C.gold,cursor:"pointer"}}
+                  />
+                  Currently in this role
+                </label>
+              </div>
               <div>
                 <label style={{fontSize:11,fontWeight:600,color:C.textLight,textTransform:"uppercase",letterSpacing:"0.5px",display:"block",marginBottom:4}}>Description / Key Takeaways</label>
                 <textarea rows={2} placeholder="What did you work on? What did you learn?" value={entry.description} onChange={e=>setEntry({...entry,description:e.target.value})} style={{...inputStyle,resize:"vertical"}}/>

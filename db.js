@@ -331,7 +331,7 @@ function setPreferences(userId, prefs) {
 // ─── OPPORTUNITIES ───
 
 const oppsAll = db.prepare(
-  "SELECT * FROM opportunities ORDER BY featured DESC, created_at DESC"
+  "SELECT * FROM opportunities ORDER BY created_at DESC"
 );
 const oppInsert = db.prepare(`
   INSERT INTO opportunities (org, title, description, industry, type, location, deadline, paid, featured, logo, detail_content, apply_url)
@@ -344,7 +344,7 @@ const oppUpdate = db.prepare(`
 `);
 
 function getAllOpportunities() {
-  return oppsAll.all().map((o) => ({ ...o, paid: !!o.paid, featured: !!o.featured }));
+  return oppsAll.all().map(({ featured, ...o }) => ({ ...o, paid: !!o.paid }));
 }
 
 function updateOpportunity(id, opp) {
@@ -352,7 +352,7 @@ function updateOpportunity(id, opp) {
     opp.org, opp.title, opp.description || "",
     opp.industry || "", opp.type || "Internship",
     opp.location || "", opp.deadline || null,
-    opp.paid ? 1 : 0, opp.featured ? 1 : 0,
+    opp.paid ? 1 : 0, 0,
     opp.logo || null, opp.detail_content || "",
     opp.apply_url || "", id
   );
@@ -363,7 +363,7 @@ function createOpportunity(opp) {
     opp.org, opp.title, opp.description || "",
     opp.industry || "", opp.type || "Internship",
     opp.location || "", opp.deadline || null,
-    opp.paid ? 1 : 0, opp.featured ? 1 : 0,
+    opp.paid ? 1 : 0, 0,
     opp.logo || null, opp.detail_content || "",
     opp.apply_url || ""
   );
@@ -694,7 +694,7 @@ function seedOpportunities(opps) {
         o.org, o.title, o.description || "",
         o.industry || "", o.type || "Internship",
         o.location || "", o.deadline || null,
-        o.paid ? 1 : 0, o.featured ? 1 : 0,
+        o.paid ? 1 : 0, 0,
         o.logo || null, o.detail_content || "",
         o.apply_url || ""
       );
