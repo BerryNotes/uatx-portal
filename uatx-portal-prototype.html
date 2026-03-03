@@ -84,6 +84,14 @@ const normalizePublicUrl = (value, allowRelative = false) => {
   return "";
 };
 
+const isPastDeadline = (deadline) => {
+  if (!deadline) return false;
+  const d = new Date(deadline);
+  if (isNaN(d.getTime())) return false;
+  d.setHours(23, 59, 59, 999);
+  return d.getTime() < Date.now();
+};
+
 const renderInlineMarkdown = (text) => {
   let html = escapeHtml(text || "");
   html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
@@ -151,7 +159,11 @@ const C = {
   success: "#4a7c59", alert: "#c75c3a",
 };
 
-const INDUSTRIES = ["Finance & Banking","Technology","Law & Policy","Government","Nonprofit","Media & Journalism","Consulting","Healthcare","Education","Energy","Real Estate","Defense & Security"];
+const INDUSTRIES = [
+  "Finance & Banking","Technology","Law & Policy","Government","Nonprofit","Media & Journalism","Consulting","Healthcare","Education","Energy","Real Estate","Defense & Security",
+  "Artificial Intelligence","Product Management","Marketing & Communications","Entrepreneurship","Manufacturing","Public Relations","Sports & Entertainment","Agriculture & Food",
+  "Environment & Sustainability","Human Resources","Sales & Business Development"
+];
 
 const AREAS_OF_INTEREST = ["Research","Policy Analysis","Journalism","Financial Modeling","Legal Research","Data Analytics","Entrepreneurship","Public Speaking","Creative Writing","International Relations","Community Organizing","Campaign Strategy","Nonprofit Management","Technology & Innovation","Education Reform"];
 
@@ -323,7 +335,7 @@ const SUBPAGE_CONTENT = {
   "event-aei": {
     title: "American Enterprise Institute",
     backTo: "events",
-    backLabel: "Back to Events & Travel",
+    backLabel: "Back to Programs & Travel",
     content: [
       {p:'<a href="https://www.aei.org/shp/" target="_blank" style="color:#a08839;font-size:13px;font-weight:500">\u2197 Visit AEI Summer Honors Program</a>'},
       {h2:"About AEI"},
@@ -384,7 +396,7 @@ const SUBPAGE_CONTENT = {
   "event-aha": {
     title: "AHA Foundation \u2014 If Not Now Fellowship",
     backTo: "events",
-    backLabel: "Back to Events & Travel",
+    backLabel: "Back to Programs & Travel",
     content: [
       {p:'<a href="https://www.theahafoundation.org/if-not-now-fellowship/" target="_blank" style="color:#a08839;font-size:13px;font-weight:500">\u2197 Visit AHA Foundation Website</a>'},
       {h2:"If Not Now Fellowship"},
@@ -416,7 +428,7 @@ const SUBPAGE_CONTENT = {
   "event-austin-institute": {
     title: "Austin Institute \u2014 The Student Forum",
     backTo: "events",
-    backLabel: "Back to Events & Travel",
+    backLabel: "Back to Programs & Travel",
     content: [
       {p:'<a href="https://www.austin-institute.org/" target="_blank" style="color:#a08839;font-size:13px;font-weight:500">\u2197 Visit Austin Institute Website</a>'},
       {h2:'The Student Forum \u2014 "Religion, Science & the State"'},
@@ -433,7 +445,7 @@ const SUBPAGE_CONTENT = {
   "event-forge": {
     title: "Coign & Forge \u2014 Forge Leadership Summit",
     backTo: "events",
-    backLabel: "Back to Events & Travel",
+    backLabel: "Back to Programs & Travel",
     content: [
       {p:'<a href="https://forgeleadership.org/" target="_blank" style="color:#a08839;font-size:13px;font-weight:500">\u2197 Visit Forge Leadership Institute</a>'},
       {h2:"Win an All-Expenses-Paid Trip to a 2026 Forge Leadership Summit"},
@@ -467,7 +479,7 @@ const SUBPAGE_CONTENT = {
   "event-pepperdine": {
     title: "Pepperdine School of Public Policy",
     backTo: "events",
-    backLabel: "Back to Events & Travel",
+    backLabel: "Back to Programs & Travel",
     content: [
       {p:'<a href="https://publicpolicy.pepperdine.edu/" target="_blank" style="color:#a08839;font-size:13px;font-weight:500">\u2197 Visit Pepperdine School of Public Policy</a>'},
       {h2:"Multiple Programs"},
@@ -484,7 +496,7 @@ const SUBPAGE_CONTENT = {
   "event-reagan": {
     title: "Ronald Reagan Institute",
     backTo: "events",
-    backLabel: "Back to Events & Travel",
+    backLabel: "Back to Programs & Travel",
     content: [
       {p:'<a href="https://www.reaganfoundation.org/reagan-institute/" target="_blank" style="color:#a08839;font-size:13px;font-weight:500">\u2197 Visit Ronald Reagan Institute</a>'},
       {h2:"About the Ronald Reagan Institute"},
@@ -505,7 +517,7 @@ const SUBPAGE_CONTENT = {
   "event-israel": {
     title: "Study Abroad in Israel",
     backTo: "events",
-    backLabel: "Back to Events & Travel",
+    backLabel: "Back to Programs & Travel",
     content: [
       {p:'<a href="https://herutna.org/" target="_blank" style="color:#a08839;font-size:13px;font-weight:500">\u2197 Visit Herut North America</a>'},
       {h2:"Study Abroad in Israel"},
@@ -529,7 +541,7 @@ const SUBPAGE_CONTENT = {
   "event-txse": {
     title: "Texas Stock Exchange \u2014 Student Visit",
     backTo: "events",
-    backLabel: "Back to Events & Travel",
+    backLabel: "Back to Programs & Travel",
     content: [
       {p:'<a href="https://www.txse.com/" target="_blank" style="color:#a08839;font-size:13px;font-weight:500">\u2197 Visit Texas Stock Exchange Website</a>'},
       {h2:"Visit the Texas Stock Exchange"},
@@ -1281,7 +1293,7 @@ const TopNav = ({activeTab, subPage, navigate, onSignOut, currentUser}) => {
     {id:"calendar",label:"Calendar"},
     {id:"profile",label:"My Profile"},
     {id:"community",label:"Community"},
-    {id:"events",label:"Events & Travel",hasDropdown:true,hideArrow:true},
+    {id:"events",label:"Programs & Travel",hasDropdown:true,hideArrow:true},
   ];
 
   const homeSubItems = [
@@ -1443,7 +1455,7 @@ const HomePage = ({navigate}) => {
           <p style={{color:C.cream+"aa",fontSize:15,maxWidth:560,marginTop:12,lineHeight:1.6}}>Your home base for discovering internships, fellowships, and career opportunities curated by the UATX Talent Network.</p>
           <div style={{display:"flex",gap:12,marginTop:24}}>
             <Btn onClick={()=>navigate("opportunities")}>Browse Opportunities</Btn>
-            <Btn variant="secondary" onClick={()=>navigate("events")}>Events & Travel</Btn>
+            <Btn variant="secondary" onClick={()=>navigate("events")}>Programs & Travel</Btn>
           </div>
         </div>
         <div style={{position:"absolute",bottom:24,left:"50%",transform:"translateX(-50%)",display:"flex",flexDirection:"column",alignItems:"center",gap:4,opacity:0.6}}>
@@ -1508,7 +1520,7 @@ const OpportunitiesPage = ({navigate, showToast, savedOpps, setSavedOpps, select
   const allItemsRaw = [...serverOpps, ...INTERNSHIPS].map(item => ({
     ...item,
     logo: normalizePublicUrl(item.logo || "", true) || null,
-  }));
+  })).filter(item => !isPastDeadline(item.deadline));
   const seenKeys = new Set();
   const allItems = allItemsRaw.filter(o => {
     const key = (o.org + "|" + o.title).toLowerCase();
@@ -1525,7 +1537,11 @@ const OpportunitiesPage = ({navigate, showToast, savedOpps, setSavedOpps, select
     const mt = filterType==="All" || i.type===filterType;
     return ms && mi && mt;
   }).sort((a,b) => {
-    if (sortBy==="deadline") return new Date(a.deadline) - new Date(b.deadline);
+    if (sortBy==="deadline") {
+      const ad = a.deadline ? new Date(a.deadline).getTime() : Number.MAX_SAFE_INTEGER;
+      const bd = b.deadline ? new Date(b.deadline).getTime() : Number.MAX_SAFE_INTEGER;
+      return ad - bd;
+    }
     if (sortBy==="org") return a.org.localeCompare(b.org);
     if (sortBy==="title") return a.title.localeCompare(b.title);
     if (sortBy==="type") return a.type.localeCompare(b.type);
@@ -1662,7 +1678,9 @@ const OpportunitiesPage = ({navigate, showToast, savedOpps, setSavedOpps, select
                   </div>
                 </div>
                 <div style={{padding:"12px 28px",borderTop:"1px solid "+C.border,backgroundColor:C.cream,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                  <div style={{fontSize:12,color:C.alert,fontWeight:600}}>Deadline: {new Date(item.deadline).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"})}</div>
+                  <div style={{fontSize:12,color:C.alert,fontWeight:600}}>
+                    Deadline: {item.deadline ? new Date(item.deadline).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"}) : "Rolling"}
+                  </div>
                   {item.subPage && <span style={{fontSize:12,fontWeight:600,color:C.navy}}>View Details &rarr;</span>}
                 </div>
               </div>
@@ -1807,7 +1825,7 @@ const CalendarPage = ({allInternships, navigate}) => {
 };
 
 // ─── CLUB PRESIDENT CARD ───
-const ClubPresidentCard = ({club, showToast}) => {
+const ClubPresidentCard = ({club, showToast, navigate}) => {
   const [showCompose, setShowCompose] = useState(false);
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
@@ -1855,6 +1873,12 @@ const ClubPresidentCard = ({club, showToast}) => {
     }
   };
 
+  const eventTitle = club.event_title || club.eventTitle || "";
+  const eventDate = club.event_date || club.eventDate || "";
+  const eventLocation = club.event_location || club.eventLocation || "";
+  const eventSubPage = club.event_sub_page || club.eventSubPage || "";
+  const isCommunityEvent = !!club.show_as_event;
+
   return (
     <div style={{border:"1px solid "+C.border,padding:16,marginBottom:12}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
@@ -1870,6 +1894,16 @@ const ClubPresidentCard = ({club, showToast}) => {
         </Btn>
         <Btn size="sm" variant="ghost" onClick={copyMemberEmails}>Copy Member Emails</Btn>
       </div>
+      {isCommunityEvent && (
+        <div style={{marginTop:10,padding:10,backgroundColor:C.cream,border:"1px solid "+C.border}}>
+          <div style={{fontSize:12,fontWeight:700,color:C.navy,marginBottom:4}}>{eventTitle || "Community Event"}</div>
+          <div style={{fontSize:11,color:C.textLight,marginBottom:8}}>
+            {eventDate ? new Date(eventDate).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"}) : "Date TBD"}
+            {eventLocation ? " · " + eventLocation : ""}
+          </div>
+          {eventSubPage && <Btn size="sm" variant="secondary" onClick={()=>navigate(eventSubPage)}>View Event Page</Btn>}
+        </div>
+      )}
       {memberEmails && !showCompose && (
         <div style={{marginTop:10,padding:10,backgroundColor:C.cream,border:"1px solid "+C.border,fontSize:12,color:C.text,fontFamily:"monospace",wordBreak:"break-all",lineHeight:1.6}}>
           {memberEmails.map(m => m.email).join(", ")}
@@ -1896,7 +1930,7 @@ const ClubPresidentCard = ({club, showToast}) => {
 };
 
 // ─── PROFILE ───
-const ProfilePage = ({showToast, selectedIndustries, setSelectedIndustries, selectedAreas, setSelectedAreas, emailAlerts, setEmailAlerts, internshipHistory, setInternshipHistory, currentUser, serverActivities, joinedClubs, setJoinedClubs}) => {
+const ProfilePage = ({showToast, selectedIndustries, setSelectedIndustries, selectedAreas, setSelectedAreas, emailAlerts, setEmailAlerts, internshipHistory, setInternshipHistory, currentUser, serverActivities, joinedClubs, setJoinedClubs, clubEmailPrefs, setClubEmailPrefs, navigate}) => {
   const [showForm, setShowForm] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -1965,7 +1999,7 @@ const ProfilePage = ({showToast, selectedIndustries, setSelectedIndustries, sele
               <h3 style={{fontFamily:"Georgia, serif",fontSize:18,color:C.navy,margin:"0 0 4px"}}>My Clubs</h3>
               <p style={{fontSize:12,color:C.textLight,margin:"0 0 16px"}}>Clubs you manage as president</p>
               {serverActivities.filter(a => (a.president_email||"").toLowerCase() === currentUser.email.toLowerCase()).map(club => (
-                <ClubPresidentCard key={club.id} club={club} showToast={showToast}/>
+                <ClubPresidentCard key={club.id} club={club} showToast={showToast} navigate={navigate}/>
               ))}
             </div>
           )}
@@ -1974,17 +2008,27 @@ const ProfilePage = ({showToast, selectedIndustries, setSelectedIndustries, sele
             {joinedClubs.length > 0 && (
               <div style={{backgroundColor:C.white,border:"1px solid "+C.border,padding:24}}>
                 <h3 style={{fontFamily:"Georgia, serif",fontSize:18,color:C.navy,margin:"0 0 4px"}}>Clubs Joined</h3>
-                <p style={{fontSize:12,color:C.textLight,margin:"0 0 16px"}}>Email lists you've joined</p>
+                <p style={{fontSize:12,color:C.textLight,margin:"0 0 16px"}}>Clubs you've joined</p>
                 <div style={{display:"flex",flexDirection:"column",gap:8}}>
                   {joinedClubs.map(clubId => {
                     const club = serverActivities.find(a => a.id === clubId);
                     if (!club) return null;
+                    const emailKey = String(clubId);
+                    const emailEnabled = clubEmailPrefs[emailKey] !== false;
+                    const eventSubPage = club.event_sub_page || club.eventSubPage || "";
                     return <div key={clubId} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 14px",border:"1px solid "+C.border}}>
                       <div>
                         <div style={{fontSize:14,fontWeight:600,color:C.navy}}>{club.title}</div>
                         <div style={{fontSize:11,color:C.textLight}}>{club.category}{club.meet_day ? " \u00B7 "+club.meet_day : ""}</div>
+                        <div style={{display:"flex",alignItems:"center",gap:8,marginTop:8}}>
+                          <div onClick={()=>setClubEmailPrefs(prev => ({ ...prev, [emailKey]: !emailEnabled }))} style={{width:32,height:18,borderRadius:9,cursor:"pointer",backgroundColor:emailEnabled?C.gold:C.border,position:"relative",transition:"background-color 0.2s ease"}}>
+                            <div style={{width:14,height:14,borderRadius:"50%",backgroundColor:C.white,position:"absolute",top:2,left:emailEnabled?16:2,transition:"left 0.2s ease",boxShadow:"0 1px 2px rgba(0,0,0,0.2)"}}/>
+                          </div>
+                          <span style={{fontSize:11,color:C.textLight}}>Receive club emails</span>
+                          {eventSubPage && <span onClick={()=>navigate(eventSubPage)} style={{fontSize:11,color:C.goldMuted,fontWeight:600,cursor:"pointer"}}>Event Page</span>}
+                        </div>
                       </div>
-                      <div onClick={()=>{setJoinedClubs(prev=>prev.filter(x=>x!==clubId));showToast("Left "+club.title);}} style={{cursor:"pointer",fontSize:11,color:C.alert,fontWeight:500}}>Leave</div>
+                      <div onClick={()=>{setJoinedClubs(prev=>prev.filter(x=>x!==clubId));setClubEmailPrefs(prev=>{const next={...prev}; delete next[emailKey]; return next;});showToast("Left "+club.title);}} style={{cursor:"pointer",fontSize:11,color:C.alert,fontWeight:500}}>Leave</div>
                     </div>;
                   }).filter(Boolean)}
                 </div>
@@ -2073,15 +2117,19 @@ const ProfilePage = ({showToast, selectedIndustries, setSelectedIndustries, sele
 };
 
 // ─── COMMUNITY ───
-const CommunityPage = ({joinedClubs, setJoinedClubs, showToast, serverActivities, navigate, refreshActivities}) => {
+const CommunityPage = ({joinedClubs, setJoinedClubs, clubEmailPrefs, setClubEmailPrefs, showToast, serverActivities, navigate, refreshActivities}) => {
   useEffect(() => { refreshActivities(); }, []);
   const isJoined = (id) => joinedClubs.includes(id);
+  const emailEnabled = (id) => clubEmailPrefs[String(id)] !== false;
   const toggleJoin = (club) => {
+    const key = String(club.id);
     if (isJoined(club.id)) {
       setJoinedClubs(prev => prev.filter(x=>x!==club.id));
+      setClubEmailPrefs(prev => { const next = { ...prev }; delete next[key]; return next; });
       showToast("Left "+club.title);
     } else {
       setJoinedClubs(prev => [...prev, club.id]);
+      setClubEmailPrefs(prev => ({ ...prev, [key]: true }));
       if (club.presidentEmail || club.president_email) {
         showToast("Joined "+club.title+"! The president has been notified at "+(club.presidentEmail || club.president_email));
       } else {
@@ -2101,6 +2149,10 @@ const CommunityPage = ({joinedClubs, setJoinedClubs, showToast, serverActivities
     desc: a.desc || a.description || "",
     meetDay: a.meetDay || a.meet_day || "",
     presidentEmail: a.presidentEmail || a.president_email || "",
+    eventTitle: a.event_title || a.eventTitle || "",
+    eventDate: a.event_date || a.eventDate || "",
+    eventLocation: a.event_location || a.eventLocation || "",
+    eventSubPage: a.event_sub_page || a.eventSubPage || "",
   }));
 
   return (
@@ -2134,9 +2186,29 @@ const CommunityPage = ({joinedClubs, setJoinedClubs, showToast, serverActivities
                   President: <a href={"mailto:"+club.presidentEmail} style={{color:C.goldMuted,fontWeight:500}}>{club.presidentEmail}</a>
                 </div>
               )}
+              {club.show_as_event && (
+                <div style={{fontSize:11,color:C.textLight,marginBottom:8,padding:"8px 10px",border:"1px solid "+C.border,backgroundColor:C.cream}}>
+                  <div style={{fontWeight:700,color:C.navy,marginBottom:2}}>{club.eventTitle || "Community Event"}</div>
+                  <div>
+                    {club.eventDate ? new Date(club.eventDate).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"}) : "Date TBD"}
+                    {club.eventLocation ? " · " + club.eventLocation : ""}
+                  </div>
+                  {club.eventSubPage && <div onClick={()=>navigate(club.eventSubPage)} style={{marginTop:6,color:C.goldMuted,fontWeight:600,cursor:"pointer"}}>Learn More</div>}
+                </div>
+              )}
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:12,borderTop:"1px solid "+C.border}}>
                 <span style={{fontSize:11,color:C.textLight}}>{club.members} member{club.members!==1?"s":""} {club.meetDay?"\u00B7 "+club.meetDay:""}</span>
-                <Btn size="sm" variant={isJoined(club.id)?"primary":"secondary"} onClick={()=>toggleJoin(club)}>{isJoined(club.id)?"On Email List":"Join Email List"}</Btn>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  {isJoined(club.id) && (
+                    <div style={{display:"flex",alignItems:"center",gap:6}}>
+                      <div onClick={()=>setClubEmailPrefs(prev => ({ ...prev, [String(club.id)]: !emailEnabled(club.id) }))} style={{width:30,height:17,borderRadius:9,cursor:"pointer",backgroundColor:emailEnabled(club.id)?C.gold:C.border,position:"relative",transition:"background-color 0.2s ease"}}>
+                        <div style={{width:13,height:13,borderRadius:"50%",backgroundColor:C.white,position:"absolute",top:2,left:emailEnabled(club.id)?15:2,transition:"left 0.2s ease"}}/>
+                      </div>
+                      <span style={{fontSize:10,color:C.textLight}}>Emails</span>
+                    </div>
+                  )}
+                  <Btn size="sm" variant={isJoined(club.id)?"primary":"secondary"} onClick={()=>toggleJoin(club)}>{isJoined(club.id)?"Joined":"Join Club"}</Btn>
+                </div>
               </div>
             </div>
           </div>
@@ -2163,7 +2235,7 @@ const EventsPage = ({navigate, serverEvents=[]}) => {
 
   return (
     <div style={{padding:"32px 40px",animation:"fadeIn 0.3s ease"}}>
-      <h1 style={{fontFamily:"Georgia, serif",fontSize:26,color:C.navy,margin:"0 0 8px"}}>UATX Sponsored Events & Travel</h1>
+      <h1 style={{fontFamily:"Georgia, serif",fontSize:26,color:C.navy,margin:"0 0 8px"}}>UATX Sponsored Programs & Travel</h1>
       <p style={{color:C.textLight,fontSize:13,margin:"0 0 24px"}}>Conferences, study abroad, and travel programs sponsored by the university</p>
       <div style={{display:"flex",gap:8,marginBottom:24,flexWrap:"wrap"}}>
         {types.map(t => (
@@ -2364,6 +2436,7 @@ const App = () => {
   // Persisted state (localStorage as fast cache, server as source of truth)
   const [savedOpps, setSavedOpps] = useState(() => load("savedOpps", []));
   const [joinedClubs, setJoinedClubs] = useState(() => load("joinedClubs", []));
+  const [clubEmailPrefs, setClubEmailPrefs] = useState(() => load("clubEmailPrefs", {}));
   const [selectedIndustries, setSelectedIndustries] = useState(() => load("industries", []));
   const [selectedAreas, setSelectedAreas] = useState(() => load("areas", []));
   const [emailAlerts, setEmailAlerts] = useState(() => load("emailAlerts", true));
@@ -2405,6 +2478,7 @@ const App = () => {
         if (p.email_alerts !== undefined) { setEmailAlerts(p.email_alerts); save("emailAlerts", p.email_alerts); }
         if (p.saved_opps !== undefined) { setSavedOpps(p.saved_opps); save("savedOpps", p.saved_opps); }
         if (p.joined_clubs !== undefined) { setJoinedClubs(p.joined_clubs); save("joinedClubs", p.joined_clubs); }
+        if (p.club_email_prefs !== undefined) { setClubEmailPrefs(p.club_email_prefs || {}); save("clubEmailPrefs", p.club_email_prefs || {}); }
         if (p.internship_history !== undefined) { setInternshipHistory(p.internship_history); save("history", p.internship_history); }
       }
     }).catch(() => {});
@@ -2461,7 +2535,7 @@ const App = () => {
           }
           return o;
         });
-        setServerOpps(opps);
+        setServerOpps(opps.filter(o => !isPastDeadline(o.deadline)));
       }
     }).catch(() => {});
   };
@@ -2469,7 +2543,39 @@ const App = () => {
   // Load server activities
   const loadServerActivities = () => {
     api("/api/activities").then(data => {
-      if (data.activities) setServerActivities(data.activities);
+      if (data.activities) {
+        const activities = data.activities.map((raw) => {
+          const a = { ...raw };
+          a.show_as_event = !!a.show_as_event;
+          a.event_title = a.event_title || "";
+          a.event_date = a.event_date || "";
+          a.event_location = a.event_location || "";
+          a.event_description = a.event_description || a.detail_content || "";
+          if (a.show_as_event && a.event_description.trim()) {
+            const pageKey = "club-event-" + a.id;
+            a.event_sub_page = pageKey;
+            const detailHtml = renderDetailMarkdown(a.event_description);
+            SUBPAGE_CONTENT[pageKey] = {
+              title: a.event_title || (a.title + " Event"),
+              backTo: "community",
+              backLabel: "Back to Community",
+              render: () => (
+                <div>
+                  <p style={ds.p}>
+                    <strong style={{color:C.gold}}>{a.title}</strong>
+                    {a.event_date ? " - " + new Date(a.event_date).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"}) : ""}
+                    {a.event_location ? " - " + a.event_location : ""}
+                  </p>
+                  <hr style={ds.hr}/>
+                  <div className="opp-detail-rich" dangerouslySetInnerHTML={{__html:detailHtml}}/>
+                </div>
+              ),
+            };
+          }
+          return a;
+        });
+        setServerActivities(activities);
+      }
     }).catch(() => {});
   };
 
@@ -2490,7 +2596,15 @@ const App = () => {
 
   // Keep a ref to latest prefs so sync always reads fresh values
   const prefsRef = useRef({});
-  prefsRef.current = { selected_industries: selectedIndustries, selected_areas: selectedAreas, email_alerts: emailAlerts, saved_opps: savedOpps, joined_clubs: joinedClubs, internship_history: internshipHistory };
+  prefsRef.current = {
+    selected_industries: selectedIndustries,
+    selected_areas: selectedAreas,
+    email_alerts: emailAlerts,
+    saved_opps: savedOpps,
+    joined_clubs: joinedClubs,
+    club_email_prefs: clubEmailPrefs,
+    internship_history: internshipHistory
+  };
 
   const syncToServer = () => {
     if (!currentUser) return;
@@ -2500,6 +2614,7 @@ const App = () => {
   // Auto-save effects (localStorage + server sync)
   useEffect(() => { save("savedOpps", savedOpps); syncToServer(); }, [savedOpps]);
   useEffect(() => { save("joinedClubs", joinedClubs); syncToServer(); }, [joinedClubs]);
+  useEffect(() => { save("clubEmailPrefs", clubEmailPrefs); syncToServer(); }, [clubEmailPrefs]);
   useEffect(() => { save("industries", selectedIndustries); syncToServer(); }, [selectedIndustries]);
   useEffect(() => { save("areas", selectedAreas); syncToServer(); }, [selectedAreas]);
   useEffect(() => { save("emailAlerts", emailAlerts); syncToServer(); }, [emailAlerts]);
@@ -2533,6 +2648,7 @@ const App = () => {
       setSubPage(tab);
       if (tab.startsWith("event-")) setActiveTab("events");
       else if (tab.startsWith("opp-")) setActiveTab("opportunities");
+      else if (tab.startsWith("club-event-")) setActiveTab("community");
       else setActiveTab("home");
     }
     window.scrollTo(0, 0);
@@ -2564,15 +2680,15 @@ const App = () => {
     const key = (o.org + "|" + o.title).toLowerCase();
     if (seen.has(key)) return false;
     seen.add(key);
-    return true;
+    return !isPastDeadline(o.deadline);
   });
 
   const pages = {
     home: <HomePage navigate={navigate}/>,
     opportunities: <OpportunitiesPage navigate={navigate} showToast={showToast} savedOpps={savedOpps} setSavedOpps={setSavedOpps} selectedIndustries={selectedIndustries} serverOpps={serverOpps}/>,
     calendar: <CalendarPage allInternships={allInternships} navigate={navigate}/>,
-    profile: <ProfilePage showToast={showToast} selectedIndustries={selectedIndustries} setSelectedIndustries={setSelectedIndustries} selectedAreas={selectedAreas} setSelectedAreas={setSelectedAreas} emailAlerts={emailAlerts} setEmailAlerts={setEmailAlerts} internshipHistory={internshipHistory} setInternshipHistory={setInternshipHistory} currentUser={currentUser} serverActivities={serverActivities} joinedClubs={joinedClubs} setJoinedClubs={setJoinedClubs}/>,
-    community: <CommunityPage joinedClubs={joinedClubs} setJoinedClubs={setJoinedClubs} showToast={showToast} serverActivities={serverActivities} navigate={navigate} refreshActivities={loadServerActivities}/>,
+    profile: <ProfilePage showToast={showToast} selectedIndustries={selectedIndustries} setSelectedIndustries={setSelectedIndustries} selectedAreas={selectedAreas} setSelectedAreas={setSelectedAreas} emailAlerts={emailAlerts} setEmailAlerts={setEmailAlerts} internshipHistory={internshipHistory} setInternshipHistory={setInternshipHistory} currentUser={currentUser} serverActivities={serverActivities} joinedClubs={joinedClubs} setJoinedClubs={setJoinedClubs} clubEmailPrefs={clubEmailPrefs} setClubEmailPrefs={setClubEmailPrefs} navigate={navigate}/>,
+    community: <CommunityPage joinedClubs={joinedClubs} setJoinedClubs={setJoinedClubs} clubEmailPrefs={clubEmailPrefs} setClubEmailPrefs={setClubEmailPrefs} showToast={showToast} serverActivities={serverActivities} navigate={navigate} refreshActivities={loadServerActivities}/>,
     events: <EventsPage navigate={navigate} serverEvents={serverEvents}/>,
   };
 

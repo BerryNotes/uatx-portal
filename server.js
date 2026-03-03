@@ -204,6 +204,17 @@ function normalizeOpportunity(opportunity) {
   return o;
 }
 
+function normalizeClubEmailPrefs(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const out = {};
+  for (const [key, raw] of Object.entries(value)) {
+    if (key.length > 24) continue;
+    if (!/^\d+$/.test(key)) continue;
+    out[key] = !!raw;
+  }
+  return out;
+}
+
 // ─── PUBLIC CONFIG (exposes Google Client ID to frontend) ───
 
 app.get("/api/config", (req, res) => {
@@ -419,9 +430,18 @@ app.put("/api/preferences", requireAuth, (req, res) => {
   if (body.selected_industries && body.selected_industries.length > MAX_ARRAY) return res.status(400).json({ error: "Too many industries" });
   if (body.selected_areas && body.selected_areas.length > MAX_ARRAY) return res.status(400).json({ error: "Too many areas" });
   if (body.saved_opps && body.saved_opps.length > 500) return res.status(400).json({ error: "Too many saved opportunities" });
+  if (body.joined_clubs && body.joined_clubs.length > 500) return res.status(400).json({ error: "Too many joined clubs" });
   if (body.internship_history && body.internship_history.length > 50) return res.status(400).json({ error: "Too many internship history entries" });
+  if (body.club_email_prefs && (typeof body.club_email_prefs !== "object" || Array.isArray(body.club_email_prefs))) {
+    return res.status(400).json({ error: "Invalid club email preferences" });
+  }
+  const clubEmailPrefKeys = body.club_email_prefs ? Object.keys(body.club_email_prefs) : [];
+  if (clubEmailPrefKeys.length > 500) return res.status(400).json({ error: "Too many club email preferences" });
   if (JSON.stringify(body).length > 50000) return res.status(400).json({ error: "Payload too large" });
-  setPreferences(req.session.userId, body);
+  setPreferences(req.session.userId, {
+    ...body,
+    club_email_prefs: normalizeClubEmailPrefs(body.club_email_prefs || {}),
+  });
   res.json({ ok: true });
 });
 

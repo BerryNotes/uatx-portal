@@ -150,7 +150,7 @@
     <button class="tab-btn active" data-tab="roster">Roster</button>
     <button class="tab-btn" data-tab="opportunities">Opportunities</button>
     <button class="tab-btn" data-tab="community">Community</button>
-    <button class="tab-btn" data-tab="events">Events & Travel</button>
+    <button class="tab-btn" data-tab="events">Programs & Travel</button>
   </div>
 
   <!-- ROSTER TAB -->
@@ -337,6 +337,29 @@
           <label>Description</label>
           <textarea id="act-desc" style="width:100%"></textarea>
         </div>
+        <div class="check-row" style="margin-bottom:12px">
+          <input type="checkbox" id="act-show-event">
+          <label for="act-show-event">Show as Community Event</label>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Event Title</label><input id="act-event-title" placeholder="e.g. Debate Night" style="width:220px"></div>
+          <div class="field"><label>Event Date</label><input id="act-event-date" type="date" style="width:160px"></div>
+          <div class="field"><label>Event Location</label><input id="act-event-location" placeholder="e.g. Room 201" style="width:220px"></div>
+        </div>
+        <div class="field" style="margin-bottom:16px">
+          <label>Event Description Page Content (markdown supported)</label>
+          <div class="detail-toolbar">
+            <button type="button" onclick="applyDetailFormat('act-event-description','bold')">Bold</button>
+            <button type="button" onclick="applyDetailFormat('act-event-description','italic')">Italic</button>
+            <button type="button" onclick="applyDetailFormat('act-event-description','bullet')">Bullets</button>
+            <select onchange="if(this.value){applyDetailFormat('act-event-description', this.value); this.selectedIndex=0;}">
+              <option value="">Font Size</option>
+              <option value="h2">Large</option>
+              <option value="h3">Medium</option>
+            </select>
+          </div>
+          <textarea id="act-event-description" style="width:100%;min-height:100px" placeholder="## About this event&#10;&#10;Add details, agenda, and expectations..."></textarea>
+        </div>
         <button class="btn btn-gold" onclick="createActivity()">Save</button>
       </div>
 
@@ -354,7 +377,7 @@
     <div class="content">
       <div class="section-header">
         <div style="display:flex;align-items:center">
-          <h2>Events & Travel</h2>
+          <h2>Programs & Travel</h2>
           <span class="count" id="event-count"></span>
         </div>
       </div>
@@ -532,7 +555,15 @@ async function loadStudentDetail(rosterId, email) {
 
     // Store current prefs for editing
     el.dataset.email = email;
-    el.dataset.prefs = JSON.stringify({ selected_industries: industries, selected_areas: areas, email_alerts: prefs ? prefs.email_alerts : true, saved_opps: prefs && prefs.saved_opps ? prefs.saved_opps : [], joined_clubs: clubIds, internship_history: history });
+    el.dataset.prefs = JSON.stringify({
+      selected_industries: industries,
+      selected_areas: areas,
+      email_alerts: prefs ? prefs.email_alerts : true,
+      saved_opps: prefs && prefs.saved_opps ? prefs.saved_opps : [],
+      joined_clubs: clubIds,
+      club_email_prefs: prefs && prefs.club_email_prefs ? prefs.club_email_prefs : {},
+      internship_history: history
+    });
 
     el.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
@@ -570,7 +601,11 @@ async function loadStudentDetail(rosterId, email) {
   }
 }
 
-const ALL_INDUSTRIES = ["Finance & Banking","Technology","Law & Policy","Government","Nonprofit","Media & Journalism","Consulting","Healthcare","Education","Energy","Real Estate","Defense & Security"];
+const ALL_INDUSTRIES = [
+  "Finance & Banking","Technology","Law & Policy","Government","Nonprofit","Media & Journalism","Consulting","Healthcare","Education","Energy","Real Estate","Defense & Security",
+  "Artificial Intelligence","Product Management","Marketing & Communications","Entrepreneurship","Manufacturing","Public Relations","Sports & Entertainment","Agriculture & Food",
+  "Environment & Sustainability","Human Resources","Sales & Business Development"
+];
 
 function openProfileEdit(email, rosterId) {
   const el = document.getElementById("detail-" + rosterId);
@@ -655,6 +690,7 @@ async function saveProfileEdit(email, rosterId) {
     email_alerts: existing.email_alerts !== undefined ? existing.email_alerts : true,
     saved_opps: existing.saved_opps || [],
     joined_clubs: existing.joined_clubs || [],
+    club_email_prefs: existing.club_email_prefs || {},
     internship_history: internshipHistory
   };
 
@@ -840,7 +876,11 @@ function renderOpportunities(opps) {
   }).join("");
 }
 
-const INDUSTRIES = ["Finance & Banking","Technology","Law & Policy","Government","Nonprofit","Media & Journalism","Consulting","Healthcare","Education","Energy","Real Estate","Defense & Security"];
+const INDUSTRIES = [
+  "Finance & Banking","Technology","Law & Policy","Government","Nonprofit","Media & Journalism","Consulting","Healthcare","Education","Energy","Real Estate","Defense & Security",
+  "Artificial Intelligence","Product Management","Marketing & Communications","Entrepreneurship","Manufacturing","Public Relations","Sports & Entertainment","Agriculture & Food",
+  "Environment & Sustainability","Human Resources","Sales & Business Development"
+];
 
 let lastCustomOpps = [];
 
@@ -1011,7 +1051,10 @@ function filterActivities() {
   const q = (document.getElementById("activity-search").value || "").toLowerCase();
   if (!q) { renderActivities(lastActivities); return; }
   const filtered = lastActivities.filter(a =>
-    (a.title + " " + a.description + " " + a.category + " " + a.meet_day + " " + a.president_email).toLowerCase().includes(q)
+    (
+      a.title + " " + a.description + " " + a.category + " " + a.meet_day + " " + a.president_email + " " +
+      (a.event_title || "") + " " + (a.event_location || "")
+    ).toLowerCase().includes(q)
   );
   renderActivities(filtered);
 }
@@ -1040,6 +1083,29 @@ function renderActivities(activities) {
           <label>Description</label>
           <textarea id="edit-act-desc" style="min-height:60px">${esc(a.description || '')}</textarea>
         </div>
+        <div class="check-row" style="margin-bottom:12px">
+          <input type="checkbox" id="edit-act-show-event" ${a.show_as_event ? "checked" : ""}>
+          <label for="edit-act-show-event">Show as Community Event</label>
+        </div>
+        <div class="opp-edit-grid">
+          <div class="field"><label>Event Title</label><input id="edit-act-event-title" value="${attr(a.event_title || '')}"></div>
+          <div class="field"><label>Event Date</label><input id="edit-act-event-date" type="date" value="${attr(a.event_date || '')}"></div>
+          <div class="field"><label>Event Location</label><input id="edit-act-event-location" value="${attr(a.event_location || '')}"></div>
+        </div>
+        <div class="opp-edit-full field">
+          <label>Event Description Page Content (markdown supported)</label>
+          <div class="detail-toolbar">
+            <button type="button" onclick="applyDetailFormat('edit-act-event-description','bold')">Bold</button>
+            <button type="button" onclick="applyDetailFormat('edit-act-event-description','italic')">Italic</button>
+            <button type="button" onclick="applyDetailFormat('edit-act-event-description','bullet')">Bullets</button>
+            <select onchange="if(this.value){applyDetailFormat('edit-act-event-description', this.value); this.selectedIndex=0;}">
+              <option value="">Font Size</option>
+              <option value="h2">Large</option>
+              <option value="h3">Medium</option>
+            </select>
+          </div>
+          <textarea id="edit-act-event-description" style="min-height:100px">${esc(a.event_description || '')}</textarea>
+        </div>
         <div style="display:flex;gap:8px">
           <button class="btn btn-gold" onclick="saveActivityEdit(${a.id})">Save</button>
           <button class="btn btn-outline" onclick="cancelActivityEdit()">Cancel</button>
@@ -1056,7 +1122,15 @@ function renderActivities(activities) {
             ${a.meet_day ? '<span>' + esc(a.meet_day) + '</span>' : ''}
             ${a.president_email ? '<span>' + esc(a.president_email) + '</span>' : ''}
             ${a.submitted_by ? '<span>Submitted by ' + esc(a.submitted_by) + '</span>' : ''}
+            ${a.show_as_event ? '<span style="color:#4a7c59">Community Event</span>' : ''}
           </div>
+          ${a.show_as_event && (a.event_title || a.event_date || a.event_location) ? `
+            <div class="opp-card-meta" style="margin-top:6px">
+              ${a.event_title ? '<span><strong>Event:</strong> ' + esc(a.event_title) + '</span>' : ''}
+              ${a.event_date ? '<span>' + formatDate(a.event_date) + '</span>' : ''}
+              ${a.event_location ? '<span>' + esc(a.event_location) + '</span>' : ''}
+            </div>
+          ` : ''}
           ${a.description ? '<div class="opp-card-desc">' + esc(a.description) + '</div>' : ''}
         </div>
       </div>
@@ -1086,6 +1160,11 @@ async function saveActivityEdit(id) {
     meet_day: document.getElementById("edit-act-meetday").value.trim(),
     president_email: document.getElementById("edit-act-president").value.trim(),
     description: document.getElementById("edit-act-desc").value.trim(),
+    show_as_event: document.getElementById("edit-act-show-event").checked,
+    event_title: document.getElementById("edit-act-event-title").value.trim(),
+    event_date: document.getElementById("edit-act-event-date").value || "",
+    event_location: document.getElementById("edit-act-event-location").value.trim(),
+    event_description: document.getElementById("edit-act-event-description").value.trim(),
   };
   if (!activity.title) return toast("Title is required", true);
   const res = await fetch("/api/admin/activities/" + id, {
@@ -1107,6 +1186,11 @@ async function createActivity() {
     meet_day: document.getElementById("act-meetday").value.trim(),
     president_email: document.getElementById("act-president").value.trim(),
     description: document.getElementById("act-desc").value.trim(),
+    show_as_event: document.getElementById("act-show-event").checked,
+    event_title: document.getElementById("act-event-title").value.trim(),
+    event_date: document.getElementById("act-event-date").value || "",
+    event_location: document.getElementById("act-event-location").value.trim(),
+    event_description: document.getElementById("act-event-description").value.trim(),
   };
   if (!activity.title) return toast("Title is required", true);
   const res = await fetch("/api/admin/activities", {
@@ -1115,8 +1199,9 @@ async function createActivity() {
   });
   const data = await res.json();
   if (!res.ok) return toast(data.error, true);
-  ["act-title","act-meetday","act-president","act-desc"].forEach(id => document.getElementById(id).value = "");
+  ["act-title","act-meetday","act-president","act-desc","act-event-title","act-event-date","act-event-location","act-event-description"].forEach(id => document.getElementById(id).value = "");
   document.getElementById("act-category").selectedIndex = 0;
+  document.getElementById("act-show-event").checked = false;
   lastActivities = data.activities;
   renderActivities(data.activities);
   toast("Activity created");

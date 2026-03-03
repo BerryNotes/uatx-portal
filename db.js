@@ -57,17 +57,23 @@ db.exec(`
     email_alerts INTEGER NOT NULL DEFAULT 1,
     saved_opps TEXT NOT NULL DEFAULT '[]',
     joined_clubs TEXT NOT NULL DEFAULT '[]',
+    club_email_prefs TEXT NOT NULL DEFAULT '{}',
     internship_history TEXT NOT NULL DEFAULT '[]'
   );
-
   CREATE TABLE IF NOT EXISTS activities (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
+    detail_content TEXT NOT NULL DEFAULT '',
     category TEXT NOT NULL DEFAULT '',
     members INTEGER NOT NULL DEFAULT 0,
     meet_day TEXT NOT NULL DEFAULT '',
     president_email TEXT NOT NULL DEFAULT '',
+    show_as_event INTEGER NOT NULL DEFAULT 0,
+    event_title TEXT NOT NULL DEFAULT '',
+    event_date TEXT NOT NULL DEFAULT '',
+    event_location TEXT NOT NULL DEFAULT '',
+    event_description TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL DEFAULT 'approved',
     submitted_by TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -130,6 +136,13 @@ try { db.exec("ALTER TABLE activities ADD COLUMN status TEXT NOT NULL DEFAULT 'a
 try { db.exec("ALTER TABLE activities ADD COLUMN submitted_by TEXT NOT NULL DEFAULT ''"); } catch (e) {}
 try { db.exec("ALTER TABLE opportunities ADD COLUMN detail_content TEXT NOT NULL DEFAULT ''"); } catch (e) {}
 try { db.exec("ALTER TABLE opportunities ADD COLUMN apply_url TEXT NOT NULL DEFAULT ''"); } catch (e) {}
+try { db.exec("ALTER TABLE user_preferences ADD COLUMN club_email_prefs TEXT NOT NULL DEFAULT '{}'"); } catch (e) {}
+try { db.exec("ALTER TABLE activities ADD COLUMN detail_content TEXT NOT NULL DEFAULT ''"); } catch (e) {}
+try { db.exec("ALTER TABLE activities ADD COLUMN show_as_event INTEGER NOT NULL DEFAULT 0"); } catch (e) {}
+try { db.exec("ALTER TABLE activities ADD COLUMN event_title TEXT NOT NULL DEFAULT ''"); } catch (e) {}
+try { db.exec("ALTER TABLE activities ADD COLUMN event_date TEXT NOT NULL DEFAULT ''"); } catch (e) {}
+try { db.exec("ALTER TABLE activities ADD COLUMN event_location TEXT NOT NULL DEFAULT ''"); } catch (e) {}
+try { db.exec("ALTER TABLE activities ADD COLUMN event_description TEXT NOT NULL DEFAULT ''"); } catch (e) {}
 
 // ─── ROSTER ───
 
@@ -238,14 +251,15 @@ const prefsGet = db.prepare(
   "SELECT * FROM user_preferences WHERE user_id = ?"
 );
 const prefsUpsert = db.prepare(`
-  INSERT INTO user_preferences (user_id, selected_industries, selected_areas, email_alerts, saved_opps, joined_clubs, internship_history)
-  VALUES (?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO user_preferences (user_id, selected_industries, selected_areas, email_alerts, saved_opps, joined_clubs, club_email_prefs, internship_history)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   ON CONFLICT(user_id) DO UPDATE SET
     selected_industries = excluded.selected_industries,
     selected_areas = excluded.selected_areas,
     email_alerts = excluded.email_alerts,
     saved_opps = excluded.saved_opps,
     joined_clubs = excluded.joined_clubs,
+    club_email_prefs = excluded.club_email_prefs,
     internship_history = excluded.internship_history
 `);
 
@@ -258,6 +272,7 @@ function getPreferences(userId) {
     email_alerts: !!row.email_alerts,
     saved_opps: JSON.parse(row.saved_opps),
     joined_clubs: JSON.parse(row.joined_clubs),
+    club_email_prefs: JSON.parse(row.club_email_prefs || "{}"),
     internship_history: JSON.parse(row.internship_history),
   };
 }
@@ -270,6 +285,7 @@ function setPreferences(userId, prefs) {
     prefs.email_alerts ? 1 : 0,
     JSON.stringify(prefs.saved_opps || []),
     JSON.stringify(prefs.joined_clubs || []),
+    JSON.stringify(prefs.club_email_prefs || {}),
     JSON.stringify(prefs.internship_history || [])
   );
 }
@@ -329,12 +345,12 @@ const activitiesApproved = db.prepare(
   "SELECT * FROM activities WHERE status = 'approved' ORDER BY created_at DESC"
 );
 const activityInsert = db.prepare(`
-  INSERT INTO activities (title, description, category, members, meet_day, president_email, status, submitted_by)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO activities (title, description, detail_content, category, members, meet_day, president_email, show_as_event, event_title, event_date, event_location, event_description, status, submitted_by)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 const activityDelete = db.prepare("DELETE FROM activities WHERE id = ?");
 const activityUpdate = db.prepare(`
-  UPDATE activities SET title=?, description=?, category=?, members=?, meet_day=?, president_email=?
+  UPDATE activities SET title=?, description=?, detail_content=?, category=?, members=?, meet_day=?, president_email=?, show_as_event=?, event_title=?, event_date=?, event_location=?, event_description=?
   WHERE id=?
 `);
 const activityApprove = db.prepare(
@@ -355,8 +371,10 @@ function approveActivity(id) {
 
 function createActivity(a) {
   const info = activityInsert.run(
-    a.title, a.description || "", a.category || "",
+    a.title, a.description || "", a.detail_content || "", a.category || "",
     a.members || 0, a.meet_day || "", a.president_email || "",
+    a.show_as_event ? 1 : 0,
+    a.event_title || "", a.event_date || "", a.event_location || "", a.event_description || "",
     a.status || "approved", a.submitted_by || ""
   );
   return info.lastInsertRowid;
@@ -364,8 +382,10 @@ function createActivity(a) {
 
 function updateActivity(id, a) {
   return activityUpdate.run(
-    a.title, a.description || "", a.category || "",
+    a.title, a.description || "", a.detail_content || "", a.category || "",
     a.members || 0, a.meet_day || "", a.president_email || "",
+    a.show_as_event ? 1 : 0,
+    a.event_title || "", a.event_date || "", a.event_location || "", a.event_description || "",
     id
   );
 }
@@ -383,8 +403,10 @@ function seedActivities(activities) {
   const insert = db.transaction((entries) => {
     for (const a of entries) {
       activityInsert.run(
-        a.title, a.description || "", a.category || "",
+        a.title, a.description || "", a.detail_content || "", a.category || "",
         a.members || 0, a.meet_day || "", a.president_email || "",
+        a.show_as_event ? 1 : 0,
+        a.event_title || "", a.event_date || "", a.event_location || "", a.event_description || "",
         a.status || "approved", a.submitted_by || ""
       );
     }
@@ -397,7 +419,7 @@ function seedActivities(activities) {
 function getClubMembers(activityId) {
   // Use JSON array-aware matching to avoid partial ID matches (e.g. 1 matching 10, 11)
   const allRows = db.prepare(`
-    SELECT u.email, u.name, up.joined_clubs
+    SELECT u.email, u.name, up.joined_clubs, up.club_email_prefs
     FROM users u
     JOIN user_preferences up ON up.user_id = u.id
     WHERE up.joined_clubs != '[]'
@@ -405,7 +427,10 @@ function getClubMembers(activityId) {
   return allRows.filter(row => {
     try {
       const clubs = JSON.parse(row.joined_clubs);
-      return Array.isArray(clubs) && clubs.includes(activityId);
+      if (!Array.isArray(clubs) || !clubs.includes(activityId)) return false;
+      const emailPrefs = JSON.parse(row.club_email_prefs || "{}");
+      const pref = emailPrefs[String(activityId)];
+      return typeof pref === "boolean" ? pref : true;
     } catch { return false; }
   }).map(({ email, name }) => ({ email, name }));
 }
