@@ -121,12 +121,20 @@
     .check-row { display: flex; align-items: center; gap: 8px; }
     .check-row input[type="checkbox"] { accent-color: #c9a84c; }
     .check-row label { font-size: 13px; color: #c4c4d4; cursor: pointer; }
-    .detail-toolbar { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0 8px; }
+    .detail-toolbar { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0 8px; align-items: center; }
     .detail-toolbar button { background: #111a26; color: #c4c4d4; border: 1px solid #243044; border-radius: 3px; font-size: 11px; font-family: inherit; font-weight: 600; padding: 4px 8px; cursor: pointer; }
     .detail-toolbar button:hover { border-color: #c9a84c; color: #d4b96a; }
     .detail-toolbar select { background: #111a26; color: #c4c4d4; border: 1px solid #243044; border-radius: 3px; font-size: 11px; font-family: inherit; font-weight: 600; padding: 4px 8px; cursor: pointer; }
     .detail-toolbar select:hover { border-color: #c9a84c; color: #d4b96a; }
+    .detail-toolbar .font-size-btn { width: 30px; text-align: center; padding: 4px 0; }
+    .detail-toolbar .detail-font-readout { min-width: 34px; text-align: center; font-size: 11px; font-weight: 700; color: #f5f0e8; border: 1px solid #243044; border-radius: 3px; padding: 4px 6px; background: #0d1520; }
     .detail-help { font-size: 11px; color: #6b7280; margin-top: 6px; line-height: 1.4; }
+    .admin-rich-editor { min-height: 120px; background: #111a26; color: #f5f0e8; border: 1px solid #243044; border-radius: 3px; padding: 10px 12px; font-size: 13px; line-height: 1.6; outline: none; }
+    .admin-rich-editor:focus { border-color: #c9a84c; }
+    .admin-rich-editor:empty:before { content: attr(data-placeholder); color: #6b7280; pointer-events: none; }
+    .admin-rich-editor ul, .admin-rich-editor ol { margin: 0 0 10px 20px; padding: 0; }
+    .admin-rich-editor p { margin: 0 0 10px; }
+    .admin-rich-editor h2, .admin-rich-editor h3, .admin-rich-editor h4 { margin: 0 0 10px; font-family: Georgia, serif; color: #f5f0e8; }
   </style>
 </head>
 <body>
@@ -246,18 +254,6 @@
             <label>Industry</label>
             <select id="opp-industry" style="width:180px">
               <option value="">Select...</option>
-              <option>Finance & Banking</option>
-              <option>Technology</option>
-              <option>Law & Policy</option>
-              <option>Government</option>
-              <option>Nonprofit</option>
-              <option>Media & Journalism</option>
-              <option>Consulting</option>
-              <option>Healthcare</option>
-              <option>Education</option>
-              <option>Energy</option>
-              <option>Real Estate</option>
-              <option>Defense & Security</option>
             </select>
           </div>
         </div>
@@ -579,53 +575,297 @@ function setCommunityCreateMode(mode) {
 }
 
 // ─── INIT ───
-function applyDetailFormat(textareaId, format) {
+const RICH_FONT_SIZES = [10, 11, 12, 13, 14, 16, 18, 20, 24, 30, 36];
+const DETAIL_EDITOR_IDS = ["opp-detail", "edit-detail", "evt-detail", "comm-evt-detail", "edit-evt-detail"];
+
+const looksLikeRichHtml = (text) => /<(p|div|h2|h3|h4|ul|ol|li|strong|em|u|span|br|a|hr)\b/i.test(String(text || ""));
+
+function formatInlineDetailMarkup(text) {
+  if (!text) return "";
+  let out = esc(String(text));
+  out = out.replace(/\*\*([^*][\s\S]*?)\*\*/g, "<strong>$1</strong>");
+  out = out.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>");
+  return out;
+}
+
+function parseRichDetailContent(rawText) {
+  const text = String(rawText || "").replace(/\r/g, "").trim();
+  if (!text) return [];
+  if (looksLikeRichHtml(text)) return [{ html: text }];
+
+  const items = [];
+  const paragraphLines = [];
+  let listMode = null;
+  let listItems = [];
+
+  const flushParagraph = () => {
+    if (!paragraphLines.length) return;
+    const para = paragraphLines.join("\n").trim();
+    if (para) items.push({ p: formatInlineDetailMarkup(para) });
+    paragraphLines.length = 0;
+  };
+
+  const flushList = () => {
+    if (!listMode || !listItems.length) {
+      listMode = null;
+      listItems = [];
+      return;
+    }
+    const payload = listItems.map((li) => formatInlineDetailMarkup(li));
+    if (listMode === "ul") items.push({ ul: payload });
+    if (listMode === "ol") items.push({ ol: payload });
+    listMode = null;
+    listItems = [];
+  };
+
+  text.split("\n").forEach((line) => {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      flushParagraph();
+      flushList();
+      return;
+    }
+
+    let m = trimmed.match(/^####\s+(.+)$/);
+    if (m) { flushParagraph(); flushList(); items.push({ h4: formatInlineDetailMarkup(m[1]) }); return; }
+    m = trimmed.match(/^###\s+(.+)$/);
+    if (m) { flushParagraph(); flushList(); items.push({ h3: formatInlineDetailMarkup(m[1]) }); return; }
+    m = trimmed.match(/^##\s+(.+)$/);
+    if (m) { flushParagraph(); flushList(); items.push({ h2: formatInlineDetailMarkup(m[1]) }); return; }
+
+    m = trimmed.match(/^-\s+(.+)$/);
+    if (m) {
+      flushParagraph();
+      if (listMode && listMode !== "ul") flushList();
+      listMode = "ul";
+      listItems.push(m[1]);
+      return;
+    }
+
+    m = trimmed.match(/^\d+\.\s+(.+)$/);
+    if (m) {
+      flushParagraph();
+      if (listMode && listMode !== "ol") flushList();
+      listMode = "ol";
+      listItems.push(m[1]);
+      return;
+    }
+
+    flushList();
+    paragraphLines.push(trimmed);
+  });
+
+  flushParagraph();
+  flushList();
+  return items;
+}
+
+function detailItemsToHtml(items) {
+  return (items || []).map((item) => {
+    if (item.html) return item.html;
+    if (item.h2) return "<h2>" + item.h2 + "</h2>";
+    if (item.h3) return "<h3>" + item.h3 + "</h3>";
+    if (item.h4) return "<h4>" + item.h4 + "</h4>";
+    if (item.p) return "<p>" + item.p + "</p>";
+    if (item.ul) return "<ul>" + item.ul.map((li) => "<li>" + li + "</li>").join("") + "</ul>";
+    if (item.ol) return "<ol>" + item.ol.map((li) => "<li>" + li + "</li>").join("") + "</ol>";
+    if (item.hr) return "<hr/>";
+    return "";
+  }).join("");
+}
+
+function normalizeRichEditorHtml(rawText) {
+  const text = String(rawText || "").replace(/\r/g, "").trim();
+  if (!text) return "";
+  return detailItemsToHtml(parseRichDetailContent(text));
+}
+
+function getRichEditor(textareaId) {
+  return document.querySelector('.admin-rich-editor[data-target="' + textareaId + '"]');
+}
+
+function syncRichEditorValue(textareaId) {
+  const textarea = document.getElementById(textareaId);
+  const editor = getRichEditor(textareaId);
+  if (!textarea || !editor) return;
+  let html = String(editor.innerHTML || "");
+  html = html.replace(/<div><br><\/div>/gi, "").replace(/^<br>$/i, "").trim();
+  textarea.value = html;
+}
+
+function setDetailFieldValue(textareaId, value) {
+  const textarea = document.getElementById(textareaId);
+  if (textarea) textarea.value = String(value || "");
+  const editor = getRichEditor(textareaId);
+  if (editor) editor.innerHTML = normalizeRichEditorHtml(value || "");
+  syncRichEditorValue(textareaId);
+}
+
+function applyRichFontSize(textareaId, size) {
+  const editor = getRichEditor(textareaId);
+  if (!editor) return;
+  const clamped = Math.max(10, Math.min(72, Number(size) || 13));
+  editor.dataset.fontSize = String(clamped);
+  editor.focus();
+  document.execCommand("fontSize", false, "7");
+  editor.querySelectorAll('font[size="7"]').forEach((node) => {
+    const span = document.createElement("span");
+    span.style.fontSize = clamped + "px";
+    while (node.firstChild) span.appendChild(node.firstChild);
+    node.parentNode.replaceChild(span, node);
+  });
+  const readout = document.querySelector('.detail-toolbar[data-target="' + textareaId + '"] .detail-font-readout');
+  if (readout) readout.textContent = String(clamped);
+  syncRichEditorValue(textareaId);
+}
+
+function applyDetailFormatPlainText(textareaId, format) {
   const el = document.getElementById(textareaId);
   if (!el) return;
   const start = el.selectionStart || 0;
   const end = el.selectionEnd || 0;
   const selected = el.value.slice(start, end);
-
   const updateSelection = (nextText, selection) => {
     el.setRangeText(nextText, start, end, "end");
-    if (selection) {
-      el.setSelectionRange(start + selection.start, start + selection.end);
-    }
+    if (selection) el.setSelectionRange(start + selection.start, start + selection.end);
     el.focus();
   };
 
   const selectedLines = selected.split("\n");
-  if (format === "bold") {
-    const inner = selected || "bold text";
-    updateSelection("**" + inner + "**", { start: 2, end: 2 + inner.length });
-    return;
-  }
-  if (format === "italic") {
-    const inner = selected || "italic text";
-    updateSelection("*" + inner + "*", { start: 1, end: 1 + inner.length });
-    return;
-  }
-  if (format === "bullet") {
-    const next = selectedLines.map(line => line.trim() ? ("- " + line.replace(/^-\s+/, "")) : line).join("\n");
-    updateSelection(next || "- ", null);
-    return;
-  }
+  if (format === "bold") return updateSelection("**" + (selected || "bold text") + "**", { start: 2, end: 2 + (selected || "bold text").length });
+  if (format === "italic") return updateSelection("*" + (selected || "italic text") + "*", { start: 1, end: 1 + (selected || "italic text").length });
+  if (format === "bullet") return updateSelection(selectedLines.map(line => line.trim() ? ("- " + line.replace(/^-\s+/, "")) : line).join("\n") || "- ", null);
   if (format === "number") {
     let idx = 1;
-    const next = selectedLines.map(line => line.trim() ? (String(idx++) + ". " + line.replace(/^\d+\.\s+/, "")) : line).join("\n");
-    updateSelection(next || "1. ", null);
-    return;
+    return updateSelection(selectedLines.map(line => line.trim() ? (String(idx++) + ". " + line.replace(/^\d+\.\s+/, "")) : line).join("\n") || "1. ", null);
   }
   if (format === "h2" || format === "h3" || format === "h4") {
     const prefix = format === "h2" ? "## " : (format === "h3" ? "### " : "#### ");
     const heading = (selected || "Heading").replace(/^\s*#{2,4}\s+/, "");
-    updateSelection(prefix + heading, { start: prefix.length, end: prefix.length + heading.length });
+    return updateSelection(prefix + heading, { start: prefix.length, end: prefix.length + heading.length });
+  }
+  if (format === "paragraph") return updateSelection((selected || "Body text").replace(/^\s*#{2,4}\s+/, ""), { start: 0, end: (selected || "Body text").length });
+}
+
+function applyDetailFormat(textareaId, format) {
+  const editor = getRichEditor(textareaId);
+  if (!editor) return applyDetailFormatPlainText(textareaId, format);
+
+  editor.focus();
+  if (format === "font-dec" || format === "font-inc") {
+    const current = Number(editor.dataset.fontSize || 13);
+    const idx = RICH_FONT_SIZES.findIndex((s) => s >= current);
+    const currentIdx = idx === -1 ? RICH_FONT_SIZES.length - 1 : idx;
+    const nextIdx = Math.max(0, Math.min(RICH_FONT_SIZES.length - 1, currentIdx + (format === "font-inc" ? 1 : -1)));
+    applyRichFontSize(textareaId, RICH_FONT_SIZES[nextIdx]);
     return;
   }
-  if (format === "paragraph") {
-    const body = (selected || "Body text").replace(/^\s*#{2,4}\s+/, "");
-    updateSelection(body, { start: 0, end: body.length });
+
+  if (format === "bold") document.execCommand("bold", false);
+  else if (format === "italic") document.execCommand("italic", false);
+  else if (format === "underline") document.execCommand("underline", false);
+  else if (format === "bullet") document.execCommand("insertUnorderedList", false);
+  else if (format === "number") document.execCommand("insertOrderedList", false);
+  else if (format === "h2") document.execCommand("formatBlock", false, "H2");
+  else if (format === "h3") document.execCommand("formatBlock", false, "H3");
+  else if (format === "h4") document.execCommand("formatBlock", false, "H4");
+  else if (format === "paragraph") document.execCommand("formatBlock", false, "P");
+
+  syncRichEditorValue(textareaId);
+}
+
+function setupDetailToolbar(toolbar, textareaId) {
+  if (!toolbar || toolbar.dataset.richReady === "1") return;
+  toolbar.dataset.richReady = "1";
+  toolbar.dataset.target = textareaId;
+
+  const decBtn = document.createElement("button");
+  decBtn.type = "button";
+  decBtn.className = "font-size-btn";
+  decBtn.textContent = "-";
+  decBtn.dataset.action = "font-dec";
+  const readout = document.createElement("span");
+  readout.className = "detail-font-readout";
+  readout.textContent = "13";
+  const incBtn = document.createElement("button");
+  incBtn.type = "button";
+  incBtn.className = "font-size-btn";
+  incBtn.textContent = "+";
+  incBtn.dataset.action = "font-inc";
+
+  toolbar.prepend(incBtn);
+  toolbar.prepend(readout);
+  toolbar.prepend(decBtn);
+
+  const buttons = Array.from(toolbar.querySelectorAll("button"));
+  buttons.forEach((btn) => {
+    btn.removeAttribute("onclick");
+    if (btn.dataset.action) return;
+    const text = btn.textContent.trim().toLowerCase();
+    if (text === "bold") btn.dataset.action = "bold";
+    else if (text === "italic") btn.dataset.action = "italic";
+    else if (text.indexOf("bullet") !== -1) btn.dataset.action = "bullet";
+    else if (text.indexOf("number") !== -1) btn.dataset.action = "number";
+  });
+
+  const hasUnderline = buttons.some((btn) => btn.dataset.action === "underline");
+  if (!hasUnderline) {
+    const underlineBtn = document.createElement("button");
+    underlineBtn.type = "button";
+    underlineBtn.textContent = "Underline";
+    underlineBtn.dataset.action = "underline";
+    const italicBtn = buttons.find((btn) => btn.dataset.action === "italic");
+    if (italicBtn && italicBtn.nextSibling) italicBtn.parentNode.insertBefore(underlineBtn, italicBtn.nextSibling);
+    else toolbar.appendChild(underlineBtn);
   }
+
+  const sizeSelect = toolbar.querySelector("select");
+  if (sizeSelect) {
+    sizeSelect.removeAttribute("onchange");
+    sizeSelect.addEventListener("change", () => {
+      if (!sizeSelect.value) return;
+      applyDetailFormat(textareaId, sizeSelect.value);
+      sizeSelect.selectedIndex = 0;
+    });
+  }
+
+  toolbar.addEventListener("mousedown", (e) => {
+    if (e.target.closest("button") || e.target.closest("select")) e.preventDefault();
+  });
+  toolbar.addEventListener("click", (e) => {
+    const btn = e.target.closest("button");
+    if (!btn) return;
+    const action = btn.dataset.action;
+    if (!action) return;
+    applyDetailFormat(textareaId, action);
+  });
+}
+
+function enhanceDetailEditors() {
+  DETAIL_EDITOR_IDS.forEach((textareaId) => {
+    const textarea = document.getElementById(textareaId);
+    if (!textarea || textarea.dataset.richReady === "1") return;
+    const field = textarea.closest(".field");
+    const toolbar = field ? field.querySelector(".detail-toolbar") : null;
+    if (!toolbar) return;
+
+    setupDetailToolbar(toolbar, textareaId);
+
+    const editor = document.createElement("div");
+    editor.className = "admin-rich-editor";
+    editor.contentEditable = "true";
+    editor.dataset.target = textareaId;
+    editor.dataset.fontSize = "13";
+    editor.dataset.placeholder = "Write detailed content...";
+    editor.innerHTML = normalizeRichEditorHtml(textarea.value || "");
+    editor.addEventListener("input", () => syncRichEditorValue(textareaId));
+    editor.addEventListener("blur", () => syncRichEditorValue(textareaId));
+    toolbar.insertAdjacentElement("afterend", editor);
+
+    textarea.style.display = "none";
+    textarea.dataset.richReady = "1";
+    syncRichEditorValue(textareaId);
+  });
 }
 
 async function init() {
@@ -647,6 +887,8 @@ async function init() {
     setEventDateMinimums();
     setCommunityCreateMode("club");
     setExpiredView("opportunities");
+    populateOpportunityIndustrySelect();
+    enhanceDetailEditors();
     loadRoster();
     loadOpportunities();
     loadActivities();
@@ -877,7 +1119,32 @@ async function loadStudentDetail(rosterId, email) {
   }
 }
 
-const ALL_INDUSTRIES = ["Finance & Banking","Technology","Law & Policy","Government","Nonprofit","Media & Journalism","Consulting","Healthcare","Education","Energy","Real Estate","Defense & Security"];
+const ALL_INDUSTRIES = [
+  "Finance & Banking",
+  "Technology",
+  "Law & Policy",
+  "Government",
+  "Nonprofit",
+  "Media & Journalism",
+  "Consulting",
+  "Healthcare",
+  "Education",
+  "Energy",
+  "Real Estate",
+  "Defense & Security",
+  "AI & Data Science",
+  "Biotech & Life Sciences",
+  "Cybersecurity",
+  "Manufacturing",
+  "Consumer Goods",
+  "Venture Capital",
+  "Entrepreneurship & Startups",
+  "International Affairs",
+  "Public Relations",
+  "Sales & Business Development",
+  "Sports & Entertainment",
+  "Transportation & Logistics"
+];
 
 function openProfileEdit(email, rosterId) {
   const el = document.getElementById("detail-" + rosterId);
@@ -1148,9 +1415,20 @@ function renderOpportunities(opps) {
       </div>
     </div>`;
   }).join("");
+  enhanceDetailEditors();
 }
 
-const INDUSTRIES = ["Finance & Banking","Technology","Law & Policy","Government","Nonprofit","Media & Journalism","Consulting","Healthcare","Education","Energy","Real Estate","Defense & Security"];
+const INDUSTRIES = [...ALL_INDUSTRIES];
+
+function populateOpportunityIndustrySelect() {
+  const select = document.getElementById("opp-industry");
+  if (!select) return;
+  const current = select.value || "";
+  select.innerHTML = '<option value="">Select...</option>' + INDUSTRIES.map((industry) => {
+    return '<option value="' + esc(industry) + '">' + esc(industry) + '</option>';
+  }).join("");
+  select.value = current;
+}
 
 let lastCustomOpps = [];
 
@@ -1165,6 +1443,7 @@ function cancelOppEdit() {
 }
 
 async function saveOppEdit(id) {
+  syncRichEditorValue("edit-detail");
   const opportunity = {
     org: document.getElementById("edit-org").value.trim(),
     title: document.getElementById("edit-title").value.trim(),
@@ -1193,6 +1472,7 @@ async function saveOppEdit(id) {
 }
 
 async function createOpp(notify) {
+  syncRichEditorValue("opp-detail");
   const opportunity = {
     org: document.getElementById("opp-org").value.trim(),
     title: document.getElementById("opp-title").value.trim(),
@@ -1213,7 +1493,8 @@ async function createOpp(notify) {
   });
   const data = await res.json();
   if (!res.ok) return toast(data.error, true);
-  ["opp-org","opp-title","opp-location","opp-deadline","opp-desc","opp-detail","opp-apply-url","opp-logo"].forEach(id => document.getElementById(id).value = "");
+  ["opp-org","opp-title","opp-location","opp-deadline","opp-desc","opp-apply-url","opp-logo"].forEach(id => document.getElementById(id).value = "");
+  setDetailFieldValue("opp-detail", "");
   document.getElementById("opp-industry").selectedIndex = 0;
   document.getElementById("opp-type").selectedIndex = 0;
   document.getElementById("opp-paid").checked = false;
@@ -1494,6 +1775,7 @@ function renderCommunityEvents(events) {
     </div>`;
   }).join("");
   setEventDateMinimums();
+  enhanceDetailEditors();
 }
 
 function renderEvents(events) {
@@ -1567,12 +1849,14 @@ function renderEvents(events) {
     </div>`;
   }).join("");
   setEventDateMinimums();
+  enhanceDetailEditors();
 }
 
 function startEventEdit(id) { editingEventId = id; filterEvents(); filterCommunityEvents(); }
 function cancelEventEdit() { editingEventId = null; filterEvents(); filterCommunityEvents(); }
 
 async function saveEventEdit(id) {
+  syncRichEditorValue("edit-evt-detail");
   const existing = lastEvents.find(e => e.id === id) || {};
   const normalizedType = existing.is_community
     ? normalizeCommunityEventType(document.getElementById("edit-evt-type").value)
@@ -1605,6 +1889,7 @@ async function saveEventEdit(id) {
 }
 
 async function createEventAdmin() {
+  syncRichEditorValue("evt-detail");
   const event = {
     title: document.getElementById("evt-title").value.trim(),
     org: document.getElementById("evt-org").value.trim(),
@@ -1624,7 +1909,8 @@ async function createEventAdmin() {
   });
   const data = await res.json();
   if (!res.ok) return toast(data.error, true);
-  ["evt-title","evt-org","evt-date","evt-url","evt-img","evt-desc","evt-detail"].forEach(id => document.getElementById(id).value = "");
+  ["evt-title","evt-org","evt-date","evt-url","evt-img","evt-desc"].forEach(id => document.getElementById(id).value = "");
+  setDetailFieldValue("evt-detail", "");
   document.getElementById("evt-type").selectedIndex = 0;
   lastEvents = data.events || [];
   filterEvents();
@@ -1634,6 +1920,7 @@ async function createEventAdmin() {
 }
 
 async function createCommunityEventAdmin() {
+  syncRichEditorValue("comm-evt-detail");
   const event = {
     title: document.getElementById("comm-evt-title").value.trim(),
     org: document.getElementById("comm-evt-org").value.trim(),
@@ -1653,7 +1940,8 @@ async function createCommunityEventAdmin() {
   });
   const data = await res.json();
   if (!res.ok) return toast(data.error, true);
-  ["comm-evt-title","comm-evt-org","comm-evt-date","comm-evt-url","comm-evt-img","comm-evt-desc","comm-evt-detail"].forEach(id => document.getElementById(id).value = "");
+  ["comm-evt-title","comm-evt-org","comm-evt-date","comm-evt-url","comm-evt-img","comm-evt-desc"].forEach(id => document.getElementById(id).value = "");
+  setDetailFieldValue("comm-evt-detail", "");
   document.getElementById("comm-evt-type").selectedIndex = 0;
   lastEvents = data.events || [];
   setCommunityCreateMode("community-event");
