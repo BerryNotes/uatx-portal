@@ -591,6 +591,39 @@ app.get("/api/activities/:id/events", requireAuth, (req, res) => {
   res.json({ events: getClubEventsByActivity(activityId) });
 });
 
+// President updates club general information
+app.put("/api/activities/:id", requireAuth, (req, res) => {
+  const activityId = parseInt(req.params.id, 10);
+  if (!Number.isInteger(activityId)) return res.status(400).json({ error: "Invalid activity id" });
+
+  const user = getUserById(req.session.userId);
+  const club = getActivitiesByPresidentEmail(user.email).find(a => a.id === activityId);
+  if (!club) return res.status(403).json({ error: "You are not the president of this club" });
+
+  const payload = (req.body && req.body.activity) || {};
+  const title = String(payload.title || "").trim();
+  if (!title) return res.status(400).json({ error: "Club title is required" });
+
+  const nextClub = {
+    title,
+    description: String(payload.description || "").trim(),
+    detail_content: String(payload.detail_content || "").trim(),
+    category: String(payload.category || "").trim(),
+    members: Number.isFinite(Number(club.members)) ? Number(club.members) : 0,
+    meet_day: String(payload.meet_day || "").trim(),
+    president_email: String(club.president_email || "").trim(),
+    show_as_event: !!club.show_as_event,
+    event_title: String(club.event_title || "").trim(),
+    event_date: String(club.event_date || "").trim(),
+    event_location: String(club.event_location || "").trim(),
+    event_description: String(club.event_description || "").trim(),
+  };
+
+  updateActivity(activityId, nextClub);
+  const updated = getAllActivities().find(a => a.id === activityId) || nextClub;
+  res.json({ ok: true, activity: updated });
+});
+
 // President creates club event
 app.post("/api/activities/:id/events", requireAuth, (req, res) => {
   const activityId = parseInt(req.params.id, 10);

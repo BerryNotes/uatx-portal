@@ -71,6 +71,30 @@ const normalizeJoinedClubIds = (value) => {
   return out;
 };
 
+const CLUB_DETAIL_PAGE_PREFIX = "club-detail-";
+const CLUB_MANAGE_PAGE_PREFIX = "club-manage-";
+
+const parseClubSubPageId = (subPage, prefix) => {
+  const raw = String(subPage || "");
+  if (!raw.startsWith(prefix)) return null;
+  return normalizeClubId(raw.slice(prefix.length));
+};
+
+const buildMergedActivities = (serverActivities = []) => {
+  const seen = new Set();
+  return [...serverActivities, ...ACTIVITIES].filter((activity) => {
+    const key = String(activity.title || "").toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).map((activity) => ({
+    ...activity,
+    desc: activity.desc || activity.description || "",
+    meetDay: activity.meetDay || activity.meet_day || "",
+    presidentEmail: activity.presidentEmail || activity.president_email || "",
+  }));
+};
+
 const getTodayISODate = () => {
   const now = new Date();
   const tzOffsetMs = now.getTimezoneOffset() * 60000;
@@ -122,6 +146,24 @@ const COMMUNITY_EVENT_CATEGORIES = ["Student Life", "Residential Life"];
 const normalizeCommunityEventCategory = (value) => {
   const raw = String(value || "").trim();
   return COMMUNITY_EVENT_CATEGORIES.includes(raw) ? raw : "Student Life";
+};
+
+const getEventSortValue = (dateValue) => {
+  if (!dateValue) return Number.POSITIVE_INFINITY;
+  const raw = String(dateValue);
+  const parsed = raw.includes("T") ? new Date(raw) : new Date(raw + "T00:00:00");
+  return Number.isNaN(parsed.getTime()) ? Number.POSITIVE_INFINITY : parsed.getTime();
+};
+
+const formatEventDateLabel = (dateValue) => {
+  if (!dateValue) return "Date TBD";
+  const raw = String(dateValue);
+  const parsed = raw.includes("T") ? new Date(raw) : new Date(raw + "T00:00:00");
+  if (Number.isNaN(parsed.getTime())) return "Date TBD";
+  if (raw.includes("T")) {
+    return parsed.toLocaleString("en-US", { month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+  }
+  return parsed.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 };
 
 const formatInlineDetailMarkup = (text) => {
@@ -1619,7 +1661,47 @@ const TopNav = ({activeTab, subPage, navigate, onSignOut, currentUser}) => {
 };
 
 // ─── DETAIL PAGE ───
-const DetailPage = ({subPage, navigate}) => {
+const DetailPage = ({subPage, navigate, currentUser, showToast, serverActivities=[], allClubEvents=[], refreshActivities, refreshClubEvents}) => {
+  const allActivities = buildMergedActivities(serverActivities);
+  const clubDetailId = parseClubSubPageId(subPage, CLUB_DETAIL_PAGE_PREFIX);
+  if (clubDetailId !== null) {
+    const club = allActivities.find((activity) => normalizeClubId(activity.serverId || activity.id) === clubDetailId);
+    if (!club) return <div style={{padding:"32px 40px"}}><p>Club not found.</p></div>;
+    const clubEvents = (allClubEvents || [])
+      .filter((event) => normalizeClubId(event.activity_id) === clubDetailId)
+      .map((event) => ({ ...event, description: event.description || event.desc || "" }))
+      .sort((a, b) => getEventSortValue(a.date) - getEventSortValue(b.date));
+    return <ClubDetailPage club={club} clubEvents={clubEvents} navigate={navigate}/>;
+  }
+
+  const clubManageId = parseClubSubPageId(subPage, CLUB_MANAGE_PAGE_PREFIX);
+  if (clubManageId !== null) {
+    const club = allActivities.find((activity) => normalizeClubId(activity.serverId || activity.id) === clubManageId);
+    const currentEmail = String(currentUser?.email || "").toLowerCase();
+    const presidentEmail = String(club?.presidentEmail || club?.president_email || "").toLowerCase();
+    if (!club || !currentEmail || currentEmail !== presidentEmail) {
+      return (
+        <div style={{padding:"32px 40px"}}>
+          <div onClick={()=>navigate("profile")} style={{cursor:"pointer",color:C.goldMuted,fontSize:13,fontWeight:500,marginBottom:24,display:"inline-flex",alignItems:"center",gap:6}}>
+            {"\u25C0"} Back to Profile
+          </div>
+          <p>You do not have access to manage this club.</p>
+        </div>
+      );
+    }
+    return (
+      <ClubManagePage
+        club={club}
+        showToast={showToast}
+        navigate={navigate}
+        onEventUpdated={() => {
+          if (refreshActivities) refreshActivities();
+          if (refreshClubEvents) refreshClubEvents();
+        }}
+      />
+    );
+  }
+
   const page = SUBPAGE_CONTENT[subPage];
   if (!page) return <div style={{padding:"32px 40px"}}><p>Page not found.</p></div>;
   return (
@@ -2070,8 +2152,56 @@ const CalendarPage = ({allInternships, navigate, serverActivities=[], serverEven
   );
 };
 
+const ClubDetailPage = ({club, clubEvents=[], navigate}) => {
+  const descriptionItems = parseRichDetailContent((club.detail_content || "").trim() || (club.desc || club.description || "").trim());
+  const events = (clubEvents || []).slice().sort((a, b) => getEventSortValue(a.date) - getEventSortValue(b.date));
+  return (
+    <div style={{animation:"fadeIn 0.3s ease"}}>
+      <div style={{background:"linear-gradient(135deg, "+C.navy+" 0%, "+C.navyLight+" 100%)",padding:"36px 40px"}}>
+        <h1 style={{color:C.cream,fontFamily:"Georgia, serif",fontSize:28,fontWeight:700,margin:0}}>{club.title}</h1>
+      </div>
+      <div style={{padding:"32px 40px"}}>
+        <div onClick={()=>navigate("clubs")} style={{cursor:"pointer",color:C.goldMuted,fontSize:13,fontWeight:500,marginBottom:24,display:"inline-flex",alignItems:"center",gap:6}}>
+          {"\u25C0"} Back to Clubs
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:18}}>
+          {club.category && <Badge>{club.category}</Badge>}
+          <span style={{fontSize:12,color:C.textLight}}>{club.members || 0} member{(club.members || 0) !== 1 ? "s" : ""}</span>
+          {club.meetDay && <span style={{fontSize:12,color:C.textLight}}>{"\u00B7"} Meets: {club.meetDay}</span>}
+        </div>
+        {club.presidentEmail && (
+          <div style={{fontSize:13,color:C.text,marginBottom:18}}>
+            President Contact: <a href={"mailto:" + club.presidentEmail} style={{color:C.goldMuted,fontWeight:600}}>{club.presidentEmail}</a>
+          </div>
+        )}
+        <div style={{backgroundColor:C.white,border:"1px solid "+C.border,padding:"20px 22px",marginBottom:24}}>
+          <h3 style={{fontFamily:"Georgia, serif",fontSize:18,color:C.navy,margin:"0 0 12px"}}>About This Club</h3>
+          {descriptionItems.length > 0 ? <Section items={descriptionItems}/> : <p style={{fontSize:14,color:C.textLight,margin:0}}>No description available yet.</p>}
+        </div>
+        <div style={{backgroundColor:C.white,border:"1px solid "+C.border,padding:"20px 22px"}}>
+          <h3 style={{fontFamily:"Georgia, serif",fontSize:18,color:C.navy,margin:"0 0 12px"}}>Club Events</h3>
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {events.map((event) => (
+              <div key={event.id} style={{border:"1px solid "+C.border,padding:"12px 14px",backgroundColor:C.cream}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
+                  <div style={{fontSize:14,fontWeight:700,color:C.navy}}>{event.title || "Club Event"}</div>
+                  <div style={{fontSize:12,color:C.textLight,fontWeight:600,whiteSpace:"nowrap"}}>{formatEventDateLabel(event.date)}</div>
+                </div>
+                {(event.location || "").trim() && <div style={{fontSize:12,color:C.textLight,marginTop:4}}>{event.location}</div>}
+                {(event.description || "").trim() && <p style={{fontSize:12,color:C.text,lineHeight:1.55,margin:"8px 0 0"}}>{event.description}</p>}
+                {event.subPage && <div style={{marginTop:10}}><Btn size="sm" variant="secondary" onClick={()=>navigate(event.subPage)}>View Event Details</Btn></div>}
+              </div>
+            ))}
+            {events.length === 0 && <p style={{fontSize:13,color:C.textLight,margin:0}}>No club events have been added yet.</p>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 // ─── CLUB PRESIDENT CARD ───
-const ClubPresidentCard = ({club, showToast, onEventUpdated}) => {
+const ClubManagePage = ({club, showToast, onEventUpdated, navigate}) => {
+  const [isEditMode, setIsEditMode] = useState(false);
   const [showCompose, setShowCompose] = useState(false);
   const [clubEvents, setClubEvents] = useState([]);
   const [newEvt, setNewEvt] = useState({title:"",date:"",location:"",description:"",detail_content:""});
@@ -2081,12 +2211,21 @@ const ClubPresidentCard = ({club, showToast, onEventUpdated}) => {
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [memberEmails, setMemberEmails] = useState(null);
+  const [savingInfo, setSavingInfo] = useState(false);
+  const [clubInfo, setClubInfo] = useState({
+    title: club.title || "",
+    category: club.category || "Academic",
+    meet_day: club.meetDay || club.meet_day || "",
+    description: club.desc || club.description || "",
+    detail_content: club.detail_content || "",
+  });
   const inputStyle = {width:"100%",padding:8,border:"1px solid "+C.border,fontSize:13,boxSizing:"border-box",fontFamily:"'Libre Franklin', sans-serif"};
   const toolbarWrapStyle = {display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",marginTop:2};
   const toolbarBtnStyle = {fontSize:10,padding:"4px 8px",border:"1px solid "+C.border,backgroundColor:C.white,color:C.textLight,cursor:"pointer",fontFamily:"'Libre Franklin', sans-serif",fontWeight:600};
   const toolbarSelectStyle = {fontSize:10,padding:"4px 8px",border:"1px solid "+C.border,backgroundColor:C.white,color:C.textLight,cursor:"pointer",fontFamily:"'Libre Franklin', sans-serif",fontWeight:600};
   const newEvtDetailRef = useRef(null);
   const editEvtDetailRef = useRef(null);
+  const clubDetailRef = useRef(null);
   const todayISO = (() => {
     const now = new Date();
     const tzOffsetMs = now.getTimezoneOffset() * 60000;
@@ -2117,6 +2256,16 @@ const ClubPresidentCard = ({club, showToast, onEventUpdated}) => {
     </div>
   );
 
+  useEffect(() => {
+    setClubInfo({
+      title: club.title || "",
+      category: club.category || "Academic",
+      meet_day: club.meetDay || club.meet_day || "",
+      description: club.desc || club.description || "",
+      detail_content: club.detail_content || "",
+    });
+  }, [club.id, club.title, club.category, club.meetDay, club.meet_day, club.desc, club.description, club.detail_content]);
+
   const loadEvents = async () => {
     try {
       const res = await fetch("/api/activities/" + club.id + "/events");
@@ -2129,6 +2278,40 @@ const ClubPresidentCard = ({club, showToast, onEventUpdated}) => {
     } catch(e) {}
   };
   useEffect(() => { loadEvents(); }, [club.id]);
+
+  const saveClubInfo = async () => {
+    if (!clubInfo.title.trim()) {
+      showToast("Club name is required");
+      return;
+    }
+    setSavingInfo(true);
+    try {
+      const res = await fetch("/api/activities/" + club.id, {
+        method: "PUT",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({
+          activity: {
+            title: clubInfo.title.trim(),
+            category: clubInfo.category || "Academic",
+            meet_day: clubInfo.meet_day || "",
+            description: clubInfo.description || "",
+            detail_content: clubInfo.detail_content || "",
+          }
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error || "Failed to save club details");
+        return;
+      }
+      showToast("Club details updated");
+      if (onEventUpdated) onEventUpdated();
+    } catch (e) {
+      showToast("Failed to save club details");
+    } finally {
+      setSavingInfo(false);
+    }
+  };
 
   const addEvent = async () => {
     if (!newEvt.title) return;
@@ -2253,15 +2436,137 @@ const ClubPresidentCard = ({club, showToast, onEventUpdated}) => {
     return !!d && d < todayISO;
   };
 
-  return (
-    <div style={{border:"1px solid "+C.border,padding:16,marginBottom:12}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-        <div>
-          <div style={{fontSize:14,fontWeight:600,color:C.navy}}>{club.title}</div>
-          <div style={{fontSize:11,color:C.textLight}}>{club.category}</div>
+  const previewDescriptionItems = parseRichDetailContent((clubInfo.detail_content || "").trim() || (clubInfo.description || "").trim());
+  const previewEvents = (clubEvents || []).slice().sort((a, b) => getEventSortValue(a.date) - getEventSortValue(b.date));
+
+  if (!isEditMode) {
+    return (
+      <div style={{padding:"32px 40px",animation:"fadeIn 0.3s ease"}}>
+        <div onClick={()=>navigate("profile")} style={{cursor:"pointer",color:C.goldMuted,fontSize:13,fontWeight:500,marginBottom:20,display:"inline-flex",alignItems:"center",gap:6}}>
+          {"\u25C0"} Back to Profile
         </div>
-        <Badge color={C.gold}>President</Badge>
+        <div style={{marginBottom:18}}>
+          <div>
+            <div style={{display:"flex",alignItems:"baseline",gap:8,flexWrap:"wrap"}}>
+              <h1 style={{fontFamily:"Georgia, serif",fontSize:26,color:C.navy,margin:0}}>{clubInfo.title || club.title}</h1>
+              <span style={{fontSize:12,color:C.textLight,fontStyle:"italic"}}>Preview</span>
+            </div>
+          </div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:18}}>
+          {clubInfo.category && <Badge>{clubInfo.category}</Badge>}
+          <span style={{fontSize:12,color:C.textLight}}>{club.members || 0} member{(club.members || 0) !== 1 ? "s" : ""}</span>
+        </div>
+        {club.presidentEmail && (
+          <div style={{fontSize:13,color:C.text,marginBottom:18}}>
+            President Contact: <a href={"mailto:" + club.presidentEmail} style={{color:C.goldMuted,fontWeight:600}}>{club.presidentEmail}</a>
+          </div>
+        )}
+        <div style={{display:"flex",gap:16,alignItems:"flex-start",flexWrap:"wrap"}}>
+          <div style={{flex:"0 1 320px",minWidth:280,backgroundColor:C.navy,border:"1px solid "+C.navyLight,color:C.white,padding:"16px 0"}}>
+            <div style={{padding:"0 18px 12px",borderBottom:"1px solid "+C.navyLight,marginBottom:8}}>
+              <h3 style={{fontFamily:"Georgia, serif",fontSize:18,color:C.cream,margin:0}}>Club Events</h3>
+              <p style={{fontSize:11,color:C.goldLight,margin:"4px 0 0"}}>Upcoming club activity</p>
+              <div style={{display:"flex",gap:8,marginTop:10,flexWrap:"wrap"}}>
+                <Btn
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    setShowCompose(false);
+                    setShowEvents(false);
+                    setIsEditMode(true);
+                  }}
+                >
+                  Edit Events
+                </Btn>
+                <Btn
+                  size="sm"
+                  onClick={() => {
+                    setShowCompose(false);
+                    setShowEvents(true);
+                    setIsEditMode(true);
+                  }}
+                >
+                  Add Event
+                </Btn>
+              </div>
+            </div>
+            <div data-lenis-prevent style={{maxHeight:420,overflowY:"auto",padding:"0 12px"}}>
+              {previewEvents.map((event) => (
+                <div key={event.id} style={{backgroundColor:C.navyLight,border:"1px solid "+C.navyLight,marginBottom:8,padding:"10px 12px"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
+                    <div style={{fontSize:13,fontWeight:700,color:C.cream,lineHeight:1.35}}>{event.title || "Club Event"}</div>
+                    <div style={{fontSize:10,color:C.goldLight,fontWeight:600,whiteSpace:"nowrap"}}>{formatEventDateLabel(event.date)}</div>
+                  </div>
+                  {(event.location || "").trim() && <div style={{fontSize:11,color:C.creamDark,marginTop:4}}>{event.location}</div>}
+                  {(event.description || "").trim() && <p style={{fontSize:11,color:C.creamDark,lineHeight:1.5,margin:"6px 0 0"}}>{event.description}</p>}
+                </div>
+              ))}
+              {previewEvents.length === 0 && <p style={{fontSize:12,color:C.creamDark,margin:"4px 8px 8px"}}>No club events have been added yet.</p>}
+            </div>
+          </div>
+          <div style={{flex:"1 1 460px",minWidth:320,backgroundColor:C.white,border:"1px solid "+C.border,padding:"20px 22px"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,marginBottom:12,flexWrap:"wrap"}}>
+              <h3 style={{fontFamily:"Georgia, serif",fontSize:18,color:C.navy,margin:0}}>About This Club</h3>
+              <Btn size="sm" onClick={()=>setIsEditMode(true)}>Edit</Btn>
+            </div>
+            {previewDescriptionItems.length > 0 ? <Section items={previewDescriptionItems}/> : <p style={{fontSize:14,color:C.textLight,margin:0}}>No description available yet.</p>}
+          </div>
+        </div>
       </div>
+    );
+  }
+
+  return (
+    <div style={{padding:"32px 40px",animation:"fadeIn 0.3s ease"}}>
+      <div onClick={()=>navigate("profile")} style={{cursor:"pointer",color:C.goldMuted,fontSize:13,fontWeight:500,marginBottom:24,display:"inline-flex",alignItems:"center",gap:6}}>
+        {"\u25C0"} Back to Profile
+      </div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:16,marginBottom:18,flexWrap:"wrap"}}>
+        <div>
+          <h1 style={{fontFamily:"Georgia, serif",fontSize:26,color:C.navy,margin:"0 0 6px"}}>Manage {club.title}</h1>
+          <p style={{fontSize:13,color:C.textLight,margin:0}}>Edit view enabled. Update events and club information below.</p>
+        </div>
+        <Btn size="sm" variant="ghost" onClick={()=>setIsEditMode(false)}>Exit Edit View</Btn>
+      </div>
+
+      <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      <div style={{backgroundColor:C.white,border:"1px solid "+C.border,padding:16,marginBottom:0,order:2}}>
+        <div style={{fontSize:16,fontWeight:700,color:C.navy,fontFamily:"Georgia, serif",marginBottom:12}}>General Information</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <div>
+            <label style={labelSt}>Club Name</label>
+            <input value={clubInfo.title} onChange={e=>setClubInfo(prev=>({...prev,title:e.target.value}))} style={inputStyle}/>
+          </div>
+          <div>
+            <label style={labelSt}>Category</label>
+            <select value={clubInfo.category} onChange={e=>setClubInfo(prev=>({...prev,category:e.target.value}))} style={{...inputStyle,cursor:"pointer"}}>
+              {["Academic","Social","Sports","Arts","Service","Professional","Religious","Cultural","Political","Media"].map(c => <option key={c}>{c}</option>)}
+            </select>
+          </div>
+          <div style={{gridColumn:"1 / span 2"}}>
+            <label style={labelSt}>Short Description</label>
+            <textarea rows={3} value={clubInfo.description} onChange={e=>setClubInfo(prev=>({...prev,description:e.target.value}))} style={{...inputStyle,resize:"vertical"}}/>
+          </div>
+          <div style={{gridColumn:"1 / span 2"}}>
+            <label style={labelSt}>Detailed Description Page</label>
+            {renderDetailToolbar(
+              clubDetailRef,
+              clubInfo.detail_content || "",
+              (nextValue) => setClubInfo(prev => ({...prev, detail_content: nextValue}))
+            )}
+            <textarea ref={clubDetailRef} rows={12} value={clubInfo.detail_content || ""} onChange={e=>setClubInfo(prev=>({...prev,detail_content:e.target.value}))} style={{...inputStyle,marginTop:6,resize:"vertical",minHeight:300}}/>
+          </div>
+        </div>
+        <div style={{marginTop:12}}>
+          <Btn size="sm" onClick={saveClubInfo}>{savingInfo ? "Saving..." : "Save Club Info"}</Btn>
+        </div>
+      </div>
+
+      <div style={{backgroundColor:C.white,border:"1px solid "+C.border,padding:16,marginBottom:0,order:1}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+          <div style={{fontSize:16,fontWeight:700,color:C.navy,fontFamily:"Georgia, serif"}}>Club Events</div>
+        </div>
       {clubEvents.length > 0 && (
         <div style={{marginBottom:10,display:"flex",flexDirection:"column",gap:6}}>
           {clubEvents.map(ev => editingEvtId === ev.id ? (
@@ -2388,12 +2693,30 @@ const ClubPresidentCard = ({club, showToast, onEventUpdated}) => {
           );})()}
         </div>
       )}
+      </div>
+    </div>
     </div>
   );
 };
 
+const ClubPresidentCard = ({club, navigate}) => (
+  <div
+    onClick={() => navigate(CLUB_MANAGE_PAGE_PREFIX + club.id)}
+    style={{border:"1px solid "+C.border,padding:16,marginBottom:12,cursor:"pointer",backgroundColor:C.cream}}
+  >
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+      <div>
+        <div style={{fontSize:14,fontWeight:600,color:C.navy}}>{club.title}</div>
+        <div style={{fontSize:11,color:C.textLight}}>{club.category || "Club"}</div>
+      </div>
+      <Badge color={C.gold}>President</Badge>
+    </div>
+    <div style={{fontSize:12,color:C.textLight,lineHeight:1.5}}>Open the club manager to edit events, description, and general information.</div>
+    <div style={{fontSize:12,color:C.navy,fontWeight:600,marginTop:8}}>Open Club Manager &rarr;</div>
+  </div>
+);
 // ─── PROFILE ───
-const ProfilePage = ({showToast, selectedIndustries, setSelectedIndustries, selectedAreas, setSelectedAreas, emailAlerts, setEmailAlerts, internshipHistory, setInternshipHistory, currentUser, serverActivities, joinedClubs, setJoinedClubs, clubEmailPrefs={}, setClubEmailPrefs, refreshActivities, allClubEvents=[], refreshClubEvents}) => {
+const ProfilePage = ({showToast, selectedIndustries, setSelectedIndustries, selectedAreas, setSelectedAreas, emailAlerts, setEmailAlerts, internshipHistory, setInternshipHistory, currentUser, serverActivities, joinedClubs, setJoinedClubs, clubEmailPrefs={}, setClubEmailPrefs, refreshActivities, allClubEvents=[], refreshClubEvents, navigate}) => {
   const [showForm, setShowForm] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -2485,7 +2808,7 @@ const ProfilePage = ({showToast, selectedIndustries, setSelectedIndustries, sele
               <h3 style={{fontFamily:"Georgia, serif",fontSize:18,color:C.navy,margin:"0 0 4px"}}>My Clubs</h3>
               <p style={{fontSize:12,color:C.textLight,margin:"0 0 16px"}}>Clubs you manage as president</p>
               {serverActivities.filter(a => (a.president_email||"").toLowerCase() === currentUser.email.toLowerCase() && a.status !== "pending").map(club => (
-                <ClubPresidentCard key={club.id} club={club} showToast={showToast} onEventUpdated={()=>{refreshActivities();if(refreshClubEvents)refreshClubEvents();}}/>
+                <ClubPresidentCard key={club.id} club={club} navigate={navigate}/>
               ))}
             </div>
           )}
@@ -2683,19 +3006,7 @@ const CommunityPage = ({mode="all", joinedClubs, setJoinedClubs, clubEmailPrefs=
       showToast("Joined "+club.title+"!");
     }
   };
-  // Merge: server activities first (source of truth), then hardcoded fallback
-  const seen = new Set();
-  const allActivities = [...serverActivities, ...ACTIVITIES].filter(a => {
-    const key = a.title.toLowerCase();
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  }).map(a => ({
-    ...a,
-    desc: a.desc || a.description || "",
-    meetDay: a.meetDay || a.meet_day || "",
-    presidentEmail: a.presidentEmail || a.president_email || "",
-  }));
+  const allActivities = buildMergedActivities(serverActivities);
 
   const adminCommunityEvents = serverEvents
     .filter(e => e.is_community)
@@ -2705,21 +3016,7 @@ const CommunityPage = ({mode="all", joinedClubs, setJoinedClubs, clubEmailPrefs=
       desc: e.description || e.desc || "",
       source: "community"
     }));
-  const clubCommunityEvents = allClubEvents.map(e => {
-    const activityId = normalizeClubId(e.activity_id);
-    const club = allActivities.find(a => normalizeClubId(a.serverId || a.id) === activityId);
-    return {
-      ...e,
-      id: "club-" + e.id,
-      title: e.title || "Club Event",
-      org: club ? club.title : "Club",
-      type: "Club Event",
-      desc: e.description || "",
-      source: "club",
-      subPage: e.subPage || "",
-    };
-  });
-  const communityEvents = [...adminCommunityEvents, ...clubCommunityEvents]
+  const communityEvents = [...adminCommunityEvents]
     .filter(e => e.date && new Date(e.date) >= new Date(new Date().toDateString()))
     .sort((a,b) => new Date(a.date) - new Date(b.date));
 
@@ -2727,14 +3024,14 @@ const CommunityPage = ({mode="all", joinedClubs, setJoinedClubs, clubEmailPrefs=
     return (
       <div style={{padding:"32px 40px",animation:"fadeIn 0.3s ease"}}>
         <h1 style={{fontFamily:"Georgia, serif",fontSize:26,color:C.navy,margin:"0 0 6px"}}>Community Events</h1>
-        <p style={{color:C.textLight,fontSize:13,margin:"0 0 18px"}}>Events from the community and student clubs.</p>
+        <p style={{color:C.textLight,fontSize:13,margin:"0 0 18px"}}>Events from the UATX community.</p>
         <div style={{display:"flex",flexDirection:"column",gap:12}}>
           {communityEvents.map(event => {
             const eventDate = new Date(event.date).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"});
             const shortDesc = (event.desc || "").trim();
             const preview = shortDesc.length > 170 ? shortDesc.slice(0, 167) + "..." : shortDesc;
             return (
-              <div key={event.id} style={{backgroundColor:C.white,border:"1px solid "+C.border,borderLeft:"3px solid "+(event.source==="club"?C.gold:C.navy),overflow:"hidden",cursor:event.subPage?"pointer":"default"}} onClick={()=>event.subPage && navigate(event.subPage)}>
+              <div key={event.id} style={{backgroundColor:C.white,border:"1px solid "+C.border,borderLeft:"3px solid "+C.navy,overflow:"hidden",cursor:event.subPage?"pointer":"default"}} onClick={()=>event.subPage && navigate(event.subPage)}>
                 <div style={{padding:"12px 18px"}}>
                   <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:8}}>
                     {event.img ? (
@@ -2786,7 +3083,11 @@ const CommunityPage = ({mode="all", joinedClubs, setJoinedClubs, clubEmailPrefs=
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:16}}>
         {allActivities.map(club => (
-          <div key={club.id} style={{backgroundColor:C.white,border:"1px solid "+C.border,overflow:"hidden"}}>
+          <div
+            key={club.id}
+            style={{backgroundColor:C.white,border:"1px solid "+C.border,overflow:"hidden",cursor:"pointer"}}
+            onClick={() => navigate(CLUB_DETAIL_PAGE_PREFIX + club.id)}
+          >
             <div style={{height:8,backgroundColor:isJoined(club.id)?C.gold:C.navy}}/>
             <div style={{padding:20}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
@@ -2796,7 +3097,7 @@ const CommunityPage = ({mode="all", joinedClubs, setJoinedClubs, clubEmailPrefs=
               <p style={{fontSize:13,color:C.textLight,lineHeight:1.5,margin:"0 0 8px"}}>{club.desc}</p>
               {club.presidentEmail && (
                 <div style={{fontSize:11,color:C.textLight,marginBottom:8}}>
-                  President: <a href={"mailto:"+club.presidentEmail} style={{color:C.goldMuted,fontWeight:500}}>{club.presidentEmail}</a>
+                  President: <a href={"mailto:"+club.presidentEmail} onClick={(e)=>e.stopPropagation()} style={{color:C.goldMuted,fontWeight:500}}>{club.presidentEmail}</a>
                 </div>
               )}
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:12,borderTop:"1px solid "+C.border}}>
@@ -2804,15 +3105,16 @@ const CommunityPage = ({mode="all", joinedClubs, setJoinedClubs, clubEmailPrefs=
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
                   {isJoined(club.id) && (
                     <div style={{display:"flex",alignItems:"center",gap:6}}>
-                      <div onClick={()=>toggleClubEmails(club.id, club.title)} style={{width:30,height:17,borderRadius:9,cursor:"pointer",backgroundColor:isClubEmailsEnabled(club.id)?C.gold:C.border,position:"relative",transition:"background-color 0.2s ease"}}>
+                      <div onClick={(e)=>{e.stopPropagation();toggleClubEmails(club.id, club.title);}} style={{width:30,height:17,borderRadius:9,cursor:"pointer",backgroundColor:isClubEmailsEnabled(club.id)?C.gold:C.border,position:"relative",transition:"background-color 0.2s ease"}}>
                         <div style={{width:13,height:13,borderRadius:"50%",backgroundColor:C.white,position:"absolute",top:2,left:isClubEmailsEnabled(club.id)?15:2,transition:"left 0.2s ease"}}/>
                       </div>
                       <span style={{fontSize:10,color:C.textLight}}>Emails</span>
                     </div>
                   )}
-                  <Btn size="sm" variant={isJoined(club.id)?"primary":"secondary"} onClick={()=>toggleJoin(club)}>{isJoined(club.id)?"Joined":"Join Club"}</Btn>
+                  <Btn size="sm" variant={isJoined(club.id)?"primary":"secondary"} onClick={(e)=>{e.stopPropagation();toggleJoin(club);}}>{isJoined(club.id)?"Joined":"Join Club"}</Btn>
                 </div>
               </div>
+              <div style={{fontSize:12,color:C.navy,fontWeight:600,paddingTop:8}}>View Club Details &rarr;</div>
             </div>
           </div>
         ))}
@@ -3155,8 +3457,8 @@ const App = () => {
           content.push(...parseRichDetailContent(detailText));
           SUBPAGE_CONTENT[pageKey] = {
             title: e.title || "Club Event",
-            backTo: "community-events",
-            backLabel: "Back to Community Events",
+            backTo: "calendar",
+            backLabel: "Back to Calendar",
             content
           };
           e.subPage = pageKey;
@@ -3223,7 +3525,9 @@ const App = () => {
     } else {
       setSubPage(tab);
       if (tab.startsWith("event-")) setActiveTab("events");
-      else if (tab.startsWith("club-event-")) setActiveTab("community-events");
+      else if (tab.startsWith("club-event-")) setActiveTab("calendar");
+      else if (tab.startsWith(CLUB_DETAIL_PAGE_PREFIX)) setActiveTab("clubs");
+      else if (tab.startsWith(CLUB_MANAGE_PAGE_PREFIX)) setActiveTab("profile");
       else if (tab === "submit-activity") setActiveTab("clubs");
       else if (tab.startsWith("opp-")) setActiveTab("opportunities");
       else setActiveTab("home");
@@ -3264,7 +3568,7 @@ const App = () => {
     home: <HomePage navigate={navigate}/>,
     opportunities: <OpportunitiesPage navigate={navigate} showToast={showToast} savedOpps={savedOpps} setSavedOpps={setSavedOpps} selectedIndustries={selectedIndustries} serverOpps={serverOpps}/>,
     calendar: <CalendarPage allInternships={allInternships} navigate={navigate} serverActivities={serverActivities} serverEvents={serverEvents} allClubEvents={allClubEvents}/>,
-    profile: <ProfilePage showToast={showToast} selectedIndustries={selectedIndustries} setSelectedIndustries={setSelectedIndustries} selectedAreas={selectedAreas} setSelectedAreas={setSelectedAreas} emailAlerts={emailAlerts} setEmailAlerts={setEmailAlerts} internshipHistory={internshipHistory} setInternshipHistory={setInternshipHistory} currentUser={currentUser} serverActivities={serverActivities} joinedClubs={joinedClubs} setJoinedClubs={setJoinedClubs} clubEmailPrefs={clubEmailPrefs} setClubEmailPrefs={setClubEmailPrefs} refreshActivities={loadServerActivities} allClubEvents={allClubEvents} refreshClubEvents={loadClubEvents}/>,
+    profile: <ProfilePage showToast={showToast} selectedIndustries={selectedIndustries} setSelectedIndustries={setSelectedIndustries} selectedAreas={selectedAreas} setSelectedAreas={setSelectedAreas} emailAlerts={emailAlerts} setEmailAlerts={setEmailAlerts} internshipHistory={internshipHistory} setInternshipHistory={setInternshipHistory} currentUser={currentUser} serverActivities={serverActivities} joinedClubs={joinedClubs} setJoinedClubs={setJoinedClubs} clubEmailPrefs={clubEmailPrefs} setClubEmailPrefs={setClubEmailPrefs} refreshActivities={loadServerActivities} allClubEvents={allClubEvents} refreshClubEvents={loadClubEvents} navigate={navigate}/>,
     "community-events": <CommunityPage mode="events" joinedClubs={joinedClubs} setJoinedClubs={setJoinedClubs} clubEmailPrefs={clubEmailPrefs} setClubEmailPrefs={setClubEmailPrefs} showToast={showToast} serverActivities={serverActivities} serverEvents={serverEvents} navigate={navigate} refreshActivities={loadServerActivities} allClubEvents={allClubEvents}/>,
     clubs: <CommunityPage mode="clubs" joinedClubs={joinedClubs} setJoinedClubs={setJoinedClubs} clubEmailPrefs={clubEmailPrefs} setClubEmailPrefs={setClubEmailPrefs} showToast={showToast} serverActivities={serverActivities} serverEvents={serverEvents} navigate={navigate} refreshActivities={loadServerActivities} allClubEvents={allClubEvents}/>,
     events: <EventsPage navigate={navigate} serverEvents={serverEvents}/>,
@@ -3284,7 +3588,7 @@ const App = () => {
       <TopNav activeTab={activeTab} subPage={subPage} navigate={navigate} onSignOut={handleSignOut} currentUser={currentUser}/>
       <div style={{marginTop:72,minHeight:"calc(100vh - 72px)",display:"flex",flexDirection:"column"}}>
         <div style={{flex:"1 0 auto"}}>
-          {subPage ? <DetailPage subPage={subPage} navigate={navigate}/> : pages[activeTab]}
+          {subPage ? <DetailPage subPage={subPage} navigate={navigate} currentUser={currentUser} showToast={showToast} serverActivities={serverActivities} allClubEvents={allClubEvents} refreshActivities={loadServerActivities} refreshClubEvents={loadClubEvents}/> : pages[activeTab]}
         </div>
         <Footer onInvert={()=>setInverted(v=>!v)}/>
       </div>
