@@ -1,0 +1,7 @@
+[dotenv@17.3.1] injecting env (0) from .env -- tip: ⚡️ secrets for agents: https://dotenvx.com/as2
+UATX Student Portal
+──────────────────────────────
+  Home:   http://localhost:3333
+  Admin:  http://localhost:3333/admin
+  Blog:   http://localhost:3333/blog
+──────────────────────────────

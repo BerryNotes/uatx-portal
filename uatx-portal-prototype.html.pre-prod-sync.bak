@@ -1,0 +1,2778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UATX Student Portal — Prototype</title>
+<link rel="icon" type="image/png" href="/images/Home/logo.png">
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<script src="https://unpkg.com/lenis@1.1.18/dist/lenis.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Libre Franklin', sans-serif; background: #f5f0e8; }
+  #root { min-height: 100vh; display: flex; flex-direction: column; }
+  html { scrollbar-width: none; }
+  body::-webkit-scrollbar { display: none; }
+  [data-lenis-prevent]::-webkit-scrollbar { width: 4px; }
+  [data-lenis-prevent]::-webkit-scrollbar-track { background: transparent; }
+  [data-lenis-prevent]::-webkit-scrollbar-thumb { background: #c9a84c44; border-radius: 2px; }
+  select:focus, input:focus, textarea:focus { outline: 2px solid #c9a84c; outline-offset: -1px; }
+  button:hover { opacity: 0.88; }
+  .opp-detail-rich h2 { font-family: Georgia, serif; font-size: 30px; line-height: 1.2; color: #1a2332; margin: 8px 0 12px; font-weight: 700; }
+  .opp-detail-rich h3 { font-family: Georgia, serif; font-size: 24px; line-height: 1.25; color: #1a2332; margin: 18px 0 10px; font-weight: 700; }
+  .opp-detail-rich h4 { font-family: Georgia, serif; font-size: 20px; line-height: 1.3; color: #1a2332; margin: 16px 0 8px; font-weight: 700; }
+  .opp-detail-rich p { font-size: 15px; line-height: 1.8; color: #2c2c2c; margin: 0 0 12px; }
+  .opp-detail-rich ul { margin: 0 0 16px 20px; padding: 0; }
+  .opp-detail-rich li { font-size: 15px; line-height: 1.8; color: #2c2c2c; margin-bottom: 4px; }
+  .opp-detail-rich strong { font-weight: 700; color: #1a2332; }
+  .opp-detail-rich em { font-style: italic; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes toastIn { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: translateX(0); } }
+  @keyframes bounce { 0%, 20%, 50%, 80%, 100% { transform: translateY(0); } 40% { transform: translateY(6px); } 60% { transform: translateY(3px); } }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+  // Fetch Google Client ID from server config
+  fetch("/api/config").then(r=>r.json()).then(c=>{window.__GOOGLE_CLIENT_ID=c.googleClientId||"";}).catch(()=>{});
+</script>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+// ─── HELPERS ───
+let _lsUserId = "";
+const load = (key, fallback) => { try { const v = localStorage.getItem("uatx_" + _lsUserId + "_" + key); return v !== null ? JSON.parse(v) : fallback; } catch(e) { return fallback; } };
+const save = (key, val) => { try { localStorage.setItem("uatx_" + _lsUserId + "_" + key, JSON.stringify(val)); } catch(e) {} };
+const api = (path, opts) => fetch(path, { headers: {"Content-Type":"application/json"}, ...opts }).then(r => {
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return r.json();
+});
+
+// Debounce helper for preference sync
+const debounce = (fn, ms) => { let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); }; };
+
+const escapeHtml = (value) => String(value || "")
+  .replace(/&/g, "&amp;")
+  .replace(/</g, "&lt;")
+  .replace(/>/g, "&gt;")
+  .replace(/"/g, "&quot;")
+  .replace(/'/g, "&#39;");
+
+const normalizePublicUrl = (value, allowRelative = false) => {
+  if (typeof value !== "string") return "";
+  let v = value.trim();
+  if (!v) return "";
+
+  const driveMatch = v.match(/drive\.google\.com\/file\/d\/([^/]+)/i);
+  if (driveMatch) return "https://drive.google.com/uc?export=view&id=" + driveMatch[1];
+
+  if (v.startsWith("data:image/")) return v;
+  if (v.startsWith("//")) return "https:" + v;
+  if (v.startsWith("http://")) return "https://" + v.slice(7);
+  if (/^https?:\/\//i.test(v)) return v;
+  if (/^[a-z0-9.-]+\.[a-z]{2,}(\/|$)/i.test(v)) return "https://" + v;
+
+  if (v.startsWith("UATX Portal Images/")) return "/images/" + v.slice("UATX Portal Images/".length);
+  if (v.startsWith("images/")) return "/" + v;
+  if (allowRelative && v.startsWith("/")) return v;
+  if (allowRelative && /^[^:]+$/.test(v)) return "/" + v.replace(/^\/+/, "");
+  return "";
+};
+
+const isPastDeadline = (deadline) => {
+  if (!deadline) return false;
+  const d = new Date(deadline);
+  if (isNaN(d.getTime())) return false;
+  d.setHours(23, 59, 59, 999);
+  return d.getTime() < Date.now();
+};
+
+const renderInlineMarkdown = (text) => {
+  let html = escapeHtml(text || "");
+  html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  html = html.replace(/\*([^*\n]+)\*/g, "<em>$1</em>");
+  return html;
+};
+
+const renderDetailMarkdown = (rawText) => {
+  const lines = String(rawText || "").replace(/\r/g, "").split("\n");
+  const blocks = [];
+  let paragraph = [];
+  let bullets = [];
+
+  const flushParagraph = () => {
+    if (!paragraph.length) return;
+    blocks.push("<p>" + renderInlineMarkdown(paragraph.join(" ")) + "</p>");
+    paragraph = [];
+  };
+
+  const flushBullets = () => {
+    if (!bullets.length) return;
+    blocks.push("<ul>" + bullets.map((line) => "<li>" + renderInlineMarkdown(line) + "</li>").join("") + "</ul>");
+    bullets = [];
+  };
+
+  lines.forEach((line) => {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      flushParagraph();
+      flushBullets();
+      return;
+    }
+
+    const headingMatch = trimmed.match(/^(#{1,3})\s*(.+)$/);
+    if (headingMatch) {
+      flushParagraph();
+      flushBullets();
+      const level = headingMatch[1].length === 1 ? 2 : headingMatch[1].length === 2 ? 3 : 4;
+      blocks.push("<h" + level + ">" + renderInlineMarkdown(headingMatch[2]) + "</h" + level + ">");
+      return;
+    }
+
+    const bulletMatch = trimmed.match(/^[-*]\s+(.+)$/);
+    if (bulletMatch) {
+      flushParagraph();
+      bullets.push(bulletMatch[1]);
+      return;
+    }
+
+    flushBullets();
+    paragraph.push(trimmed);
+  });
+
+  flushParagraph();
+  flushBullets();
+  return blocks.join("");
+};
+
+// ─── CONSTANTS ───
+const C = {
+  navy: "#1a2332", navyLight: "#243044", navyDark: "#111a26",
+  gold: "#c9a84c", goldLight: "#d4b96a", goldMuted: "#a08839",
+  cream: "#f5f0e8", creamDark: "#e8e0d0", white: "#ffffff",
+  text: "#2c2c2c", textLight: "#6b6b6b", border: "#e0d8c8",
+  success: "#4a7c59", alert: "#c75c3a",
+};
+
+const INDUSTRIES = [
+  "Finance & Banking","Technology","Law & Policy","Government","Nonprofit","Media & Journalism","Consulting","Healthcare","Education","Energy","Real Estate","Defense & Security",
+  "Artificial Intelligence","Product Management","Marketing & Communications","Entrepreneurship","Manufacturing","Public Relations","Sports & Entertainment","Agriculture & Food",
+  "Environment & Sustainability","Human Resources","Sales & Business Development"
+];
+
+const AREAS_OF_INTEREST = ["Research","Policy Analysis","Journalism","Financial Modeling","Legal Research","Data Analytics","Entrepreneurship","Public Speaking","Creative Writing","International Relations","Community Organizing","Campaign Strategy","Nonprofit Management","Technology & Innovation","Education Reform"];
+
+// ─── DATA: INTERNSHIPS ───
+const INTERNSHIPS = [
+  { id:1, org:"GovAI", title:"DC Senate Fellowship", industry:"Government", type:"Fellowship", deadline:"2026-06-01", description:"Staffing a policy advisor in a U.S. Senate office, conducting legislative research, attending briefings, and supporting policy development on AI governance and technology issues.", location:"Washington, D.C.", paid:true, featured:true, logo:"/images/Opportunities/govai.png" },
+  { id:2, org:"RepublicanJobs.com", title:"Job Placement", industry:"Consulting", type:"Program", deadline:"2026-04-15", description:"A political recruitment and placement platform connecting candidates with job and internship opportunities across the Republican political ecosystem.", location:"Remote", paid:true, featured:false, subPage:"opp-republican-jobs", logo:"/images/Opportunities/republicanjobs.png" },
+  { id:3, org:"Colloquium", title:"DC Political Science Journal", industry:"Media & Journalism", type:"Internship", deadline:"2026-04-12", description:"An opportunity to contribute to a political science journal based in Washington, D.C.", location:"Washington, D.C.", paid:false, featured:false },
+  { id:4, org:"Office of the Texas Governor", title:"Multiple Roles", industry:"Government", type:"Internship", deadline:"2026-03-20", description:"Internship offerings in various departments within the Governor's office, including legislative affairs, communications, and constituent services.", location:"Austin, TX", paid:false, featured:true, subPage:"opp-texas-governor", logo:"/images/Opportunities/texas-governor.png" },
+  { id:5, org:"Casas por Cristo", title:"Multiple Roles", industry:"Nonprofit", type:"Internship", deadline:"2026-04-10", description:"A nonprofit dedicated to building safe, decent homes for families in need. Roles in building, administration, and mission trips.", location:"El Paso, TX", paid:false, featured:false, subPage:"opp-casas", logo:"/images/Opportunities/casas.png" },
+  { id:6, org:"Maynard Nexsen", title:"Legal Internship Program", industry:"Law & Policy", type:"Internship", deadline:"2026-02-27", description:"A 12-month legal internship at a national, full-service law firm with nearly 600 attorneys across 31 U.S. locations.", location:"Austin, TX", paid:true, featured:true, subPage:"opp-maynard-nexsen", logo:"/images/Opportunities/maynard-nexsen.png" },
+  { id:7, org:"Setna iO", title:"Multiple Roles", industry:"Technology", type:"Internship", deadline:"2026-03-28", description:"10\u201315 internship positions in aerospace supply chain across operations, engineering, data, and related fields.", location:"Multiple U.S. Locations", paid:true, featured:false, subPage:"opp-setna-io", logo:"/images/Opportunities/setna-io.png" },
+  { id:8, org:"Hertog Foundation", title:"Summer Fellowship", industry:"Education", type:"Fellowship", deadline:"2026-04-05", description:"Nationally competitive educational programs for aspiring leaders passionate about shaping the intellectual, civic, and political life of the United States.", location:"Washington, D.C.", paid:true, featured:false, subPage:"opp-hertog", logo:"/images/Opportunities/hertog.png" },
+  { id:9, org:"Senator Ted Cruz", title:"Summer Intern", industry:"Government", type:"Internship", deadline:"2026-03-06", description:"Experience the inner workings of Congress through legislative research, constituent services, and Capitol Hill operations.", location:"Washington, D.C. / Texas", paid:true, featured:false, subPage:"opp-senator-cruz", logo:"/images/Opportunities/senator-cruz.png" },
+  { id:10, org:"New American Industrial Alliance", title:"Content Manager", industry:"Consulting", type:"Internship", deadline:"2026-04-15", description:"Lead content creation and audience growth for a trade organization revitalizing American industry, backed by top VC firms.", location:"Washington, D.C.", paid:true, featured:false, subPage:"opp-naia", logo:"/images/Opportunities/naia.png" },
+  { id:11, org:"Futures Forge", title:"Facilitator", industry:"Education", type:"Internship", deadline:"2026-04-08", description:"9-week paid role coaching high school students through hands-on challenges in Boston. Room & board covered.", location:"Boston, MA", paid:true, featured:false, subPage:"opp-futures-forge", logo:"/images/Opportunities/futures-forge.png" },
+  { id:12, org:"UATX", title:"Work Study", industry:"Education", type:"Program", deadline:"2026-05-01", description:"The UATX Work Study program provides on-campus employment opportunities that allow students to develop professional skills.", location:"Austin, TX", paid:true, featured:false, logo:"/images/Opportunities/uatx.png" },
+  { id:13, org:"Hudson Institute", title:"Political Studies Summer Fellowship", industry:"Government", type:"Fellowship", deadline:"2026-03-22", description:"A six-week education in political theory and practice with rigorous seminars, policy workshops, and a distinguished speaker series.", location:"Washington, D.C.", paid:true, featured:true, subPage:"opp-hudson", logo:"/images/Opportunities/hudson.png" },
+  { id:14, org:"Senator Barry Finegold", title:"Summer Internship", industry:"Government", type:"Internship", deadline:"2026-04-20", description:"Gain firsthand experience in state government, public policy, and constituent services at the Massachusetts State House.", location:"Boston, MA", paid:false, featured:false, subPage:"opp-finegold", logo:"/images/Opportunities/finegold.png" },
+  { id:15, org:"Claremont Institute", title:"Publius Research Fellowship", industry:"Government", type:"Fellowship", deadline:"2026-03-30", description:"Study American political thought and constitutional governance through this competitive fellowship.", location:"Claremont, CA", paid:true, featured:true, logo:"/images/Opportunities/claremont.png" },
+  { id:16, org:"Claremont Institute", title:"Research Assistant", industry:"Government", type:"Internship", deadline:"2026-04-15", description:"Assist senior fellows with research on constitutional law, political philosophy, and public policy.", location:"Claremont, CA", paid:true, featured:false, logo:"/images/Opportunities/claremont.png" },
+  { id:17, org:"Open the Books", title:"Multiple Roles", industry:"Nonprofit", type:"Internship", deadline:"2026-04-10", description:"The nation's flagship transparency organization with paid contributor, fellowship, and scholarship opportunities.", location:"Remote", paid:true, featured:false, subPage:"opp-open-the-books", logo:"/images/Opportunities/open-the-books.png" },
+  { id:18, org:"First Court of Appeals", title:"Summer Internship", industry:"Law & Policy", type:"Internship", deadline:"2026-03-28", description:"Research factual and legal issues, review appellate records, write memoranda of law, and observe oral arguments.", location:"Austin, TX", paid:false, featured:false, subPage:"opp-first-court", logo:"/images/Opportunities/first-court.png" },
+  { id:19, org:"Cicero Institute", title:"Summer Research Fellowship", industry:"Government", type:"Fellowship", deadline:"2026-03-15", description:"Part-time summer research assistants identify system-level problems and develop policy responses in Austin, TX. $650/week.", location:"Austin, TX", paid:true, featured:true, subPage:"opp-cicero-fellowship", logo:"/images/Opportunities/cicero.png" },
+  { id:20, org:"Cicero Institute", title:"Research Assistant", industry:"Government", type:"Internship", deadline:"2026-04-01", description:"Entry-level position supporting state-focused policy reforms through rigorous research and polished written products.", location:"Austin, TX", paid:true, featured:false, subPage:"opp-cicero-ra", logo:"/images/Opportunities/cicero.png" },
+  { id:21, org:"The American Housing Corporation", title:"Summer 2026 Internship", industry:"Technology", type:"Internship", deadline:"2026-04-15", description:"Opportunities in Engineering, Design, Marketing, Architecture, and Supply Chain at a startup solving the housing crisis.", location:"TBD", paid:true, featured:false, subPage:"opp-american-housing" },
+];
+
+// ─── DATA: 8 EVENTS ───
+const EVENTS = [
+  { id:1, title:"Texas Stock Exchange Visit", date:"2026-04-01", type:"Student Visit", org:"UATX", subPage:"event-txse", desc:"Meet the founders of the newly established TXSE national securities exchange in Dallas for a private tour and lunch.", url:"https://www.txse.com/", img:"/images/UATX Sponsered Events & Travel/txse.png" },
+  { id:2, title:"AHA Foundation — If Not Now Fellowship", date:"2026-05-17", type:"VIP Event Partnership", org:"AHA Foundation", subPage:"event-aha", desc:"A week-long immersive fellowship in NYC equipping student leaders to confront antisemitism on campus.", url:"https://www.theahafoundation.org/if-not-now-fellowship/", img:"/images/UATX Sponsered Events & Travel/aha.png" },
+  { id:3, title:"Study Abroad: Israel", date:"2026-06-21", type:"Study Abroad", org:"UATX", subPage:"event-israel", desc:"An 11-day program exploring Israeli history, culture, and geopolitics with visits to Jerusalem, Judea & Samaria, and the Gaza Envelope.", url:"https://herutna.org/", img:null },
+  { id:4, title:"AEI Summer Honors Program", date:"2026-06-01", type:"Summer Program", org:"AEI", subPage:"event-aei", desc:"Fully funded one-week policy seminars in Washington, D.C. with leading AEI scholars on economics, foreign policy, and governance.", url:"https://www.aei.org/shp/", img:"/images/UATX Sponsered Events & Travel/aei.png" },
+  { id:5, title:"Austin Institute — The Student Forum", date:"2026-02-04", type:"Seminar Series", org:"Austin Institute", subPage:"event-austin-institute", desc:"A seminar series exploring Tocqueville's study of American mores through the lenses of religion, science, and the state.", url:"https://www.austin-institute.org/", img:"/images/UATX Sponsered Events & Travel/austin-institute.png" },
+  { id:6, title:"Pepperdine School of Public Policy", date:"2026-02-06", type:"Multiple Programs", org:"Pepperdine", subPage:"event-pepperdine", desc:"Graduate and undergraduate policy programs including a full-tuition Middle East Policy Studies degree at Pepperdine's D.C. campus.", url:"https://publicpolicy.pepperdine.edu/", img:"/images/UATX Sponsered Events & Travel/pepperdine.png" },
+  { id:7, title:"Coign & Forge — Leadership Summit", date:"2026-06-15", type:"Conference", org:"Coign & Forge", subPage:"event-forge", desc:"Win an all-expenses-paid spot at a five-day leadership summit featuring media training, legislative simulations, and networking.", url:"https://forgeleadership.org/", img:"/images/UATX Sponsered Events & Travel/forge.png" },
+  { id:8, title:"Ronald Reagan Institute Programs", date:"2026-06-02", type:"Multiple Programs", org:"Reagan Institute", subPage:"event-reagan", desc:"Fellowships and programs in leadership, national defense, and civic education grounded in President Reagan's principles.", url:"https://www.reaganfoundation.org/reagan-institute/", img:"/images/UATX Sponsered Events & Travel/reagan.png" },
+];
+
+// ─── DATA: ACTIVITIES ───
+const ACTIVITIES = [];
+
+// ─── SUBPAGE CONTENT ───
+const ds = {
+  h2:{fontFamily:"Georgia, serif",fontSize:20,color:C.navy,margin:"28px 0 12px",fontWeight:700},
+  h3:{fontFamily:"Georgia, serif",fontSize:16,color:C.navy,margin:"24px 0 8px",fontWeight:700},
+  p:{fontSize:14,lineHeight:1.75,color:C.text,margin:"0 0 12px"},
+  ul:{margin:"0 0 16px 20px",padding:0},
+  li:{fontSize:14,lineHeight:1.75,color:C.text,marginBottom:4},
+  hr:{border:"none",borderTop:"1px solid "+C.border,margin:"24px 0"},
+  note:{fontSize:13,fontStyle:"italic",color:C.textLight,marginTop:24,paddingTop:16,borderTop:"1px solid "+C.border},
+};
+
+const Section = ({items}) => items.map((item, i) => {
+  if (item.h2) return <h2 key={i} style={{...ds.h2,...(i===0?{marginTop:0}:{})}}>{item.h2}</h2>;
+  if (item.h3) return <h3 key={i} style={ds.h3}>{item.h3}</h3>;
+  if (item.p) return <p key={i} style={ds.p} dangerouslySetInnerHTML={{__html:item.p}}/>;
+  if (item.ul) return <ul key={i} style={ds.ul}>{item.ul.map((li,j) => <li key={j} style={ds.li} dangerouslySetInnerHTML={{__html:li}}/>)}</ul>;
+  if (item.hr) return <hr key={i} style={ds.hr}/>;
+  if (item.note) return <p key={i} style={ds.note}>{item.note}</p>;
+  return null;
+});
+
+const SUBPAGE_CONTENT = {
+  // ─── HOME SUBPAGES ───
+  "unpaid-internship": {
+    title: "Unpaid Internship Support",
+    backTo: "home",
+    backLabel: "Back to Student Portal",
+    content: [
+      {h2:"Overview"},
+      {p:"UATX will offer an Educational Support award of up to $2,000 to students who secure unpaid summer internships. The purpose of the award is to help offset general living expenses that may otherwise limit access to learning opportunities aligned with a student's academic and career goals."},
+      {p:"This award is not compensation for services and does not create an employment relationship with UATX."},
+      {hr:true},
+      {h2:"Eligibility"},
+      {ul:[
+        "Applicants must be a rising junior or senior (in the summer award is utilized) in good academic standing, currently enrolled at UATX, with the intention to return in the fall.",
+        "Applicants must have secured (or received an offer for) an unpaid, career-focused summer internship.",
+        "Internships are expected to involve a meaningful time commitment appropriate to the nature of the opportunity.",
+        "Award amounts may vary based on duration, financial need, and available funding.",
+      ]},
+      {hr:true},
+      {h2:"Deadline"},
+      {p:'Applications should be submitted to Nick Vainisi at <a href="mailto:nvainisi@uaustin.org" style="color:#a08839">nvainisi@uaustin.org</a> and will be reviewed on a rolling basis through <strong>May 1, 2026</strong>.'},
+      {p:"Decisions will be made within a reasonable time frame following submission."},
+      {hr:true},
+      {h2:"Application Process"},
+      {p:"Students must submit a one-page summary statement that includes:"},
+      {ul:[
+        "An overview of the student's academic program, internship details, and how the experience will support their educational and career goals",
+        "Internship organization name, job description, and the name and contact information of the supervisor",
+        "A summary of the intended use of the award funds",
+      ]},
+      {hr:true},
+      {h2:"Post-Internship Requirement"},
+      {p:"Following completion of the internship, award recipients must submit a summary describing:"},
+      {ul:["The internship experience","How the opportunity contributed to their academic or career development"]},
+      {hr:true},
+      {h2:"Allowable Use of Funds"},
+      {p:"Funds may be used at the student's discretion to help offset general expenses incurred during the internship period, including but not limited to:"},
+      {ul:["Housing","Food","Transportation","Relocation or travel expenses"]},
+      {p:"Students are responsible for managing the funds and determining their personal budget."},
+      {hr:true},
+      {h2:"Award Amounts"},
+      {ul:[
+        "Awards are capped at <strong>$2,000</strong> per student",
+        "Award amounts may be less than the maximum based on demonstrated financial need, internship duration, and available program funding",
+      ]},
+      {hr:true},
+      {h2:"Disbursement"},
+      {ul:[
+        "Awards are disbursed directly to students via ACH through our expense management system, Ramp.com",
+        "Disbursement may occur as a lump sum or in installments",
+        "Students must complete all required acceptance and verification steps prior to payment (signed award acceptance, internship start verification, active enrollment verification, must have W9 on file)",
+      ]},
+      {hr:true},
+      {h2:"Tax Notice"},
+      {p:"Funds provided through this program may be considered taxable income under IRS regulations. The university does not withhold taxes from these payments. Students are responsible for any tax obligations associated with receipt of the award."},
+      {note:"*Award is subject to forfeiture or reimbursement should the student change internship status, quit, or terminate internship opportunity early."},
+    ]
+  },
+
+  "meritfirst": {
+    title: "MeritFirst Exams",
+    backTo: "home",
+    backLabel: "Back to Student Portal",
+    render: () => (
+      <div>
+        <img src="/images/Student Portal Page/merit first/Merit First exams.png" alt="MeritFirst Exams" style={{maxWidth:"100%",display:"block",marginBottom:24,borderRadius:4}}/>
+        <h2 style={ds.h2}>About MeritFirst</h2>
+        <p style={ds.p}>Talent is more than credentials. MeritFirst gives you short, practical assessments to demonstrate real skill and get in front of companies that hire on merit — not pedigree. Choose your track, show what you can do, and get matched as you test.</p>
+        <p style={ds.p} dangerouslySetInnerHTML={{__html:'Visit <a href="http://www.meritfirst.us" target="_blank" style="color:#a08839">www.meritfirst.us</a> to get started.'}}/>
+      </div>
+    )
+  },
+
+  "finance-skills": {
+    title: "Finance Skills Development",
+    backTo: "home",
+    backLabel: "Back to Student Portal",
+    render: () => (
+      <div>
+        <p style={ds.p}>Several students have expressed interest in gaining hands-on finance skills that will make you more competitive for internships and future roles in investment banking, private equity, corporate finance, or financial consulting. UATX is offering a partially funded opportunity for motivated students to complete a self-study finance training program, with reimbursement of up to $250 upon successful completion.</p>
+        <p style={ds.p}>These programs are designed to provide practical knowledge of the finance industry and help you develop the core competencies that employers value, including financial modeling, valuation, and Excel skills.</p>
+        <p style={ds.p}>If you choose to complete one of these courses over the holidays or during the Winter or Spring Terms in 2026, we will reimburse up to <strong>$250</strong> upon submission of proof of successful completion.</p>
+        <hr style={ds.hr}/>
+        {[
+          {name:"Training the Street",sub:"Foundations + Advanced",cost:"Cost: $500 (we will reimburse up to $250)",img:"/images/Student Portal Page/finance skill dev/training the street.png",imgWidth:240,items:["Excel techniques specifically tailored for financial modeling","Time value of money, discounting, and other foundational finance math","Understanding and interpreting the income, balance sheet, and cash flow statements","Fundamentals of building integrated 3-statement models from scratch","Core valuation techniques, like DCF","Valuing companies using peer multiples","The basics of LBOs, including capital structure and return drivers","Building full LBO models in Excel","Building merger models (pro forma statements, synergies, etc.)"],why:"These topics cover what analysts and interns actually work on in finance roles. You don't just learn how to model, you also learn how to value, analyze deals, and use Excel."},
+          {name:"Wall Street Prep",sub:"Financial & Valuation Modeling (Premium Package)",cost:"Cost: $499 (we will reimburse up to $250)",img:"/images/Student Portal Page/finance skill dev/wallstreet prep.png",imgWidth:240,items:["Building 3-statement financial models from scratch","Discounted Cash Flow (DCF) valuation","Trading and transaction comparables","Mergers & Acquisitions (M&A) modeling","Leveraged Buyout (LBO) modeling"],why:"This program mirrors the real-world modeling tasks that analysts and interns perform on the job. It's hands-on, practical, and highly regarded in the finance industry."},
+          {name:"Breaking Into Wall Street",sub:"Premium Package",cost:"Cost: $497 (we will reimburse up to $250)",img:"/images/Student Portal Page/finance skill dev/breaking into wallstreet.png",imgWidth:280,items:["Core financial modeling (3-statement modeling, forecasting)","Valuation (DCF, comps, precedent transactions)","M&A and LBO modeling","Excel/VBA for financial modeling","Interview case studies and practical exercises used by banks and consulting firms"],why:"Extremely comprehensive and widely used by students preparing for internships. Includes hundreds of hours of video tutorials, exercises, and practice models."},
+        ].map((prog,i) => (
+          <div key={i} style={{backgroundColor:C.white,border:"1px solid "+C.border,padding:24,marginBottom:20}}>
+            <img src={prog.img} alt={prog.name} style={{maxWidth:prog.imgWidth,width:"100%",display:"block",marginBottom:16,borderRadius:4}}/>
+            <h3 style={{...ds.h3,marginTop:0,fontSize:20}}>{prog.name}</h3>
+            <div style={{fontSize:15,color:C.textLight,margin:"-4px 0 12px",fontWeight:500}}>{prog.sub}</div>
+            <div style={{display:"inline-block",backgroundColor:C.navy,color:C.cream,fontSize:13,fontWeight:600,padding:"4px 14px",marginBottom:14}}>{prog.cost}</div>
+            <h3 style={ds.h3}>What You Will Learn</h3>
+            <ul style={ds.ul}>{prog.items.map((li,j) => <li key={j} style={ds.li}>{li}</li>)}</ul>
+            <h3 style={ds.h3}>Why It's Valuable</h3>
+            <p style={ds.p}>{prog.why}</p>
+          </div>
+        ))}
+      </div>
+    )
+  },
+
+  // ─── EVENT SUBPAGES ───
+  "event-aei": {
+    title: "American Enterprise Institute",
+    backTo: "events",
+    backLabel: "Back to Programs & Travel",
+    content: [
+      {p:'<a href="https://www.aei.org/shp/" target="_blank" style="color:#a08839;font-size:13px;font-weight:500">\u2197 Visit AEI Summer Honors Program</a>'},
+      {h2:"About AEI"},
+      {p:"The American Enterprise Institute (AEI) is a Washington, D.C.\u2013based public policy think tank that promotes ideas rooted in free markets, limited government, individual liberty, and a strong national defense. It conducts research on economics, foreign and domestic policy, health care, education, and constitutional studies. AEI is known for emphasizing empirical research and debate rather than advocating a single party platform."},
+      {hr:true},
+      {h2:"2026 Summer Honors Program"},
+      {p:"The Summer Honors Program at the American Enterprise Institute (AEI) is an intensive, fully-funded educational and professional development opportunity for top undergraduate students. Situated in the heart of Washington, DC, this program provides participants the opportunity to connect with the ideas, research, and network of AEI\u2014one of America's preeminent policy think tanks. This will occur during an intensive one-week seminar led by an AEI scholar or partner instructor."},
+      {p:"The program assembles a diverse cohort of students from a wide range of ideological perspectives to engage in substantive dialogue and debate about the most pressing issues facing the country and world."},
+      {p:"The program aims to provide students with a deeper understanding of contemporary public policy challenges, a greater appreciation for substantive dialogue across ideological divides, and the knowledge and networks to pursue a future career in the policy world."},
+      {hr:true},
+      {h2:"Full Course List"},
+      {h3:"June 1\u20135"},
+      {ul:[
+        '"Thinking About War" with Kori Schake',
+        '"Culture, Covenant, and Country: American Religion and American Identity in a Nationalist Era" with Paul D. Miller (Georgetown University)',
+        '"The American Dream Is Not Dead: Principles and Practices of Democratic Capitalism" with Michael R. Strain',
+        '"The American Safety Net: Work, Poverty, and Opportunity" with Angela Rachidi',
+        '"Hormones, Sex, and Society: An Evolutionary Perspective" with Carole Hooven',
+      ]},
+      {h3:"June 8\u201312"},
+      {ul:[
+        '"Liberalism and the Common Good" with Yuval Levin',
+        '"Across Borders: Navigating Globalization" with Stan Veuger',
+        '"Molding the Middle East: US Foreign Policy" with Danielle Pletka and Daniel J. Samet',
+        '"China and Competition in the Indo-Pacific" with Zack Cooper',
+        '"Fiscal Foundations: Tax Policy in America" with Alex Brill',
+      ]},
+      {h3:"June 22\u201326"},
+      {ul:[
+        '"The Founding and the Bible: Biblical Inspiration and the Meaning of America" with Meir Y. Soloveichik (Yeshiva University)',
+        '"Unbreaking the News: Journalism as Vocation" with Chris Stirewalt and Anna Sugg (NewsNation)',
+        '"The Constitution: Original Meanings" with John Yoo',
+        '"Technology\'s Challenge to Public Life" with Christine Rosen',
+        '"Plato\'s Symposium: Love and Politics, Ancient and Modern" with Benjamin Storey',
+      ]},
+      {h3:"July 6\u201310"},
+      {ul:[
+        '"Transatlantic Partnerships: History and Future Risks" with Dalibor Rohac',
+        '"Climate Risks and Realities: Science and Policymaking" with Roger Pielke Jr.',
+        '"K\u201312 Education: The Foundation of American Democracy, Society, and Economy" with Michael Q. McShane',
+        '"More Than a Paycheck: Work and Dignity in a Rapidly Changing Economy" with Brent Orrell',
+      ]},
+      {hr:true},
+      {h2:"Details"},
+      {ul:[
+        "<strong>Location:</strong> Washington, DC",
+        "<strong>Dates:</strong> Students participate in a one-week course in Summer 2026",
+        "<strong>Funding:</strong> This is a fully-funded program. Participants will receive: reimbursement for travel to DC, housing, a $250 stipend, and lunch and dinner on most class days.",
+        "<strong>Class Size:</strong> 12\u201318 students per class",
+      ]},
+      {hr:true},
+      {h2:"How to Apply"},
+      {p:"<strong>Deadline: March 15, 2026</strong>"},
+      {p:'Complete the application on the <a href="https://www.aei.org/shp/" target="_blank" style="color:#a08839">AEI website</a>.'},
+    ]
+  },
+
+  "event-aha": {
+    title: "AHA Foundation \u2014 If Not Now Fellowship",
+    backTo: "events",
+    backLabel: "Back to Programs & Travel",
+    content: [
+      {p:'<a href="https://www.theahafoundation.org/if-not-now-fellowship/" target="_blank" style="color:#a08839;font-size:13px;font-weight:500">\u2197 Visit AHA Foundation Website</a>'},
+      {h2:"If Not Now Fellowship"},
+      {p:"<strong>May 17\u201320, 2026 | New York City</strong>"},
+      {p:"The If Not Now Fellowship is a week-long immersive experience for mid- to upper-level college student leaders that will equip them to stand up for their Jewish peers and confront antisemitism on their campuses."},
+      {hr:true},
+      {h2:"Details"},
+      {p:'Participating students will be offered a <strong>$500 travel stipend</strong>, and hotel and meals are covered during the program.'},
+      {p:"The curriculum combines lectures on antisemitism (its history, manifestations, how to recognize antisemitic bias on campuses), rights the students hold on campus to advocate for their Jewish peers, and excursions around NYC that tie into the programmatic themes of the fellowship."},
+      {p:"By the end of the fellowship, participants will emerge with:"},
+      {ul:[
+        "A deeper understanding of how to identify and productively confront antisemitism",
+        "Practical tools to stand up for their Jewish peers in their communities",
+        "A supportive network of student leaders and nonprofit professionals",
+        "The confidence to lead with integrity and purpose",
+      ]},
+      {p:"Accommodations will be arranged for Jewish students observing the holiday of Shavuot."},
+      {hr:true},
+      {h2:"Ideal Candidates"},
+      {p:"AHA Foundation is accepting 15 students, and hope to include a mix of Christian, Jewish, and non-religious participants."},
+      {p:"Admissions are rolling until the 15 student cohort is filled."},
+      {p:"Students who are accepted will have shown leadership on their campus whether that be a part of a formal role in campus clubs or informal in the classroom."},
+      {hr:true},
+      {h2:"How to Apply"},
+      {p:'Send an email to Nick Vainisi (<a href="mailto:nvainisi@uaustin.org" style="color:#a08839">nvainisi@uaustin.org</a>) with a CV and why you are interested in attending the program.'},
+    ]
+  },
+
+  "event-austin-institute": {
+    title: "Austin Institute \u2014 The Student Forum",
+    backTo: "events",
+    backLabel: "Back to Programs & Travel",
+    content: [
+      {p:'<a href="https://www.austin-institute.org/" target="_blank" style="color:#a08839;font-size:13px;font-weight:500">\u2197 Visit Austin Institute Website</a>'},
+      {h2:'The Student Forum \u2014 "Religion, Science & the State"'},
+      {p:"For Alexis de Tocqueville, the study of politics always involved the study of \"mores,\" the moral and intellectual habits that define a people. In this seminar series, we will explore Tocqueville's study of American and democratic mores as they manifest in the domains of religion and science."},
+      {hr:true},
+      {h2:"About the Event"},
+      {p:"The short seminars are led by an expert in the field and focus on exploring topics that help develop intellectual and moral virtues, particularly those that contribute to the flourishing of the individual and the establishment of healthy human relationships."},
+      {hr:true},
+      {h2:"Date/Time"},
+      {ul:["Feb 04, 2026, 6:00 PM \u2013 7:30 PM","Feb 11, 2026, 6:00 PM \u2013 7:30 PM","Feb 18, 2026, 6:00 PM \u2013 7:30 PM"]},
+    ]
+  },
+
+  "event-forge": {
+    title: "Coign & Forge \u2014 Forge Leadership Summit",
+    backTo: "events",
+    backLabel: "Back to Programs & Travel",
+    content: [
+      {p:'<a href="https://forgeleadership.org/" target="_blank" style="color:#a08839;font-size:13px;font-weight:500">\u2197 Visit Forge Leadership Institute</a>'},
+      {h2:"Win an All-Expenses-Paid Trip to a 2026 Forge Leadership Summit"},
+      {p:"Are you \u2014 or do you know \u2014 a young conservative looking to bolster your leadership skills and connect with other like-minded leaders?"},
+      {p:"In partnership with Forge Leadership Institute, a previous Coign charity recipient, we are offering three all-expenses-paid spots to attend a 2026 Forge Leadership Summit in Nashville, TN (June 15\u201319) or Columbus, OH (July 20\u201324). Applicants must be 18\u201325 years old and submit a 90-second video sharing how Forge would prepare them to lead, serve, and make a lasting impact."},
+      {hr:true},
+      {h2:"Details"},
+      {p:"Forge Leadership Institute is committed to fostering the minds, character, and conviction of the next generation of conservative leaders. Through immersive leadership summits, Forge equips young Americans with the principles, relationships and practical tools needed to lead with courage, responsibility and purpose."},
+      {p:"Attendees will refine their skills through experiential learning exercises, including a media training workshop, legislative process simulations, relationship building activities and more."},
+      {p:"This is more than a conference \u2014 it's an investment in those who aspire to help strengthen American culture, institutions and civic life."},
+      {hr:true},
+      {h2:"Locations and Dates"},
+      {ul:["<strong>Nashville, TN:</strong> June 15\u201319, 2026","<strong>Columbus, OH:</strong> July 20\u201324, 2026"]},
+      {h2:"Winners Will Receive"},
+      {ul:["Summit Registration","Round-Trip Airfare","Lodging, Meals and On-Site Accommodations"]},
+      {h2:"Eligibility"},
+      {ul:["Age 18\u201325 at the time of the summit","Available to attend at least one of the listed dates","Demonstrated interest in leadership and service and a commitment to the values of Coign and the Forge Leadership Institute"]},
+      {hr:true},
+      {h2:"How to Apply"},
+      {p:"Applicants must submit a video no longer than 90 seconds responding to one of the following prompts:"},
+      {ul:[
+        "What issue in America today most motivates you to lead \u2014 and how do you hope Forge Leadership will help prepare you to address it?",
+        "How do you plan to use the leadership training and relationships from the Forge Leadership Summit to strengthen your community, industry or the country over the next 10 years?",
+        "Forge invests in leaders who value responsibility, freedom and service. How do these principles shape your vision for making America stronger?",
+        "Why are you personally committed to contributing to America's future \u2014 and why is now the right time for you to attend the Forge Leadership Summit?",
+      ]},
+      {p:'To apply, please email the video to <a href="mailto:marketing@coign.com" style="color:#a08839">marketing@coign.com</a> no later than <strong>March 6, 2026</strong>.'},
+    ]
+  },
+
+  "event-pepperdine": {
+    title: "Pepperdine School of Public Policy",
+    backTo: "events",
+    backLabel: "Back to Programs & Travel",
+    content: [
+      {p:'<a href="https://publicpolicy.pepperdine.edu/" target="_blank" style="color:#a08839;font-size:13px;font-weight:500">\u2197 Visit Pepperdine School of Public Policy</a>'},
+      {h2:"Multiple Programs"},
+      {p:"We're just a week out from our app deadline for our new full-scholarship Master of Middle East Policy Studies degree (at Pepperdine DC), as well as an undergrad opportunity, and a new summer program for junior faculty. Here are the dates:"},
+      {ul:[
+        "<strong>Friday, FEB 6th:</strong> Final App Deadline for Master of Middle East Policy Studies. This is a full-tuition scholarship program offered to only 25 students at Pepperdine's Washington, DC campus.",
+        "<strong>FEB 14th:</strong> Final app deadline for our \"Roots of American Order Faculty Program.\" This will be hosted at Pepperdine's campus in Washington, DC.",
+        "<strong>March 2nd:</strong> \"Roots of American Order Summer Certificate.\" Application only for this cohort of 100 undergraduate students (including spring grads).",
+      ]},
+      {p:"We're seeing a great response to our MPP program for fall applications."},
+    ]
+  },
+
+  "event-reagan": {
+    title: "Ronald Reagan Institute",
+    backTo: "events",
+    backLabel: "Back to Programs & Travel",
+    content: [
+      {p:'<a href="https://www.reaganfoundation.org/reagan-institute/" target="_blank" style="color:#a08839;font-size:13px;font-weight:500">\u2197 Visit Ronald Reagan Institute</a>'},
+      {h2:"About the Ronald Reagan Institute"},
+      {p:"The Ronald Reagan Institute serves to advance the principles and legacy of President Ronald Reagan in today's policy landscape. The Institute convenes bipartisan leaders, produces research on national security and economic prosperity, and develops the next generation of public servants through its fellowship and internship programs."},
+      {hr:true},
+      {h2:"Programs & Fellowships"},
+      {h3:"Academy for Civic Education and Democracy (early June\u2013late July)"},
+      {p:"In partnership with the George Washington University, ACED offers high-achieving college students the opportunity to spend a summer learning leadership skills and civic engagement while immersed in Washington DC life. Students participate in an internship with one of our DC-based partners and take a class about presidential leadership at RRI."},
+      {h3:"Civic Leaders Fellowship (November\u2013April)"},
+      {p:"Our CLF students participate in a six month leadership and professional development program designed to cultivate them into the next generation of civic-minded professionals. They meet six times \u2014 thrice virtually, twice in Washington, DC, and once at the Reagan Library in Simi Valley, CA. They'll be paired with a professional mentor in RRI's network."},
+      {h3:"National Defense Fellowship (September\u2013December)"},
+      {p:"Run in conjunction with the Alexander Hamilton Society, NDF seeks to educate about 20 advanced students in the vocabulary, theory, practice, and organization of U.S. defense policy. The main components include the Peace Through Strength Boot Camp in September and participation in the Reagan National Defense Forum in Simi Valley, CA."},
+      {h3:"American Opportunity Bootcamp (October)"},
+      {p:"AOB is a three day weekend convening in Washington DC that seeks to educate undergraduates about economic policymaking process and explore current ideas and debates in applied political economy \u2014 including the role of research, business, interest groups, lobbying, think tanks, and journalism in the policymaking process."},
+    ]
+  },
+
+  "event-israel": {
+    title: "Study Abroad in Israel",
+    backTo: "events",
+    backLabel: "Back to Programs & Travel",
+    content: [
+      {p:'<a href="https://herutna.org/" target="_blank" style="color:#a08839;font-size:13px;font-weight:500">\u2197 Visit Herut North America</a>'},
+      {h2:"Study Abroad in Israel"},
+      {p:"<strong>June 21 \u2013 July 1, 2026 | Israel</strong>"},
+      {p:"We are pleased to invite applications for an 11-day study abroad program in Israel. Supported by a generous grant from the Dell Foundation, this program offers an opportunity to explore the history, culture, and geopolitics of the region. The trip will entail a 1.5 credit hour course taught by Prof. JJ Kimche on Israel's past and future, and will require a 3\u20135 hour Zoom seminar in the week prior to the program."},
+      {p:"The trip, organized by Herut, immerses students in the complexities of Israeli sovereignty, security doctrine, and history through strategic visits to Jerusalem, Judea & Samaria, and the Gaza Envelope. Participants will engage in high-level meetings with Knesset members and military strategists, alongside touring iconic historical sites such as the City of David and Masada."},
+      {hr:true},
+      {h2:"Key Details"},
+      {ul:[
+        "<strong>Dates:</strong> June 21 \u2013 July 1",
+        "<strong>Subsidized Cost:</strong> $2,000 (includes round-trip airfare, lodging, and programming). Due by May 1, 2026.",
+        "<strong>Eligibility:</strong> Open to students with an academic average of 83 or higher.",
+      ]},
+      {hr:true},
+      {h2:"How to Apply"},
+      {p:"Space is strictly limited. Participants will be selected based on academic standing and a statement of interest."},
+      {p:"<strong>Deadline:</strong> Applications are due by Friday, January 30 at the start of the day (8:00 AM CST)."},
+    ]
+  },
+
+  "event-txse": {
+    title: "Texas Stock Exchange \u2014 Student Visit",
+    backTo: "events",
+    backLabel: "Back to Programs & Travel",
+    content: [
+      {p:'<a href="https://www.txse.com/" target="_blank" style="color:#a08839;font-size:13px;font-weight:500">\u2197 Visit Texas Stock Exchange Website</a>'},
+      {h2:"Visit the Texas Stock Exchange"},
+      {p:"<strong>April 1, 2026</strong>"},
+      {p:"We are excited to offer a unique opportunity for a select group of students to visit the Texas Stock Exchange in Dallas. Students selected for this experience will meet with the exchange's founders, tour the facilities, and join them for a private lunch in their offices. This visit is designed for students who are genuinely curious about markets, finance, and the changing landscape of American capital formation."},
+      {p:"<strong>Important:</strong> Students will not be excused from class for attending this visit. If you have a class or academic commitment that conflicts with the timing of the trip, you must resolve it directly with your professor before accepting a spot."},
+      {hr:true},
+      {h2:"About the Texas Stock Exchange"},
+      {p:"The Texas Stock Exchange (TXSE) is a newly established national securities exchange headquartered in Dallas. Founded with the goal of creating a more competitive, issuer-friendly alternative to legacy exchanges, TXSE seeks to streamline listing requirements, reduce regulatory friction, and attract companies and investors who value transparency, innovation, and choice."},
+      {hr:true},
+      {h2:"How to Apply"},
+      {p:'<strong>Deadline: February 20, 2026</strong>'},
+      {p:'Students interested in attending should submit short written responses by email to Nick Vainisi (<a href="mailto:nvainisi@uaustin.org" style="color:#a08839">nvainisi@uaustin.org</a>). Your email should include answers to the following:'},
+      {ul:[
+        "Why are you interested in visiting the Texas Stock Exchange?",
+        "What do you hope to learn from the experience?",
+        "What is one question you would ask a leader at the Texas Stock Exchange, and why?",
+        "In your view, what role do stock exchanges play in a free and prosperous society?",
+        "Are you currently following a specific market, index, asset class, or sector? If so, which one and why?",
+      ]},
+      {p:"Students will be chosen based on clarity of interest, thoughtfulness of responses, demonstrated curiosity about markets, and overall professionalism."},
+    ]
+  },
+
+  // ─── OPPORTUNITY SUBPAGES ───
+  "opp-casas": {
+    title: "Casas por Cristo",
+    backTo: "opportunities",
+    backLabel: "Back to Opportunities",
+    content: [
+      {h2:"About Casas por Cristo"},
+      {p:"Casas por Cristo is a non-profit organization dedicated to building safe, decent homes for families in need throughout Latin America and the United States. Their mission is rooted in serving vulnerable communities by providing housing solutions that promote dignity, stability, and hope. Through volunteer teams, local partnerships, and compassionate service, Casas por Cristo works to strengthen communities and foster long-term relationships with the families they serve."},
+      {hr:true},
+      {h2:"Building Internship"},
+      {p:"The Building Internship with Casas por Cristo offers a hands-on opportunity to participate directly in the construction of homes for families in need. Interns work alongside experienced staff, volunteers, and local partners to assist with building projects, manage tools and materials, and support on-site coordination efforts. This internship provides meaningful exposure to construction work, teamwork, and service-oriented leadership in a mission-driven environment."},
+      {hr:true},
+      {h2:"Administrative Internship"},
+      {p:"The Administrative Internship provides practical experience supporting the day-to-day operations of a non-profit organization. Interns assist with office administration, communications, volunteer coordination, data management, and program support. This role is ideal for students interested in non-profit administration, communications, operations, or ministry support, and offers valuable insight into how mission-driven organizations function behind the scenes."},
+      {hr:true},
+      {h2:"Mission Trips & Volunteer Opportunities"},
+      {p:"In addition to internships, Casas por Cristo offers mission trips and volunteer opportunities for individuals, churches, and student groups who want to serve families in need through hands-on homebuilding and relational ministry. Participants work directly with local communities, helping construct homes while building meaningful relationships with homeowners and fellow volunteers."},
+      {p:"Mission trips range from short-term experiences to longer commitments and provide an opportunity to grow personally, professionally, and spiritually while making a tangible impact. No prior construction experience is required. Training and guidance is provided on site."},
+    ]
+  },
+
+  "opp-cicero-fellowship": {
+    title: "Cicero Institute \u2014 Summer Research Fellowship",
+    backTo: "opportunities",
+    backLabel: "Back to Opportunities",
+    content: [
+      {h2:"What is the Cicero Institute?"},
+      {p:"The Cicero Institute is a nonpartisan group of policy innovators with deep experience in government, legislating, research, technology, and entrepreneurship. Together, we incubate, develop, and fight for policies that apply the principles of a free society and solve problems at the state level, impacting millions of Americans."},
+      {hr:true},
+      {h2:"Overview"},
+      {p:"The Cicero Institute seeks ambitious, talented part-time Summer Research Assistants to experience practical policy development for a summer in Austin, Texas. Summer RAs will identify a system-level social and/or public problem related to Cicero's issue areas and develop a policy response. They will achieve this while immersed in our entrepreneurial culture in tandem with other projects that advance Cicero's goals. RAs will gain professional development under the mentorship of our experienced policy team. All are encouraged to apply: philosophers and data scientists, writers and engineers, welders and policy students."},
+      {hr:true},
+      {h2:"Requirements"},
+      {ul:[
+        "A high school graduate, not currently enrolled in a graduate program, and not the recipient of a graduate degree",
+        "Willing to relocate to Austin for the duration of the summer program",
+        "Ideologically aligned with the mission of the Cicero Institute",
+        "Detail-oriented",
+        "Intellectually curious",
+        "Skilled at grappling with and conveying complex concepts and processes",
+        "Self-driven and entrepreneurial",
+        "Organized and able to manage multiple tasks",
+        "Genuinely enthusiastic to learn about and apply their skills to public policy",
+      ]},
+      {hr:true},
+      {h2:"Responsibilities"},
+      {ul:[
+        "Work approximately 6 hours per day, Monday through Thursday, in our Austin office",
+        "Support the Cicero Institute's policy development through research, drafting, editing, and more at the direction of Cicero staff",
+        "Collaborate with the Cicero Institute's staff to identify a system-level social and/or public sector problem and develop a policy response",
+        "Present the identified problem and policy response for feedback with Cicero's policy area lead",
+        "Attend weekly check-ins with the program directors to receive support and discuss progress",
+        "Share and present work, collaborate on projects, and gain familiarity with research across all policy verticals",
+        "Write posts for Cicero staff to share upon completion of major assignments",
+      ]},
+      {hr:true},
+      {h2:"Professional Development"},
+      {ul:[
+        "Professional development events with Cicero staff and guest speakers",
+        "Publication of an opinion piece on the Cicero Institute's website or in an external publication",
+        "Individual writing workshopping with the communications and media staff",
+        "Causal inference literacy and data workshop",
+        "Alerts of events with other Austin-based policy organizations over the summer",
+        "One-on-one career advising from a Cicero staff mentor",
+        "An exit interview with personalized professional development advice",
+      ]},
+      {hr:true},
+      {h2:"Details"},
+      {ul:[
+        "<strong>Program Dates:</strong> June 15, 2026 through August 14, 2026",
+        "<strong>Compensation:</strong> $650 per week",
+        "<strong>Location:</strong> Austin, TX",
+      ]},
+      {hr:true},
+      {h2:"How to Apply"},
+      {p:'Let Erin Valdez (<a href="mailto:evaldez@uaustin.org" style="color:#a08839">evaldez@uaustin.org</a>) know if you plan to apply. Applications will be considered on a rolling basis through <strong>March 15, 2026</strong>. For any questions, please reach the team at <a href="mailto:internships@ciceroinstitute.org" style="color:#a08839">internships@ciceroinstitute.org</a>.'},
+    ]
+  },
+
+  "opp-cicero-ra": {
+    title: "Cicero Institute \u2014 Research Assistant",
+    backTo: "opportunities",
+    backLabel: "Back to Opportunities",
+    content: [
+      {h2:"Overview"},
+      {p:"The Cicero Institute is hiring a Research Assistant to support the development of state-focused policy reforms. Working closely with senior staff, you will deliver rigorous research and polished written products\u2014independently and as part of teams\u2014to execute ambitious, high-quality products on tight timelines."},
+      {p:"We operate in a disciplined, high-expectation environment. We often move quickly from research to implementation and work alongside a strong network of public- and private-sector leaders to advance reforms that most policy organizations cannot execute."},
+      {p:"The Research Assistant (RA) role is an entry-level position, but it is also a front-line opportunity for a smart, hardworking, self-driven individual who shares our values and wants to improve government for the prosperity of all."},
+      {hr:true},
+      {h2:"The Work Includes"},
+      {ul:[
+        "50-state legislative landscapes with clean citations and clear categorizations",
+        "Short policy memos that frame problems and recommend options",
+        "Draft statutory or regulatory language accompanied by plain-English summaries",
+        "One-page briefs that distill what happened, why it matters, and what we should do next",
+      ]},
+      {p:"RAs may also help develop simple tables, exhibits, and analytics that turn messy or incomplete information into clear, actionable recommendations for policymakers."},
+      {hr:true},
+      {h2:"Key Responsibilities"},
+      {ul:[
+        "Produce well-sourced, timely research to support state-focused policy proposals and advocacy material",
+        "Draft and revise memos, briefs, position pieces, blogs, and longer research products to a public-ready standard",
+        "Navigate fragmented information and translate it into decision-grade outputs",
+        "Track and synthesize relevant policy developments into internal and/or external policy briefs",
+        "Support cross-team requests with clear scoping, tight timelines, and clean deliverables",
+        "Conduct 50-state legislative mappings by locating, verifying, and summarizing relevant statutes, bills, and administrative rules",
+        "Support policy language development by drafting and editing legislation or regulatory language",
+      ]},
+      {hr:true},
+      {h2:"The Ideal Candidate"},
+      {ul:[
+        "Is self-directed and takes full ownership of their work",
+        "Has comfort turning loosely defined assignments into well-scoped projects on deadline",
+        "Is a strong writer and critical thinker",
+        "Exercises sound judgment, rigorously verifying facts",
+        "Maintains high standards for organization and follow-through",
+        "Is coachable and growth-oriented",
+        "Brings genuine intellectual curiosity and the ability to quickly learn new policy domains",
+        "Experience with quantitative analysis or coding (Excel, R, Python, Stata) is a plus",
+      ]},
+      {hr:true},
+      {h2:"How to Apply"},
+      {p:'The Cicero Institute offers a competitive salary and benefits package including health benefits, 401k, and a generous paid leave plan. The ideal candidate is located in Austin, Texas, or is willing to relocate.'},
+      {p:'To apply, please email <a href="mailto:careers@ciceroinstitute.org" style="color:#a08839">careers@ciceroinstitute.org</a> with: (1) your resume, (2) a one-page memo responding to one of the prompts below, and (3) three professional references.'},
+      {h3:"Prompt 1 (Structural Problem Memo)"},
+      {p:"Write a one-page, single-spaced memo to a state legislator explaining a policy problem you care about. Explain why the problem is structural, why current state action is insufficient, and what happens if the state does nothing. Be clear, urgent, and jargon-free."},
+      {h3:"Prompt 2 (Policy Options Memo)"},
+      {p:"Write a one-page, single-spaced memo to a state policymaker on a concrete reform idea. State the goal in one sentence and define how success would be measured. Present three policy options, each with benefits, risks, and implementation constraints. Recommend one option and anticipate the strongest objection with a response."},
+    ]
+  },
+
+  "opp-first-court": {
+    title: "First Court of Appeals \u2014 Summer Internship",
+    backTo: "opportunities",
+    backLabel: "Back to Opportunities",
+    content: [
+      {h2:"Judicial Internships"},
+      {p:"<strong>First Session:</strong> June 2 \u2013 June 27, 2026"},
+      {p:"<strong>Second Session:</strong> July 7 \u2013 August 1, 2026"},
+      {p:"The First Court of Appeals is accepting applications from law students who will be rising second- and third-year students during Summer 2026 for unpaid judicial internship positions. The positions may be volunteer or for credit. Your school or an outside organization may financially support judicial internships."},
+      {hr:true},
+      {h2:"About the Program"},
+      {p:"The First Court's intern program provides an opportunity to improve research and writing skills, while also providing a behind-the-scenes view of how an intermediate court of appeals works. Interns research factual and legal issues, review appellate records, perform substantive citation checks, write memoranda of law, discuss those memoranda with the judges and the Court's attorneys, observe the judges' discussion of issues in cases that are submitted, observe oral argument, and observe post-submission resolution of legal issues raised in oral argument."},
+      {hr:true},
+      {h2:"How to Apply"},
+      {p:'Please submit (1) a cover letter, (2) a resume, and (3) an unofficial transcript. Please combine all three documents into one PDF file and email to <a href="mailto:interns@txcourts.gov" style="color:#a08839">interns@txcourts.gov</a>.'},
+      {p:"Please note that incomplete or inaccurate applications will not be accepted."},
+      {p:'If you have any questions, you can email them to <a href="mailto:interns@txcourts.gov" style="color:#a08839">interns@txcourts.gov</a>.'},
+    ]
+  },
+
+  "opp-futures-forge": {
+    title: "Futures Forge \u2014 Facilitator",
+    backTo: "opportunities",
+    backLabel: "Back to Opportunities",
+    content: [
+      {h2:"Facilitator Internship"},
+      {p:"Futures Forge is hiring college sophomores through seniors to join their Skills for Success Accelerator as Facilitators this summer in Boston."},
+      {p:"Being a facilitator at Futures Forge is an elite opportunity reserved for the best. As a facilitator, you'll guide and inspire others while honing your leadership and problem-solving skills. This is a challenging role that demands excellence, creativity, emotional intelligence, horsepower, motivation, and drive."},
+      {p:"Facilitators are the backbone of Futures Forge's innovative challenge-driven learning system. Facilitators adapt and run challenges for students, and coach the students in intense team and 1:1 coaching sessions to help them learn and grow from the challenges they took on."},
+      {p:"You'll live on-site with high school students, coach them through hands-on challenges, and build real-world skills like critical thinking and leadership."},
+      {hr:true},
+      {h2:"Details"},
+      {ul:[
+        "<strong>Duration:</strong> 9 weeks paid, June 15 \u2013 August 14",
+        "<strong>Location:</strong> Boston, MA",
+        "<strong>Room &amp; board covered</strong>",
+      ]},
+      {hr:true},
+      {h2:"You Will"},
+      {ul:[
+        "<strong>Gain Real World Experience:</strong> At Futures Forge, the responsibility is real, the results matter. Your performance directly impacts the success and growth of your students.",
+        "<strong>Build Your Future:</strong> Develop valuable skills, enhance your resume, and earn while you learn.",
+        "<strong>Get Best-in-Class Coaching:</strong> Futures Forge develops its talent with the same methods and people that have been developing elite management consultants for decades.",
+        "<strong>Inspire Others:</strong> Empower and mentor others, helping them grow and gain confidence while making a lasting impact.",
+        "<strong>Form Deep Bonds:</strong> The facilitation experience is intense, and the bonding that occurs in experiences both exciting and challenging is unmatched.",
+      ]},
+    ]
+  },
+
+  "opp-hertog": {
+    title: "Hertog Foundation \u2014 Summer Fellowship",
+    backTo: "opportunities",
+    backLabel: "Back to Opportunities",
+    content: [
+      {h2:"Why Hertog?"},
+      {p:"For over 15 years, the Hertog Foundation has offered nationally competitive educational programs for aspiring leaders passionate about shaping the intellectual, civic, and political life of the United States. You are encouraged to apply for a transformational summer experience."},
+      {hr:true},
+      {h2:"Selective & Prestigious"},
+      {ul:[
+        "817 applicants from 286 colleges and universities",
+        "97 fellows selected for Summer 2025",
+        "Average accepted GPA: 3.81",
+      ]},
+      {h2:"Exceptional Fellows"},
+      {ul:[
+        "Graduate at 19 (summa cum laude)",
+        "Solo vocalist at Carnegie Hall",
+        "Dual Truman-Marshall Scholar",
+        "USA Biology Olympiad top 50 medalist",
+        "U.S. military veterans and NCAA athletes",
+        "Published in major outlets: NYT, Bloomberg, CNN, WSJ",
+      ]},
+      {hr:true},
+      {h2:"Summer 2026 Program Offerings"},
+      {h3:"Political Studies Program (6 weeks)"},
+      {p:"Revamped curriculum + special speakers celebrating the 250th anniversary of the Declaration of Independence."},
+      {h3:"Security Studies Program (5 weeks)"},
+      {p:"Expanded program focused on today's key national security challenges."},
+      {h3:"Constitutional Studies Program (2 weeks)"},
+      {p:"Explore major constitutional debates with leading legal scholars and Supreme Court advocates."},
+      {h3:"War Studies Program (2 weeks)"},
+      {p:"Study the theory, practice, and organization of war with top U.S. military commanders and civilian leaders."},
+      {h3:"Virtual Humanities at Hertog Seminars"},
+      {p:"Engage with classic texts in philosophy, history, and literature\u2014no travel required."},
+      {hr:true},
+      {h2:"How to Apply"},
+      {p:'Students may apply directly at <a href="https://hertogfoundation.org" target="_blank" style="color:#a08839">hertogfoundation.org</a> or be nominated by faculty and advisors.'},
+    ]
+  },
+
+  "opp-hudson": {
+    title: "Hudson Institute \u2014 Political Studies Summer Fellowship",
+    backTo: "opportunities",
+    backLabel: "Back to Opportunities",
+    content: [
+      {h2:"Summer Fellowship"},
+      {p:"Hudson Institute Political Studies Summer Fellowship offers a six-week education in political theory and practice that broadens and deepens understanding of public policy and American political principles. Rather than a set of answers, Hudson Institute Political Studies provides a framework for political thought and strategic analysis that equips students to seriously confront the challenges facing this nation and the world."},
+      {hr:true},
+      {h2:"Participate In"},
+      {ul:[
+        "<strong>Rigorous seminars</strong> led by master teachers on week-long topics in political theory and public policy",
+        "<strong>Policy workshops</strong> led by think tank experts and experienced government officials, from foreign policy in the Middle East to AI Policy and Regulation",
+        "<strong>Distinguished speaker series</strong> of national leaders from the government, business, journalism, the military, and the academy. Recent speakers include Senator Tom Cotton and General Jack Keane.",
+      ]},
+      {hr:true},
+      {h2:"Curriculum"},
+      {ul:[
+        "<strong>Week 1:</strong> Political Foundings \u2014 The Classical Origins of Modern Politics",
+        "<strong>Week 2:</strong> The American Founding \u2014 Understanding the American Experiment",
+        "<strong>Week 3:</strong> The Ideal Republic \u2014 Citizenship according to Plato's Republic",
+        "<strong>Week 4:</strong> The American Refounding \u2014 On Lincoln & the Fight for a Free America",
+        "<strong>Week 5:</strong> Public Policy \u2014 Current Topics in Domestic & Foreign Policy",
+        "<strong>Week 6:</strong> Beyond Politics \u2014 Religion, Technology, & Public Life",
+      ]},
+      {hr:true},
+      {h2:"Perks"},
+      {ul:[
+        "<strong>Free to Attend:</strong> Admitted students attend free of charge and receive a library of all the texts read during the program",
+        "<strong>Stipend:</strong> Participants receive a $3,000 stipend to offset travel and other costs",
+        "<strong>Complimentary Housing:</strong> Summer fellows live together in the heart of DC in apartment style housing with full kitchens",
+        "<strong>At the Heart of American Politics:</strong> Summer Fellows experience political life in Washington, DC",
+      ]},
+      {hr:true},
+      {h2:"Sessions"},
+      {ul:[
+        "<strong>Session I:</strong> May 24 \u2013 July 5",
+        "<strong>Session II:</strong> June 28 \u2013 August 7",
+      ]},
+      {h2:"How to Apply"},
+      {p:'To apply for a 2026 session, please visit <a href="https://www.hudsonpoliticalstudies.org" target="_blank" style="color:#a08839">www.hudsonpoliticalstudies.org</a>.'},
+      {p:'If you have questions, contact Ayla McBreen at <a href="mailto:amcbreen@hudson.org" style="color:#a08839">amcbreen@hudson.org</a>.'},
+    ]
+  },
+
+  "opp-maynard-nexsen": {
+    title: "Maynard Nexsen \u2014 Legal Internship Program",
+    backTo: "opportunities",
+    backLabel: "Back to Opportunities",
+    content: [
+      {h2:"About Maynard Nexsen"},
+      {p:"Maynard Nexsen is a national, full-service law firm with nearly 600 attorneys across 31 U.S. locations, serving clients ranging from public companies to high-growth startups. The firm formed in 2023 through the merger of Maynard Cooper & Gale and Nexsen Pruet, creating one integrated platform with coast-to-coast reach."},
+      {ul:[
+        "Ranked 99th on Forbes' 2025 list of America's Best Companies\u2014the only law firm to make the list",
+        "Consistently honored by Chambers USA and Best Law Firms, including National Tier 1 distinctions",
+        "Listed in the NLJ 500 and Am Law 200",
+      ]},
+      {hr:true},
+      {h2:"Program Overview"},
+      {ul:[
+        "<strong>Duration:</strong> 12 months, aligned to the academic calendar and respectful of school holidays",
+        "<strong>Schedule:</strong> Priority given to interns available every weekday for consistent limited hours (2\u20134 hours)",
+        "<strong>Location:</strong> Austin, TX",
+      ]},
+      {hr:true},
+      {h2:"What You'll Do"},
+      {p:"Interns are treated as professionals and expected to perform. You'll receive real responsibility on consequential work, with close mentorship from litigators and corporate deal teams."},
+      {h3:"Primary Tracks"},
+      {ul:[
+        "<strong>High-Stakes Litigation:</strong> Join complex commercial matters\u2014drafting research memos, assisting with discovery, building factual records, and shadowing hearings or depositions",
+        "<strong>Corporate & Transactions:</strong> Contribute to venture capital, M&A, fund formation, and corporate governance",
+      ]},
+      {h3:"Elective Exposure"},
+      {ul:[
+        "Real Estate: Support financings, acquisitions, and development matters",
+        "Government & Regulatory Affairs: Assist with research and client advisories",
+        "Department of War Contracting: Explore specialized government contracting work",
+        "Broader Capabilities: IP/tech, employment & labor, cross-border trade, and more",
+      ]},
+      {hr:true},
+      {h2:"Why This Program Stands Out"},
+      {ul:[
+        "<strong>Meaningful Work, Measurable Impact:</strong> Interns contribute to live litigation and active deals",
+        "<strong>Top-tier mentorship:</strong> Work alongside Chambers- and Best-Lawyers-recognized attorneys",
+        "<strong>Austin + National Platform:</strong> Gain local market fluency while leveraging national resources",
+      ]},
+      {hr:true},
+      {h2:"Candidate Profile"},
+      {ul:[
+        "Intellectual rigor and clear written communication",
+        "Accountability and professionalism under time pressure",
+        "Curiosity across disciplines, with interest in litigation and corporate work",
+        "Reliability to maintain a consistent weekday schedule during the term",
+      ]},
+      {hr:true},
+      {h2:"Application Details"},
+      {ul:[
+        "<strong>Deadline:</strong> February 27 (for the upcoming 12-month cohort)",
+        "<strong>Materials:</strong> Resume, a brief statement of interest (250\u2013400 words), and a written work sample (legal or analytical)",
+        "<strong>Selection:</strong> Rolling interviews; offers extend promptly",
+      ]},
+      {p:'Submit applications to Nick Vainisi (<a href="mailto:nvainisi@uaustin.org" style="color:#a08839">nvainisi@uaustin.org</a>) and indicate &quot;Maynard Nexsen Austin Internship&quot; in the subject line.'},
+    ]
+  },
+
+  "opp-naia": {
+    title: "New American Industrial Alliance \u2014 Content Manager",
+    backTo: "opportunities",
+    backLabel: "Back to Opportunities",
+    content: [
+      {h2:"About NAIA"},
+      {p:"The New American Industrial Alliance (NAIA) is a 501(c)(6) trade organization dedicated to revitalizing American industry. Spun out of the Reindustrialize Summit\u2014which gained national attention in just its second year\u2014NAIA advocates for U.S. manufacturing, energy, rare earths, and physical technology companies that are building the backbone of a new industrial economy. Members include leading venture capital firms such as General Catalyst, 8VC, a16z, and Eclipse, as well as companies like Joby, Hadrian, Oklo, and Palantir."},
+      {hr:true},
+      {h2:"The Role: Content Manager"},
+      {p:"NAIA is seeking a strong writer and digital strategist to lead content creation and audience growth across NAIA's channels. This role offers the chance to help shape the narrative of America's industrial resurgence while collaborating with executives, founders, and investors driving national reindustrialization."},
+      {h3:"Key Responsibilities"},
+      {ul:[
+        "Manage and grow NAIA's social media presence (X, LinkedIn, Instagram)",
+        "Write and edit a biweekly newsletter for a growing audience",
+        "Create engaging content that builds community and drives engagement",
+        "Work with leadership to amplify messaging around key initiatives and events",
+      ]},
+      {h3:"Qualifications"},
+      {ul:[
+        "Demonstrated ability to build or manage high-performing social media accounts (include links)",
+        "Excellent writing and editing skills",
+        "Strong interest in American industry, manufacturing, and economic resilience",
+        "Entrepreneurial mindset with high initiative and adaptability",
+        "Preferred: experience with UATX-style environments emphasizing high agency",
+      ]},
+      {hr:true},
+      {h2:"Why Join"},
+      {ul:[
+        "Contribute to a national movement to restore American industrial strength",
+        "Collaborate with leading entrepreneurs, investors, and policymakers",
+        "Help define the voice of a fast-growing organization with national impact",
+      ]},
+      {hr:true},
+      {h2:"How to Apply"},
+      {p:'Send a resume, a short note about your interest, and links to social media accounts you\'ve built or managed to <a href="mailto:ben@newindustrials.org" style="color:#a08839">ben@newindustrials.org</a>.'},
+    ]
+  },
+
+  "opp-texas-governor": {
+    title: "Office of the Texas Governor \u2014 Internship Program",
+    backTo: "opportunities",
+    backLabel: "Back to Opportunities",
+    content: [
+      {h2:"Governor's Internship Program"},
+      {p:"Do you see a future career in public service? The Texas Governor's Internship program could be the next stepping stone for your career in public service. The Office of the Governor (OOG) Internship program offers college students and recent graduates valuable experience and exposure to state government by providing opportunities to work alongside OOG staff in a variety of different fields."},
+      {hr:true},
+      {h2:"Benefits"},
+      {ul:[
+        "Give students an overview of state government by working closely with staff in the Office of the Governor",
+        "Provide students with experience in a working office environment",
+        "Enhance appreciation of public service",
+        "Interns are assigned to work with the Governor's staff",
+      ]},
+      {h2:"Primary Duties"},
+      {ul:[
+        "Performs support work for division program areas",
+        "Provides project assistance",
+        "Conducts research as requested for various projects",
+        "Prepares correspondence, reports, studies, forms and documents",
+        "May research, compose, design, or edit agency publications",
+        "Assists with special projects",
+      ]},
+      {hr:true},
+      {h2:"Sessions"},
+      {ul:[
+        "<strong>Spring:</strong> January \u2013 May (applications due November 15)",
+        "<strong>Summer:</strong> June \u2013 August (applications due April 15)",
+        "<strong>Fall:</strong> September \u2013 December (applications due July 15)",
+      ]},
+      {p:"Internships are on an unpaid basis. They are available to college students and recent graduates."},
+      {hr:true},
+      {h2:"Available Divisions"},
+      {ul:[
+        "Appointments Office","Budget & Policy","Committee on People with Disabilities","Communications",
+        "Constituent Communications","Criminal Justice Division","Economic Development","Financial Services",
+        "General Counsel","Homeland Security Grants Division","Human Resources","Legislative Office",
+        "Office of Compliance and Monitoring","Office of the First Lady","Office of State & Federal Relations (Washington D.C.)",
+        "Office of Economic Development Finance","Public Safety Office","Research and Economic Analysis",
+        "Scheduling & Advance","Texas Film Commission","Texas Music Office",
+        "Texas Military Preparedness Commission","Travel Texas","Texas Space Commission",
+      ]},
+      {hr:true},
+      {h2:"How to Apply"},
+      {p:'Students interested should submit the application, a cover letter, and a resume to Nick Vainisi (<a href="mailto:nvainisi@uaustin.org" style="color:#a08839">nvainisi@uaustin.org</a>) to be considered for the program.'},
+    ]
+  },
+
+  "opp-open-the-books": {
+    title: "Open the Books",
+    backTo: "opportunities",
+    backLabel: "Back to Opportunities",
+    content: [
+      {h2:"About Open the Books"},
+      {p:"Open the Books, the nation's flagship transparency organization, believes deeply in citizen journalism and citizen activism. Our tagline is our mission: <em>Every dime. Online. In real-time.</em> A free society can't have accountability without visibility."},
+      {p:"We focus on data capture, investigations, and changing transparency laws at all levels of government. We have created three pathways for individuals to engage directly in exposing how government spends YOUR money."},
+      {hr:true},
+      {h2:"Paid Contributors"},
+      {p:"We invite independent researchers, journalists, and analysts to contribute original, non-partisan investigative work using Open the Books data."},
+      {ul:[
+        "$300 for short investigative pieces (600\u2013800 words)",
+        "$1,000 for long-form investigations (1,200+ words)",
+        "Submissions must be investigative in nature and grounded in data\u2014not political commentary",
+        "Contributors receive access to the Open the Books team for customized data searches",
+        "Articles are published under the Open the Books byline",
+      ]},
+      {p:'To learn more or pitch an investigation, contact: <a href="mailto:contributors@openthebooks.com" style="color:#a08839">contributors@openthebooks.com</a>'},
+      {hr:true},
+      {h2:"Open the Books Fellowships"},
+      {p:"Consistent contributors may apply to join the Open the Books Fellows program\u2014a formal network of trusted investigators and transparency advocates."},
+      {ul:[
+        "Recognition on the Open the Books website",
+        "Invitations to exclusive briefings, trainings, and internal events",
+        "Opportunities to engage directly with leadership and research teams",
+      ]},
+      {p:'Program will be formally launched in Fall 2026. Contact: <a href="mailto:fellows@openthebooks.com" style="color:#a08839">fellows@openthebooks.com</a>'},
+      {hr:true},
+      {h2:"The Adam Andrzejewski Memorial Scholarship"},
+      {p:"The Adam Andrzejewski Memorial Scholarship honors the legacy of Open the Books' late founder and CEO by supporting the next generation of transparency leaders."},
+      {p:"Each year, Open the Books awards a <strong>$25,000 scholarship</strong> to one high school junior or senior, or current college student, who demonstrates leadership in advancing financial transparency, accountability, and public service."},
+      {p:'Applications are due June 30, 2026. Contact: <a href="mailto:scholarship@openthebooks.com" style="color:#a08839">scholarship@openthebooks.com</a>'},
+    ]
+  },
+
+  "opp-republican-jobs": {
+    title: "RepublicanJobs.com \u2014 Job Placement",
+    backTo: "opportunities",
+    backLabel: "Back to Opportunities",
+    content: [
+      {h2:"About RepublicanJobs.com"},
+      {p:"RepublicanJobs.com is a political recruitment and placement platform that connects candidates with job and internship opportunities across the Republican political ecosystem. It operates as a private recruiting service, not an official arm of the Republican National Committee, and works with a wide network of employers, including political campaigns, government offices, policy organizations, consulting firms, and advocacy groups."},
+      {p:"Individuals can submit their resumes for free, and the Republican Jobs team reviews applications and refers qualified candidates to organizations with current openings. The platform is commonly used by students, recent graduates, and early-career professionals seeking entry-level roles, internships, or career pathways in Republican politics, policy, communications, and public affairs."},
+      {hr:true},
+      {h2:"UATX Accelerated Track"},
+      {p:"The founder of RepublicanJobs.com has provided UATX students with a special, dedicated application link that places them on an accelerated track within the recruiting process. Students who apply through this link receive:"},
+      {ul:[
+        "Prioritized review",
+        "Early career consultation",
+        "Faster matching for relevant jobs and internships",
+      ]},
+      {p:"This helps students move more quickly from resume submission to real opportunities in campaigns, policy organizations, and political firms."},
+    ]
+  },
+
+  "opp-senator-cruz": {
+    title: "Senator Ted Cruz \u2014 Summer Internship",
+    backTo: "opportunities",
+    backLabel: "Back to Opportunities",
+    content: [
+      {h2:"Internship Program"},
+      {p:"Sen. Cruz's Internship Program offers Texas students a unique opportunity to experience first-hand the inner workings of Congress."},
+      {p:"There are two six-week sessions during the summer as well as full-semester internships in both the spring and fall. Interns work during normal office hours: Monday through Friday, from 8 am to 5 pm in Texas, from 9 am to 6 pm in Washington, D.C. The internship is in-person only."},
+      {hr:true},
+      {h2:"Available Offices"},
+      {ul:["Washington, D.C.","Austin","Dallas","Houston","San Antonio","McAllen"]},
+      {h2:"Due Dates"},
+      {ul:[
+        "<strong>Summer internships:</strong> completed packets are due the first Friday in March",
+        "<strong>Fall semester:</strong> due the first Friday in July",
+        "<strong>Spring semester:</strong> due the first Friday in November",
+      ]},
+      {p:"Priority is given to students either from Texas or students enrolled in a Texas school who have completed at least their sophomore year of college. This is a highly competitive process."},
+      {p:"Internships in Washington, DC are paid and it is possible to receive internship course credit."},
+      {hr:true},
+      {h2:"What Interns Do"},
+      {p:"Interns are supervised by the Director of the office location they select. They will receive weekly feedback and coaching on education, internship, and job pursuits. They will also participate in a reading program and discussion with a focus on American history, the role of government, and citizen engagement."},
+      {h3:"Duties and Responsibilities"},
+      {ul:[
+        "Answering phones, reviewing voicemails, and logging constituent correspondence",
+        "Assisting constituents with connecting to staffers",
+        "Processing email, mail, and packages received",
+        "Reviewing news items and compiling for office use",
+        "Legislative research and follow-up for staff and constituents",
+        "Assisting casework team with processing constituent requests",
+        "Supporting the Service Academy Coordinator",
+        "Various special projects as needed",
+      ]},
+      {hr:true},
+      {h2:"How to Apply"},
+      {p:'Submit the application online and the following items to Nick Vainisi (<a href="mailto:nvainisi@uaustin.org" style="color:#a08839">nvainisi@uaustin.org</a>) via email:'},
+      {ul:[
+        "A cover letter detailing why you would like to be an intern in Senator Ted Cruz's office",
+        "A one page resume",
+      ]},
+    ]
+  },
+
+  "opp-finegold": {
+    title: "Senator Barry Finegold \u2014 Summer Internship",
+    backTo: "opportunities",
+    backLabel: "Back to Opportunities",
+    content: [
+      {h2:"Internship"},
+      {p:"<strong>Summer 2026 | Boston</strong>"},
+      {p:"The Office of Senator Barry Finegold is seeking motivated and civic-minded college students to join our team as interns for Summer 2026. This is an excellent opportunity to gain firsthand experience in state government, public policy, and constituent services while working inside the historic Massachusetts State House."},
+      {p:"While the Massachusetts Senate does not offer paid internships, many interns hold outside jobs and we are happy to accommodate work schedules when possible. Please note that our office cannot assist with securing paid employment or housing."},
+      {p:"Space within the State House is limited, and therefore so is our capacity. However, every Senate office hosts interns, and the Senate as a whole provides a robust educational program, including a speaker series featuring legislators and other public leaders."},
+      {p:"Interns will work out of the Massachusetts State House in Boston, typically Monday\u2013Thursday (or another agreed-upon schedule). A returning intern from last year will serve as the \"Senior Intern,\" helping to coordinate schedules, support workflow, and act as a peer leader."},
+      {hr:true},
+      {h2:"Ideal Candidates"},
+      {ul:[
+        "A strong interest in public policy and state government",
+        "An independent, proactive work ethic",
+        "The ability to contribute meaningfully to research, policy projects, and constituent services",
+        "Openness to the fast-paced, deadline-driven environment typical of a legislative office",
+      ]},
+      {hr:true},
+      {h2:"How to Apply"},
+      {p:'Send an email to Betsy Wall (<a href="mailto:elizabeth.wall@masenate.gov" style="color:#a08839">elizabeth.wall@masenate.gov</a>) with a resume and note explaining why you are interested in attending the program.'},
+    ]
+  },
+
+  "opp-setna-io": {
+    title: "Setna iO \u2014 Internship Opportunities",
+    backTo: "opportunities",
+    backLabel: "Back to Opportunities",
+    content: [
+      {h2:"Internship Opportunities at Setna iO"},
+      {p:"Setna iO offers internship opportunities designed to give students meaningful, hands-on experience within the aerospace supply chain industry. The company provides placements across several departments, depending on each student's interests, background, and academic focus."},
+      {hr:true},
+      {h2:"Summer 2026 Internships"},
+      {p:"Setna iO is currently welcoming inquiries for Summer 2026 internships. While the standard internship period runs from May\u2013August, the company remains flexible to accommodate varying academic calendars."},
+      {h3:"Program Highlights"},
+      {ul:[
+        "10\u201315 internship positions anticipated across multiple U.S. locations",
+        "Opportunities aligned with departmental needs in operations, engineering, supply chain, data, and related fields",
+        "Hourly compensation ranging from $18\u2013$20, depending on role and location",
+        "Exposure to real-world projects, professional mentorship, and a dynamic environment",
+      ]},
+      {hr:true},
+      {h2:"Potential Roles"},
+      {ul:[
+        "HQ IL \u2014 Parts Trading",
+        "HQ IL \u2014 Accounting",
+        "HQ IL \u2014 Technology/Ops",
+        "Setnix AZ \u2014 Engineering/Shop",
+        "LGT Miami \u2014 Engineering/Shop",
+        "Zulu Miami \u2014 Engineering/Shop",
+        "Setnix UK \u2014 Engineering/Shop",
+        "Setna UK \u2014 Parts Trading",
+      ]},
+      {hr:true},
+      {h2:"Contact Information"},
+      {p:'Students interested in learning more or expressing interest in a Summer 2026 internship are encouraged to reach out to:'},
+      {ul:[
+        'Mithila Wakode \u2014 <a href="mailto:Mithila.Wakode@setnaio.com" style="color:#a08839">Mithila.Wakode@setnaio.com</a>',
+        'Janelle Weber \u2014 <a href="mailto:Janelle.Weber@setnaio.com" style="color:#a08839">Janelle.Weber@setnaio.com</a>',
+      ]},
+    ]
+  },
+
+  "opp-american-housing": {
+    title: "The American Housing Corporation \u2014 Summer 2026 Internship",
+    backTo: "opportunities",
+    backLabel: "Back to Opportunities",
+    content: [
+      {h2:"About The American Housing Corporation"},
+      {p:"The American Housing Corporation is on a mission to solve America's housing crisis through all-out production. They believe that America's affordability crisis is fundamentally a production crisis, and that solving it requires a vertically integrated development approach: They buy land, and manufacture, install, and sell their homes directly to customers. This is the only way to build at the scale necessary to solve the crisis."},
+      {hr:true},
+      {h2:"Internship Program"},
+      {p:"The internship program offers opportunities for students and recent graduates to gain valuable real-world experience across a variety of fields, including Engineering, Design, Marketing, Architecture, and Supply Chain. Interns work on real projects that contribute directly to solving the housing crisis in the United States."},
+      {h3:"Areas of Interest"},
+      {ul:[
+        "Engineering (Mechanical, Manufacturing, Robotics, or related disciplines)",
+        "Architecture",
+        "Design (Product, Interior, Graphic)",
+        "Marketing & Communications",
+        "Supply Chain & Operations",
+      ]},
+      {hr:true},
+      {h2:"What You'll Do"},
+      {ul:[
+        "Collaborate with cross-disciplinary teams to support ongoing projects",
+        "Conduct research, analyze data, and contribute new ideas",
+        "Assist in process improvement initiatives and problem-solving",
+        "Help develop presentations and documents for internal and external stakeholders",
+        "Participate in team meetings, brainstorming sessions, and project reviews",
+      ]},
+      {hr:true},
+      {h2:"Required Qualifications"},
+      {ul:[
+        "Currently enrolled in or recently graduated from a relevant undergraduate or graduate program",
+        "Demonstrated interest in one of their focus areas",
+        "Strong analytical, communication, and teamwork skills",
+        "Ability to work in a fast-paced, dynamic environment",
+        "Self-motivated, proactive, and eager to learn",
+      ]},
+      {p:"Compensation for internships is dependent on the role and experience of the candidate."},
+    ]
+  },
+  "submit-activity": {
+    title: "List a Club or Activity",
+    backTo: "community",
+    backLabel: "Back to Community",
+    render: () => {
+      const inputStyle = {width:"100%",padding:"10px 12px",border:"1px solid "+C.border,fontSize:13,boxSizing:"border-box",fontFamily:"'Libre Franklin', sans-serif",backgroundColor:C.white};
+      const labelStyle = {fontSize:11,fontWeight:600,color:C.textLight,textTransform:"uppercase",letterSpacing:"0.5px",display:"block",marginBottom:6};
+      const [form, setForm] = React.useState({
+        title:"",
+        category:"Academic",
+        meetDay:"",
+        desc:"",
+        presidentEmail:"",
+        showEvent:false,
+        eventTitle:"",
+        eventDate:"",
+        eventLocation:"",
+        eventDescription:""
+      });
+      const [submitted, setSubmitted] = React.useState(false);
+      const eventReady = !form.showEvent || (form.eventTitle && form.eventDescription);
+      const allFilled = form.title && form.category && form.meetDay && form.desc && form.presidentEmail && eventReady;
+      const handleSubmit = async () => {
+        if (!allFilled) return;
+        try {
+          await fetch("/api/activities", {
+            method:"POST", headers:{"Content-Type":"application/json"},
+            body: JSON.stringify({
+              activity: {
+                title: form.title,
+                category: form.category,
+                meet_day: form.meetDay,
+                description: form.desc,
+                president_email: form.presidentEmail,
+                members: 0,
+                show_as_event: !!form.showEvent,
+                event_title: form.eventTitle,
+                event_date: form.eventDate,
+                event_location: form.eventLocation,
+                event_description: form.eventDescription
+              }
+            })
+          });
+        } catch(e) {}
+        setSubmitted(true);
+      };
+      if (submitted) return React.createElement("div", {style:{textAlign:"center",padding:"48px 0"}},
+        React.createElement("div", {style:{width:56,height:56,borderRadius:"50%",backgroundColor:"#f0f4f0",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 20px"}},
+          React.createElement("div", {style:{width:24,height:12,borderLeft:"3px solid #4a7c59",borderBottom:"3px solid #4a7c59",transform:"rotate(-45deg)",marginTop:-4}})
+        ),
+        React.createElement("h2", {style:{fontFamily:"Georgia, serif",fontSize:22,color:C.navy,margin:"0 0 12px"}}, "Submitted for Review"),
+        React.createElement("p", {style:{fontSize:14,color:C.textLight,lineHeight:1.6,maxWidth:420,margin:"0 auto"}}, "Your club has been submitted and is pending approval. It will appear on the Community page once reviewed by an administrator.")
+      );
+      return React.createElement("div", {style:{maxWidth:560}},
+        React.createElement("p", {style:{fontSize:14,color:C.text,lineHeight:1.7,margin:"0 0 24px"}}, "Submit your club or activity for review. Once approved, it will appear on the Community page for other students to find and join. All fields are required."),
+        React.createElement("div", {style:{display:"flex",flexDirection:"column",gap:16}},
+          React.createElement("div", null,
+            React.createElement("label", {style:labelStyle}, "Club / Activity Name"),
+            React.createElement("input", {type:"text",placeholder:"e.g. Chess Club",value:form.title,onChange:e=>setForm({...form,title:e.target.value}),style:inputStyle})
+          ),
+          React.createElement("div", null,
+            React.createElement("label", {style:labelStyle}, "Category"),
+            React.createElement("select", {value:form.category,onChange:e=>setForm({...form,category:e.target.value}),style:{...inputStyle,cursor:"pointer"}},
+              ["Academic","Social","Sports","Arts","Service","Professional","Religious","Cultural","Political","Media"].map(c => React.createElement("option", {key:c,value:c}, c))
+            )
+          ),
+          React.createElement("div", null,
+            React.createElement("label", {style:labelStyle}, "Meeting Day / Time"),
+            React.createElement("input", {type:"text",placeholder:"e.g. Wednesdays at 6pm",value:form.meetDay,onChange:e=>setForm({...form,meetDay:e.target.value}),style:inputStyle})
+          ),
+          React.createElement("div", null,
+            React.createElement("label", {style:labelStyle}, "Description"),
+            React.createElement("textarea", {rows:3,placeholder:"What does this club do? What should members expect?",value:form.desc,onChange:e=>setForm({...form,desc:e.target.value}),style:{...inputStyle,resize:"vertical"}})
+          ),
+          React.createElement("div", {style:{display:"flex",alignItems:"center",gap:8,padding:"4px 0"}},
+            React.createElement("input", {type:"checkbox",checked:!!form.showEvent,onChange:e=>setForm({...form,showEvent:e.target.checked}),id:"submit-club-show-event"}),
+            React.createElement("label", {htmlFor:"submit-club-show-event",style:{fontSize:12,color:C.text}}, "Also list a community event for this club")
+          ),
+          form.showEvent && React.createElement(React.Fragment, null,
+            React.createElement("div", null,
+              React.createElement("label", {style:labelStyle}, "Event Title"),
+              React.createElement("input", {type:"text",placeholder:"e.g. Debate Night",value:form.eventTitle,onChange:e=>setForm({...form,eventTitle:e.target.value}),style:inputStyle})
+            ),
+            React.createElement("div", {style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}},
+              React.createElement("div", null,
+                React.createElement("label", {style:labelStyle}, "Event Date"),
+                React.createElement("input", {type:"date",value:form.eventDate,onChange:e=>setForm({...form,eventDate:e.target.value}),style:inputStyle})
+              ),
+              React.createElement("div", null,
+                React.createElement("label", {style:labelStyle}, "Event Location"),
+                React.createElement("input", {type:"text",placeholder:"e.g. Room 201",value:form.eventLocation,onChange:e=>setForm({...form,eventLocation:e.target.value}),style:inputStyle})
+              )
+            ),
+            React.createElement("div", null,
+              React.createElement("label", {style:labelStyle}, "Event Description Page Content"),
+              React.createElement("textarea", {rows:4,placeholder:"Add details shown on the event page.",value:form.eventDescription,onChange:e=>setForm({...form,eventDescription:e.target.value}),style:{...inputStyle,resize:"vertical"}})
+            )
+          ),
+          React.createElement("div", null,
+            React.createElement("label", {style:labelStyle}, "President / Contact Email"),
+            React.createElement("input", {type:"email",placeholder:"president@student.uaustin.org",value:form.presidentEmail,onChange:e=>setForm({...form,presidentEmail:e.target.value}),style:inputStyle})
+          ),
+          React.createElement("div", {style:{marginTop:8}},
+            React.createElement("button", {onClick:handleSubmit,style:{cursor:allFilled?"pointer":"not-allowed",border:"none",fontFamily:"'Libre Franklin', sans-serif",fontWeight:600,letterSpacing:"0.5px",textTransform:"uppercase",fontSize:13,padding:"10px 24px",backgroundColor:allFilled?C.gold:"#ccc",color:allFilled?C.navy:"#888",transition:"all 0.2s",opacity:allFilled?1:0.7},disabled:!allFilled}, "Submit for Review")
+          )
+        )
+      );
+    }
+  },
+};
+
+// ─── UI COMPONENTS ───
+const Badge = ({children, color=C.gold, bg}) => (
+  <span style={{display:"inline-block",padding:"3px 10px",borderRadius:"3px",fontSize:"11px",fontWeight:600,letterSpacing:"0.5px",textTransform:"uppercase",color,backgroundColor:bg||color+"18",border:"1px solid "+color+"30"}}>{children}</span>
+);
+
+const Btn = ({children, variant="primary", size="md", onClick, style={}}) => {
+  const base = {cursor:"pointer",border:"none",fontFamily:"'Libre Franklin', sans-serif",fontWeight:600,letterSpacing:"0.5px",transition:"all 0.2s ease",textTransform:"uppercase",fontSize:size==="sm"?"11px":"13px",padding:size==="sm"?"6px 14px":"10px 24px"};
+  const v = {
+    primary:{backgroundColor:C.gold,color:C.navy,...base},
+    secondary:{backgroundColor:"transparent",color:C.gold,border:"1px solid "+C.gold,...base},
+    ghost:{backgroundColor:"transparent",color:C.textLight,border:"1px solid "+C.border,...base},
+  };
+  return <button style={{...v[variant],...style}} onClick={onClick}>{children}</button>;
+};
+
+const Crest = () => (
+  <img src="/images/Home/logo.png" alt="UATX" style={{width:48,height:48,objectFit:"contain"}}/>
+);
+
+const Toast = ({toasts}) => (
+  <div style={{position:"fixed",top:20,right:20,zIndex:9999,display:"flex",flexDirection:"column",gap:8}}>
+    {toasts.map(t => (
+      <div key={t.id} style={{backgroundColor:C.navy,color:C.cream,padding:"12px 20px",fontSize:13,fontWeight:500,boxShadow:"0 4px 16px rgba(0,0,0,0.2)",borderLeft:"3px solid "+C.gold,animation:"toastIn 0.3s ease",maxWidth:340}}>{t.msg}</div>
+    ))}
+  </div>
+);
+
+// ─── TOP NAV ───
+const TopNav = ({activeTab, subPage, navigate, onSignOut, currentUser}) => {
+  const [homeOpen, setHomeOpen] = useState(false);
+  const [eventsOpen, setEventsOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setHomeOpen(false);
+        setEventsOpen(false);
+        setProfileOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const tabs = [
+    {id:"home",label:"Home",hasDropdown:true,hideArrow:true},
+    {id:"opportunities",label:"Opportunities"},
+    {id:"calendar",label:"Calendar"},
+    {id:"profile",label:"My Profile"},
+    {id:"community",label:"Community"},
+    {id:"events",label:"Programs & Travel",hasDropdown:true,hideArrow:true},
+  ];
+
+  const homeSubItems = [
+    {id:"unpaid-internship",label:"Unpaid Internship Support"},
+    {id:"meritfirst",label:"MeritFirst Exams"},
+    {id:"finance-skills",label:"Finance Skills Development"},
+  ];
+
+  const eventSubItems = [
+    {id:"event-aei",label:"AEI"},
+    {id:"event-aha",label:"AHA Foundation"},
+    {id:"event-austin-institute",label:"Austin Institute"},
+    {id:"event-forge",label:"Coign & Forge"},
+    {id:"event-pepperdine",label:"Pepperdine"},
+    {id:"event-reagan",label:"Ronald Reagan Institute"},
+    {id:"event-israel",label:"Study Abroad: Israel"},
+    {id:"event-txse",label:"Texas Stock Exchange"},
+  ];
+
+  const isActive = (id) => {
+    if (id === "home") return activeTab === "home";
+    if (id === "events") return activeTab === "events";
+    return activeTab === id && !subPage;
+  };
+
+  const handleTabClick = (tab) => {
+    if (tab.id === "home") {
+      setEventsOpen(false);
+      if (activeTab === "home" && !subPage) {
+        setHomeOpen(prev => !prev);
+      } else {
+        setHomeOpen(false);
+        navigate("home");
+      }
+    } else if (tab.id === "events") {
+      setHomeOpen(false);
+      if (activeTab === "events" && !subPage) {
+        setEventsOpen(prev => !prev);
+      } else {
+        setEventsOpen(false);
+        navigate("events");
+      }
+    } else {
+      setHomeOpen(false);
+      setEventsOpen(false);
+      navigate(tab.id);
+    }
+  };
+
+  const handleSubClick = (id) => {
+    setHomeOpen(false);
+    setEventsOpen(false);
+    navigate(id);
+  };
+
+  const dropdownStyle = {
+    position:"absolute",top:"100%",left:0,backgroundColor:C.navy,border:"1px solid "+C.navyLight,
+    minWidth:220,zIndex:20,boxShadow:"0 4px 16px rgba(0,0,0,0.3)",
+  };
+
+  const dropdownItemStyle = (active) => ({
+    padding:"10px 20px",cursor:"pointer",fontSize:13,color:active?C.gold:C.cream+"cc",
+    fontWeight:active?600:400,transition:"all 0.15s ease",borderBottom:"1px solid "+C.navyLight,
+  });
+
+  return (
+    <div ref={dropdownRef} style={{position:"fixed",top:0,left:0,right:0,height:72,backgroundColor:"#0e162a",display:"flex",alignItems:"center",zIndex:10,borderBottom:"1px solid #1a2332",padding:"0 28px"}}>
+      {/* Left: Crest + Title */}
+      <div style={{display:"flex",alignItems:"center",marginRight:32,flexShrink:0,cursor:"pointer"}} onClick={()=>navigate("home")}>
+        <Crest/>
+      </div>
+
+      {/* Center: Tabs */}
+      <nav style={{display:"flex",alignItems:"stretch",height:"100%",flex:1,justifyContent:"center",gap:0}}>
+        {tabs.map(tab => {
+          const active = isActive(tab.id);
+          const showDropdown = (tab.id === "home" && homeOpen) || (tab.id === "events" && eventsOpen);
+          const items = tab.id === "home" ? homeSubItems : tab.id === "events" ? eventSubItems : [];
+          return (
+            <div key={tab.id} style={{position:"relative",display:"flex",alignItems:"stretch"}}>
+              <div onClick={()=>handleTabClick(tab)} style={{
+                display:"flex",alignItems:"center",gap:6,padding:"0 18px",cursor:"pointer",
+                fontSize:13,fontWeight:active?600:400,color:active?C.gold:C.cream+"bb",
+                borderBottom:active?"3px solid "+C.gold:"3px solid transparent",
+                transition:"all 0.15s ease",letterSpacing:"0.3px",
+                fontFamily:"'Libre Franklin', sans-serif",
+              }}>
+                {tab.label}
+                {tab.hasDropdown && !tab.hideArrow && <span style={{fontSize:8,marginLeft:2,opacity:0.6}}>{showDropdown?"\u25B2":"\u25BC"}</span>}
+              </div>
+              {showDropdown && items.length > 0 && (
+                <div style={dropdownStyle}>
+                  {items.map(item => (
+                    <div key={item.id} onClick={()=>handleSubClick(item.id)}
+                      style={dropdownItemStyle(subPage===item.id)}
+                      onMouseEnter={e=>e.target.style.backgroundColor=C.navyLight}
+                      onMouseLeave={e=>e.target.style.backgroundColor="transparent"}
+                    >{item.label}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </nav>
+
+      {/* Right: User */}
+      <div style={{position:"relative",flexShrink:0}}>
+        <div onClick={()=>setProfileOpen(p=>!p)} style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer"}}>
+          {currentUser?.avatar_url ? (
+            <img src={currentUser.avatar_url} alt="" style={{width:32,height:32,borderRadius:"50%"}} referrerPolicy="no-referrer"/>
+          ) : (
+            <div style={{width:32,height:32,borderRadius:"50%",backgroundColor:C.goldMuted,display:"flex",alignItems:"center",justifyContent:"center",color:C.navy,fontSize:12,fontWeight:700}}>{(currentUser?.name||"?").split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}</div>
+          )}
+          <div>
+            <div style={{color:C.cream,fontSize:12,fontWeight:600}}>{currentUser?.name||"Student"}</div>
+            <div style={{color:C.goldMuted,fontSize:10}}>{currentUser?.email||""}</div>
+          </div>
+          <span style={{color:C.cream+"88",fontSize:8,marginLeft:2}}>{profileOpen?"\u25B2":"\u25BC"}</span>
+        </div>
+        {profileOpen && (
+          <div style={{position:"absolute",top:"100%",right:0,marginTop:4,backgroundColor:C.navy,border:"1px solid "+C.navyLight,minWidth:180,zIndex:20,boxShadow:"0 4px 16px rgba(0,0,0,0.3)"}}>
+            <div onClick={()=>{setProfileOpen(false);navigate("profile");}} style={{padding:"10px 20px",cursor:"pointer",fontSize:13,color:C.cream+"cc",borderBottom:"1px solid "+C.navyLight,transition:"all 0.15s ease"}} onMouseEnter={e=>e.target.style.backgroundColor=C.navyLight} onMouseLeave={e=>e.target.style.backgroundColor="transparent"}>My Profile</div>
+            <div onClick={()=>{setProfileOpen(false);onSignOut();}} style={{padding:"10px 20px",cursor:"pointer",fontSize:13,color:C.alert,transition:"all 0.15s ease"}} onMouseEnter={e=>e.target.style.backgroundColor=C.navyLight} onMouseLeave={e=>e.target.style.backgroundColor="transparent"}>Sign Out</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ─── DETAIL PAGE ───
+const DetailPage = ({subPage, navigate}) => {
+  const page = SUBPAGE_CONTENT[subPage];
+  if (!page) return <div style={{padding:"32px 40px"}}><p>Page not found.</p></div>;
+  return (
+    <div style={{animation:"fadeIn 0.3s ease"}}>
+      <div style={{background:"linear-gradient(135deg, "+C.navy+" 0%, "+C.navyLight+" 100%)",padding:"36px 40px"}}>
+        <h1 style={{color:C.cream,fontFamily:"Georgia, serif",fontSize:28,fontWeight:700,margin:0}}>{page.title}</h1>
+      </div>
+      <div style={{padding:"32px 40px"}}>
+        <div onClick={()=>navigate(page.backTo)} style={{cursor:"pointer",color:C.goldMuted,fontSize:13,fontWeight:500,marginBottom:24,display:"inline-flex",alignItems:"center",gap:6}}>
+          {"\u25C0"} {page.backLabel}
+        </div>
+        {page.render ? page.render() : <Section items={page.content}/>}
+      </div>
+
+    </div>
+  );
+};
+
+// ─── HOME ───
+const HomePage = ({navigate}) => {
+  return (
+    <div style={{animation:"fadeIn 0.3s ease"}}>
+      <div style={{background:"linear-gradient(135deg, "+C.navy+"dd 0%, "+C.navyLight+"cc 100%), url('/images/Home/hi def background.avif') center/cover no-repeat",minHeight:"calc(100vh - 72px)",display:"flex",flexDirection:"column",justifyContent:"center",alignItems:"flex-start",padding:"48px 40px",position:"relative",overflow:"hidden"}}>
+        <div style={{position:"relative"}}>
+          <h1 style={{color:C.cream,fontFamily:"Georgia, serif",fontSize:32,fontWeight:700,margin:0,lineHeight:1.3}}>Welcome to the UATX<br/>Student Opportunity Portal</h1>
+          <p style={{color:C.cream+"aa",fontSize:15,maxWidth:560,marginTop:12,lineHeight:1.6}}>Your home base for discovering internships, fellowships, and career opportunities curated by the UATX Talent Network.</p>
+          <div style={{display:"flex",gap:12,marginTop:24}}>
+            <Btn onClick={()=>navigate("opportunities")}>Browse Opportunities</Btn>
+            <Btn variant="secondary" onClick={()=>navigate("events")}>Programs & Travel</Btn>
+          </div>
+        </div>
+        <div style={{position:"absolute",bottom:24,left:"50%",transform:"translateX(-50%)",display:"flex",flexDirection:"column",alignItems:"center",gap:4,opacity:0.6}}>
+          <span style={{color:C.cream,fontSize:11,letterSpacing:"1px",textTransform:"uppercase"}}>Scroll for more</span>
+          <span style={{color:C.cream,fontSize:18,animation:"bounce 2s infinite"}}>&#9660;</span>
+        </div>
+      </div>
+      <div style={{backgroundColor:C.cream,padding:"48px 40px 48px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:32}}>
+          <div style={{width:4,height:36,backgroundColor:C.gold,flexShrink:0}}/>
+          <div>
+            <h2 style={{fontFamily:"Georgia, serif",fontSize:22,color:C.navy,margin:"0 0 4px",fontWeight:700}}>Programs & Resources</h2>
+            <p style={{fontSize:13,color:C.textLight,margin:0}}>Explore funding, training, and networking programs designed to accelerate your career.</p>
+          </div>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:48}}>
+          {[
+            {title:"Unpaid Internship Support",tagline:"Up to $2,000 Award",desc:"Secure an unpaid summer internship and receive an Educational Support award to help offset living expenses. Open to all enrolled UATX students with a confirmed unpaid placement.",details:"Applications reviewed on a rolling basis through May 1, 2026. Awards cover housing, food, transportation, and relocation expenses. Submit a one-page summary to Nick Vainisi.",link:"unpaid-internship",action:"Learn More",accent:C.gold,img:null},
+            {title:"LinkedIn Talent Network",tagline:"Professional Networking",desc:"Connect with UATX alumni, employers, and peers in the Talent Network LinkedIn group. Build professional relationships that open doors to internships, mentorship, and full-time roles.",details:"A polished LinkedIn profile and updated resume are required before requesting entry. Send yours to Nick Vainisi for review, then request to join the group.",link:null,action:"Join Group",accent:"#0077B5",img:"/images/Student Portal Page/linkedin.png"},
+            {title:"Finance Skills Development",tagline:"Up to $250 Reimbursement",desc:"Choose from Training the Street, Wall Street Prep, or Breaking Into Wall Street. Master financial modeling, valuation, and Excel skills that top employers demand.",details:"Complete the self-study program on your own schedule and submit your certificate of completion to receive reimbursement of up to $250. Covers core skills: DCF, LBO, M&A modeling.",link:"finance-skills",action:"Learn More",accent:C.success,img:"/images/Student Portal Page/finance skill dev.png"},
+            {title:"MeritFirst Exams",tagline:"Skills-Based Hiring",desc:"Take short, practical assessments that showcase your abilities to employers who value talent over pedigree. No cost to students \u2014 results shared directly with hiring partners.",details:"Choose your track, demonstrate real-world skills, and get matched with companies as you test. Assessments are designed to level the playing field for all students.",link:"meritfirst",action:"Learn More",accent:C.alert,img:"/images/Student Portal Page/merit first exams.png",imgContain:true},
+          ].map((sec,i) => (
+            <div key={i} onClick={sec.link?()=>navigate(sec.link):undefined} style={{backgroundColor:C.white,border:"1px solid "+C.border,overflow:"hidden",cursor:sec.link?"pointer":"default",transition:"box-shadow 0.2s ease, transform 0.2s ease",display:"flex",flexDirection:"row",alignItems:"stretch",minHeight:200}} onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 6px 24px rgba(0,0,0,0.1)";e.currentTarget.style.transform="translateY(-2px)";}} onMouseLeave={e=>{e.currentTarget.style.boxShadow="none";e.currentTarget.style.transform="translateY(0)";}}>
+              <div style={{width:4,backgroundColor:sec.accent,flexShrink:0}}/>
+              <div style={{flex:1,padding:"32px 40px",display:"flex",flexDirection:"column",justifyContent:"center"}}>
+                <div style={{fontSize:10,fontWeight:700,color:sec.accent,textTransform:"uppercase",letterSpacing:"1px",marginBottom:8}}>{sec.tagline}</div>
+                <div style={{fontSize:20,fontWeight:700,color:C.navy,fontFamily:"Georgia, serif",marginBottom:10}}>{sec.title}</div>
+                <p style={{fontSize:14,color:C.text,lineHeight:1.7,margin:"0 0 8px"}}>{sec.desc}</p>
+                <p style={{fontSize:12,color:C.textLight,lineHeight:1.6,margin:"0 0 20px"}}>{sec.details}</p>
+                <div><Btn size="sm" variant="secondary" onClick={sec.link ? (e)=>{e.stopPropagation();navigate(sec.link);} : undefined}>{sec.action}</Btn></div>
+              </div>
+              <div style={{width:280,flexShrink:0,backgroundColor:C.creamDark,overflow:"hidden"}}>
+                {sec.img ? (
+                  <img src={sec.img} alt={sec.title} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+                ) : (
+                  <div style={{width:"100%",height:"100%",background:"linear-gradient(135deg, "+C.navy+" 0%, "+C.navyLight+" 100%)",display:"flex",alignItems:"center",justifyContent:"center",color:C.gold,fontSize:56,fontWeight:700,fontFamily:"Georgia, serif"}}>$</div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+    </div>
+  );
+};
+
+// ─── OPPORTUNITIES ───
+const OpportunitiesPage = ({navigate, showToast, savedOpps, setSavedOpps, selectedIndustries, serverOpps=[]}) => {
+  const [search, setSearch] = useState("");
+  const [filterInd, setFilterInd] = useState("All");
+  const [filterType, setFilterType] = useState("All");
+  const [sortBy, setSortBy] = useState("deadline");
+  const [showSaved, setShowSaved] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [form, setForm] = useState({org:"",title:"",description:"",industry:"Finance & Banking",type:"Internship",location:"",deadline:"",paid:false,contactEmail:""});
+  const [visibleIds, setVisibleIds] = useState(new Set());
+  const [brokenLogos, setBrokenLogos] = useState({});
+  const cardRefs = useRef({});
+  const sidebarItemRefs = useRef({});
+
+  const allItemsRaw = [...serverOpps, ...INTERNSHIPS].map(item => ({
+    ...item,
+    logo: normalizePublicUrl(item.logo || "", true) || null,
+  })).filter(item => !isPastDeadline(item.deadline));
+  const seenKeys = new Set();
+  const allItems = allItemsRaw.filter(o => {
+    const key = (o.org + "|" + o.title).toLowerCase();
+    if (seenKeys.has(key)) return false;
+    seenKeys.add(key);
+    return true;
+  });
+  const availableIndustries = [...new Set(allItems.map(i => i.industry).filter(Boolean))];
+  const availableTypes = [...new Set(allItems.map(i => i.type).filter(Boolean))];
+  const filtered = allItems.filter(i => {
+    if (showSaved && !savedOpps.includes(i.id)) return false;
+    const ms = i.title.toLowerCase().includes(search.toLowerCase()) || i.org.toLowerCase().includes(search.toLowerCase());
+    const mi = filterInd==="All" || i.industry===filterInd;
+    const mt = filterType==="All" || i.type===filterType;
+    return ms && mi && mt;
+  }).sort((a,b) => {
+    if (sortBy==="deadline") {
+      const ad = a.deadline ? new Date(a.deadline).getTime() : Number.MAX_SAFE_INTEGER;
+      const bd = b.deadline ? new Date(b.deadline).getTime() : Number.MAX_SAFE_INTEGER;
+      return ad - bd;
+    }
+    if (sortBy==="org") return a.org.localeCompare(b.org);
+    if (sortBy==="title") return a.title.localeCompare(b.title);
+    if (sortBy==="type") return a.type.localeCompare(b.type);
+    return 0;
+  });
+
+  const toggleSave = (id) => setSavedOpps(prev => prev.includes(id) ? prev.filter(x=>x!==id) : [...prev, id]);
+  const isSaved = (id) => savedOpps.includes(id);
+  const matches = (ind) => selectedIndustries.includes(ind);
+  const markLogoBroken = (id, slot) => setBrokenLogos(prev => ({ ...prev, [id + ":" + slot]: true }));
+  const hasLogo = (item, slot) => {
+    if (!item.logo) return false;
+    return !brokenLogos[item.id + ":" + slot];
+  };
+
+  const submitListing = () => {
+    if (!form.org || !form.title) return;
+    const newItem = {...form, featured:false, deadline:form.deadline||"2026-06-01"};
+    api("/api/admin/opportunities", { method: "POST", body: JSON.stringify({ opportunity: newItem }) })
+      .then(() => showToast("Your listing has been submitted!"))
+      .catch(() => showToast("Submission failed — you may need admin access"));
+    setForm({org:"",title:"",description:"",industry:"Finance & Banking",type:"Internship",location:"",deadline:"",paid:false,contactEmail:""});
+    setShowModal(false);
+  };
+
+  // Track which cards are visible via IntersectionObserver
+  useEffect(() => {
+    const observer = new IntersectionObserver((entries) => {
+      setVisibleIds(prev => {
+        const next = new Set(prev);
+        entries.forEach(e => {
+          const id = e.target.dataset.oppId;
+          if (e.isIntersecting) next.add(id); else next.delete(id);
+        });
+        return next;
+      });
+    }, { rootMargin: "-80px 0px -40% 0px", threshold: 0 });
+    Object.values(cardRefs.current).forEach(el => { if (el) observer.observe(el); });
+    return () => observer.disconnect();
+  }, [filtered.length, search, filterInd, filterType, sortBy, showSaved]);
+
+  // Auto-scroll sidebar to first visible item
+  useEffect(() => {
+    if (visibleIds.size === 0) return;
+    const firstVisible = filtered.find(item => visibleIds.has(String(item.id)));
+    if (firstVisible && sidebarItemRefs.current[firstVisible.id]) {
+      sidebarItemRefs.current[firstVisible.id].scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }, [visibleIds]);
+
+  const scrollToCard = (id) => {
+    const el = cardRefs.current[id];
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const typeTip = {Internship:"Short-term work experience, typically 1 semester or summer",Fellowship:"Competitive program with stipend, mentorship, and structured curriculum",Program:"Training, placement, or certification-based opportunity"};
+  const sel = {padding:"8px 12px",border:"1px solid "+C.border,backgroundColor:C.white,fontSize:13,color:C.text,fontFamily:"'Libre Franklin', sans-serif",cursor:"pointer",minWidth:160};
+  const inputStyle = {width:"100%",padding:8,border:"1px solid "+C.border,fontSize:13,boxSizing:"border-box",fontFamily:"'Libre Franklin', sans-serif"};
+
+  return (
+    <div style={{animation:"fadeIn 0.3s ease"}}>
+      <div style={{display:"flex",alignItems:"stretch",minHeight:"calc(100vh - 72px)"}}>
+        {/* Sidebar — full-height nav */}
+        <div data-lenis-prevent style={{width:260,flexShrink:0,backgroundColor:C.navy,overflowY:"auto",position:"sticky",top:72,height:"calc(100vh - 72px)",padding:"20px 0",borderRight:"1px solid "+C.navyLight}}>
+          <div style={{padding:"0 20px 14px",borderBottom:"1px solid "+C.navyLight,marginBottom:6}}>
+            <div style={{fontSize:14,fontWeight:700,color:C.cream,letterSpacing:"0.3px"}}>Opportunities</div>
+            <div style={{fontSize:11,color:C.goldLight,marginTop:3}}>{filtered.length} listed</div>
+          </div>
+          {filtered.map(item => {
+            const isVis = visibleIds.has(String(item.id));
+            return (
+            <div key={item.id} ref={el=>sidebarItemRefs.current[item.id]=el} onClick={()=>item.subPage?navigate(item.subPage):scrollToCard(item.id)} style={{padding:"9px 20px",cursor:"pointer",transition:"all 0.2s",display:"flex",alignItems:"center",gap:10,backgroundColor:isVis?C.navyLight:"transparent",borderLeft:isVis?"3px solid "+C.gold:"3px solid transparent"}} onMouseEnter={e=>{if(!isVis)e.currentTarget.style.backgroundColor=C.navyLight+"88";}} onMouseLeave={e=>{if(!isVis)e.currentTarget.style.backgroundColor="transparent";}}>
+              {hasLogo(item, "sidebar") ? (
+                <img src={item.logo} alt="" style={{width:26,height:26,borderRadius:4,objectFit:"contain",backgroundColor:"#fff",flexShrink:0}} onError={()=>markLogoBroken(item.id, "sidebar")}/>
+              ) : (
+                <div style={{width:26,height:26,borderRadius:4,backgroundColor:C.navyDark,display:"flex",alignItems:"center",justifyContent:"center",color:C.gold,fontSize:11,fontWeight:700,fontFamily:"Georgia, serif",flexShrink:0}}>{item.org.charAt(0)}</div>
+              )}
+              <div style={{minWidth:0,flex:1}}>
+                <div style={{fontSize:12,fontWeight:isVis?700:500,color:isVis?C.cream:"#b0bcc8",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",transition:"all 0.2s"}}>{item.org}</div>
+                <div style={{fontSize:10,color:isVis?"#aab4be":"#667788",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{item.title}</div>
+              </div>
+            </div>
+            );
+          })}
+        </div>
+
+        {/* Main content — cards */}
+        <div style={{flex:1,minWidth:0,padding:"24px 40px"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+            <h1 style={{fontFamily:"Georgia, serif",fontSize:26,color:C.navy,margin:0}}>Job & Internship Opportunities</h1>
+          </div>
+          <div style={{display:"flex",gap:10,marginBottom:20,alignItems:"center",flexWrap:"wrap"}}>
+            <input type="text" placeholder="Search opportunities..." value={search} onChange={e=>setSearch(e.target.value)} style={{flex:1,minWidth:180,padding:"9px 14px",border:"1px solid "+C.border,fontSize:13,fontFamily:"'Libre Franklin', sans-serif",backgroundColor:C.white}}/>
+            <div onClick={()=>setShowSaved(!showSaved)} style={{padding:"7px 12px",border:"1px solid "+(showSaved?C.gold:C.border),backgroundColor:showSaved?C.gold+"15":C.white,cursor:"pointer",display:"flex",alignItems:"center",gap:6,fontSize:12,fontWeight:showSaved?600:400,color:showSaved?C.goldMuted:C.textLight,transition:"all 0.15s ease",whiteSpace:"nowrap"}}><span style={{fontSize:16,lineHeight:1}}>{showSaved?"\u2605":"\u2606"}</span> Saved{savedOpps.length>0?" ("+savedOpps.length+")":""}</div>
+            {availableIndustries.length > 1 && <select value={filterInd} onChange={e=>setFilterInd(e.target.value)} style={sel}>
+              <option value="All">All Industries</option>
+              {availableIndustries.map(ind=><option key={ind} value={ind}>{ind}</option>)}
+            </select>}
+            {availableTypes.length > 1 && <select value={filterType} onChange={e=>setFilterType(e.target.value)} style={sel}>
+              <option value="All">All Types</option>
+              {availableTypes.map(t=><option key={t} value={t}>{t}</option>)}
+            </select>}
+            <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={sel}>
+              <option value="deadline">Sort by Deadline</option>
+              <option value="org">Sort by Organization</option>
+              <option value="title">Sort by Title</option>
+              <option value="type">Sort by Type</option>
+            </select>
+          </div>
+          <div style={{fontSize:12,color:C.textLight,marginBottom:16}}>{filtered.length} opportunities found</div>
+          <div style={{display:"flex",flexDirection:"column",gap:20}}>
+            {filtered.map(item => (
+              <div key={item.id} ref={el=>{if(el){el.dataset.oppId=String(item.id);cardRefs.current[item.id]=el;}}} style={{backgroundColor:C.white,border:"1px solid "+C.border,cursor:item.subPage?"pointer":"default",transition:"box-shadow 0.2s ease, transform 0.2s ease",borderLeft:matches(item.industry)?"3px solid "+C.gold:"3px solid transparent",display:"flex",flexDirection:"column",overflow:"hidden",scrollMarginTop:"88px"}} onClick={()=>item.subPage&&navigate(item.subPage)} onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 6px 24px rgba(0,0,0,0.1)";e.currentTarget.style.transform="translateY(-2px)";}} onMouseLeave={e=>{e.currentTarget.style.boxShadow="none";e.currentTarget.style.transform="translateY(0)";}}>
+                <div style={{padding:"24px 28px 20px",flex:1}}>
+                  <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:16}}>
+                    {hasLogo(item, "card") ? (
+                      <img src={item.logo} alt={item.org} style={{width:48,height:48,borderRadius:6,objectFit:"contain",backgroundColor:C.white,border:"1px solid "+C.border,flexShrink:0}} onError={()=>markLogoBroken(item.id, "card")}/>
+                    ) : (
+                      <div style={{width:48,height:48,borderRadius:6,backgroundColor:C.navyDark,display:"flex",alignItems:"center",justifyContent:"center",color:C.gold,fontSize:18,fontWeight:700,fontFamily:"Georgia, serif",flexShrink:0}}>{item.org.charAt(0)}</div>
+                    )}
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:16,fontWeight:700,color:C.navy,fontFamily:"Georgia, serif"}}>{item.org}</div>
+                      {item.location && <div style={{fontSize:12,color:C.textLight}}>{item.location}</div>}
+                    </div>
+                    <div onClick={e=>{e.stopPropagation();toggleSave(item.id);}} style={{cursor:"pointer",fontSize:24,color:isSaved(item.id)?C.gold:C.border,transition:"color 0.2s",lineHeight:1}} title={isSaved(item.id)?"Unsave":"Save"}>{isSaved(item.id)?"\u2605":"\u2606"}</div>
+                  </div>
+                  <div style={{fontSize:15,fontWeight:600,color:C.navy,marginBottom:8}}>{item.title}</div>
+                  <p style={{fontSize:13,color:C.text,lineHeight:1.7,margin:"0 0 16px"}}>{item.description}</p>
+                  <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                    <span title={typeTip[item.type]||""}><Badge>{item.type}</Badge></span>
+                    {item.paid && <Badge color={C.success}>Paid</Badge>}
+                    {item.featured && <Badge color={C.gold}>Featured</Badge>}
+                    {item.industry && <span style={{fontSize:11,color:C.textLight,fontWeight:500}}>{item.industry}</span>}
+                  </div>
+                </div>
+                <div style={{padding:"12px 28px",borderTop:"1px solid "+C.border,backgroundColor:C.cream,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                  <div style={{fontSize:12,color:C.alert,fontWeight:600}}>
+                    Deadline: {item.deadline ? new Date(item.deadline).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"}) : "Rolling"}
+                  </div>
+                  {item.subPage && <span style={{fontSize:12,fontWeight:600,color:C.navy}}>View Details &rarr;</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+    </div>
+  );
+};
+
+// ─── CALENDAR ───
+const CalendarPage = ({allInternships, navigate}) => {
+  const [calMonth, setCalMonth] = useState(() => new Date().getMonth());
+  const [calYear, setCalYear] = useState(() => new Date().getFullYear());
+
+  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  const firstDay = new Date(calYear, calMonth, 1).getDay();
+  const monthName = new Date(calYear, calMonth).toLocaleDateString("en-US",{month:"long",year:"numeric"});
+
+  const days = [];
+  for (let i = 0; i < firstDay; i++) days.push(null);
+  for (let d = 1; d <= daysInMonth; d++) days.push(d);
+
+  const deadlines = allInternships.map(i=>({...i,dateObj:new Date(i.deadline)}));
+  const events = EVENTS.map(e=>({...e,dateObj:new Date(e.date)}));
+
+  const getItems = (day) => {
+    if (!day) return [];
+    const items = [];
+    deadlines.forEach(dl => {
+      if (dl.dateObj.getFullYear()===calYear && dl.dateObj.getMonth()===calMonth && dl.dateObj.getDate()===day)
+        items.push({type:"deadline",label:dl.org,subPage:dl.subPage});
+    });
+    events.forEach(ev => {
+      if (ev.dateObj.getFullYear()===calYear && ev.dateObj.getMonth()===calMonth && ev.dateObj.getDate()===day)
+        items.push({type:"event",label:ev.title,subPage:ev.subPage});
+    });
+    return items;
+  };
+
+  const prevMonth = () => { if (calMonth===0) { setCalMonth(11); setCalYear(calYear-1); } else setCalMonth(calMonth-1); };
+  const nextMonth = () => { if (calMonth===11) { setCalMonth(0); setCalYear(calYear+1); } else setCalMonth(calMonth+1); };
+  const goToday = () => { const n=new Date(); setCalMonth(n.getMonth()); setCalYear(n.getFullYear()); };
+
+  // All upcoming items sorted
+  const now = new Date();
+  const allUpcoming = [
+    ...deadlines.filter(d=>d.dateObj>now).map(d=>({...d,itemType:"deadline"})),
+    ...events.filter(e=>e.dateObj>now).map(e=>({...e,itemType:"event",title:e.title,org:e.org})),
+  ].sort((a,b) => a.dateObj - b.dateObj);
+
+  // Next 7 days deadlines
+  const nextWeek = new Date(now.getTime() + 7*24*60*60*1000);
+  const thisWeekDeadlines = allUpcoming.filter(item => item.itemType==="deadline" && item.dateObj <= nextWeek);
+
+  // Group upcoming items by date
+  const upcomingByDate = {};
+  allUpcoming.slice(0, 12).forEach(item => {
+    const key = item.dateObj.toLocaleDateString("en-US",{month:"short",day:"numeric"});
+    if (!upcomingByDate[key]) upcomingByDate[key] = [];
+    upcomingByDate[key].push(item);
+  });
+
+  return (
+    <div style={{padding:"32px 40px",animation:"fadeIn 0.3s ease"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
+        <h1 style={{fontFamily:"Georgia, serif",fontSize:26,color:C.navy,margin:0}}>UATX Portal Calendar</h1>
+        <button onClick={()=>{window.open("https://calendar.google.com/calendar/r?cid=webcal%3A%2F%2F"+window.location.host+"%2Fcalendar%2Fuatx-events.ics","_blank");}} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 16px",border:"1px solid #dadce0",borderRadius:6,backgroundColor:C.white,cursor:"pointer",fontSize:13,fontWeight:500,fontFamily:"'Libre Franklin', sans-serif",color:"#3c4043",boxShadow:"0 1px 3px rgba(0,0,0,0.08)"}}>
+          <svg width="18" height="18" viewBox="0 0 24 24"><path d="M19.5 3h-1V1.5h-2V3h-9V1.5h-2V3h-1A2.5 2.5 0 002 5.5v14A2.5 2.5 0 004.5 22h15a2.5 2.5 0 002.5-2.5v-14A2.5 2.5 0 0019.5 3z" fill="#4285F4"/><rect x="3" y="9" width="18" height="12" rx="1.5" fill="#fff"/><rect x="5.5" y="11.5" width="3" height="3" rx=".5" fill="#EA4335"/><rect x="10.5" y="11.5" width="3" height="3" rx=".5" fill="#34A853"/><rect x="15.5" y="11.5" width="3" height="3" rx=".5" fill="#FBBC04"/><rect x="5.5" y="16.5" width="3" height="3" rx=".5" fill="#4285F4"/><rect x="10.5" y="16.5" width="3" height="3" rx=".5" fill="#EA4335"/><rect x="15.5" y="16.5" width="3" height="3" rx=".5" fill="#34A853"/></svg>
+          Sync to Google Calendar
+        </button>
+      </div>
+
+      <div style={{display:"flex",gap:24,alignItems:"flex-start"}}>
+        {/* Upcoming sidebar */}
+        <div style={{width:260,flexShrink:0,backgroundColor:C.navy,borderRadius:10,padding:"20px 0",color:C.white}}>
+          <div style={{padding:"0 20px 16px",borderBottom:"1px solid "+C.navyLight,marginBottom:8}}>
+            <div style={{fontSize:14,fontWeight:700,letterSpacing:"0.3px"}}>Upcoming</div>
+            <div style={{fontSize:11,color:C.goldLight,marginTop:2}}>Next deadlines & events</div>
+          </div>
+          <div data-lenis-prevent style={{maxHeight:480,overflowY:"auto"}}>
+            {Object.entries(upcomingByDate).map(([dateStr, items]) => (
+              <div key={dateStr} style={{padding:"10px 20px"}}>
+                <div style={{fontSize:11,fontWeight:700,color:C.gold,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:6}}>{dateStr}</div>
+                {items.map((item,j) => (
+                  <div key={j} style={{display:"flex",alignItems:"flex-start",gap:8,marginBottom:j<items.length-1?8:0}}>
+                    <div style={{width:3,minHeight:14,borderRadius:2,backgroundColor:item.itemType==="deadline"?C.alert:C.success,marginTop:3,flexShrink:0}}/>
+                    <div>
+                      <div style={{fontSize:12,fontWeight:600,lineHeight:1.3}}>{item.itemType==="deadline"?item.title:item.title}</div>
+                      <div style={{fontSize:10,color:"#8899aa",marginTop:1}}>{item.org}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ))}
+            {Object.keys(upcomingByDate).length===0 && (
+              <div style={{padding:"20px",textAlign:"center",fontSize:12,color:"#8899aa"}}>No upcoming items</div>
+            )}
+          </div>
+        </div>
+
+        {/* Calendar grid */}
+        <div style={{flex:1,backgroundColor:C.white,border:"1px solid "+C.border,borderRadius:10,overflow:"hidden"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px 24px",backgroundColor:C.cream}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <div onClick={prevMonth} style={{cursor:"pointer",width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:6,backgroundColor:C.white,border:"1px solid "+C.border,fontSize:13,color:C.navy,fontWeight:700}}>{"\u25C0"}</div>
+              <div onClick={nextMonth} style={{cursor:"pointer",width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:6,backgroundColor:C.white,border:"1px solid "+C.border,fontSize:13,color:C.navy,fontWeight:700}}>{"\u25B6"}</div>
+              <span style={{fontFamily:"Georgia, serif",fontSize:18,fontWeight:700,color:C.navy,marginLeft:8}}>{monthName}</span>
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:16}}>
+              <span style={{fontSize:11,color:C.alert,fontWeight:600}}>{"\u25CF"} Deadlines</span>
+              <span style={{fontSize:11,color:C.success,fontWeight:600}}>{"\u25CF"} Events</span>
+              <Btn size="sm" variant="ghost" onClick={goToday}>Today</Btn>
+            </div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7, 1fr)"}}>
+            {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d => (
+              <div key={d} style={{padding:"10px 0",textAlign:"center",fontSize:11,fontWeight:600,color:C.textLight,textTransform:"uppercase",letterSpacing:"0.5px",borderBottom:"1px solid "+C.border}}>{d}</div>
+            ))}
+            {days.map((day,i) => {
+              const items = getItems(day);
+              const isToday = day && calYear===now.getFullYear() && calMonth===now.getMonth() && day===now.getDate();
+              return (
+                <div key={i} style={{height:100,padding:"6px 8px",backgroundColor:day?(isToday?C.gold+"08":C.white):"#fafaf8",borderRight:i%7<6?"1px solid #f0ece4":"none",borderBottom:"1px solid #f0ece4",overflow:"hidden"}}>
+                  {day && <>
+                    <div style={{fontSize:12,fontWeight:isToday?700:400,color:isToday?C.gold:items.length?C.navy:C.textLight,marginBottom:4,textAlign:"right"}}>{isToday ? <span style={{backgroundColor:C.gold,color:C.white,borderRadius:"50%",width:24,height:24,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:11}}>{day}</span> : day}</div>
+                    {items.slice(0,3).map((item,j) => (
+                      <div key={j} onClick={item.subPage?()=>navigate(item.subPage):undefined} style={{fontSize:10,padding:"3px 6px",marginTop:2,borderRadius:4,borderLeft:"3px solid "+(item.type==="deadline"?C.alert:C.success),backgroundColor:item.type==="deadline"?C.alert+"10":C.success+"10",color:item.type==="deadline"?C.alert:C.success,fontWeight:600,lineHeight:1.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",cursor:item.subPage?"pointer":"default"}}>{item.label}</div>
+                    ))}
+                    {items.length>3 && <div style={{fontSize:9,color:C.textLight,marginTop:2,textAlign:"center"}}>+{items.length-3} more</div>}
+                  </>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── CLUB PRESIDENT CARD ───
+const ClubPresidentCard = ({club, showToast, navigate}) => {
+  const [showCompose, setShowCompose] = useState(false);
+  const [subject, setSubject] = useState("");
+  const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
+  const [memberEmails, setMemberEmails] = useState(null);
+  const inputStyle = {width:"100%",padding:8,border:"1px solid "+C.border,fontSize:13,boxSizing:"border-box",fontFamily:"'Libre Franklin', sans-serif"};
+
+  const sendEmail = async () => {
+    if (!subject || !message) return;
+    setSending(true);
+    try {
+      const res = await fetch("/api/activities/" + club.id + "/email", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ subject, message })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast("Email sent to " + data.sent + " member" + (data.sent !== 1 ? "s" : ""));
+        setSubject("");
+        setMessage("");
+        setShowCompose(false);
+      } else {
+        showToast(data.error || "Failed to send");
+      }
+    } catch(e) {
+      showToast("Failed to send email");
+    }
+    setSending(false);
+  };
+
+  const copyMemberEmails = async () => {
+    try {
+      const res = await fetch("/api/activities/" + club.id + "/members");
+      const data = await res.json();
+      if (data.members && data.members.length > 0) {
+        const emails = data.members.map(m => m.email).join(", ");
+        navigator.clipboard.writeText(emails);
+        setMemberEmails(data.members);
+        showToast(data.members.length + " email" + (data.members.length !== 1 ? "s" : "") + " copied to clipboard");
+      } else {
+        showToast("No members have joined yet");
+      }
+    } catch(e) {
+      showToast("Failed to get members");
+    }
+  };
+
+  const eventTitle = club.event_title || club.eventTitle || "";
+  const eventDate = club.event_date || club.eventDate || "";
+  const eventLocation = club.event_location || club.eventLocation || "";
+  const eventSubPage = club.event_sub_page || club.eventSubPage || "";
+  const isCommunityEvent = !!club.show_as_event;
+
+  return (
+    <div style={{border:"1px solid "+C.border,padding:16,marginBottom:12}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+        <div>
+          <div style={{fontSize:14,fontWeight:600,color:C.navy}}>{club.title}</div>
+          <div style={{fontSize:11,color:C.textLight}}>{club.category}{club.meet_day || club.meetDay ? " \u00B7 " + (club.meet_day || club.meetDay) : ""}</div>
+        </div>
+        <Badge color={C.gold}>President</Badge>
+      </div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        <Btn size="sm" variant={showCompose?"ghost":"secondary"} onClick={()=>setShowCompose(!showCompose)}>
+          {showCompose ? "Cancel" : "Email Members"}
+        </Btn>
+        <Btn size="sm" variant="ghost" onClick={copyMemberEmails}>Copy Member Emails</Btn>
+      </div>
+      {isCommunityEvent && (
+        <div style={{marginTop:10,padding:10,backgroundColor:C.cream,border:"1px solid "+C.border}}>
+          <div style={{fontSize:12,fontWeight:700,color:C.navy,marginBottom:4}}>{eventTitle || "Community Event"}</div>
+          <div style={{fontSize:11,color:C.textLight,marginBottom:8}}>
+            {eventDate ? new Date(eventDate).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"}) : "Date TBD"}
+            {eventLocation ? " � " + eventLocation : ""}
+          </div>
+          {eventSubPage && <Btn size="sm" variant="secondary" onClick={()=>navigate(eventSubPage)}>View Event Page</Btn>}
+        </div>
+      )}
+      {memberEmails && !showCompose && (
+        <div style={{marginTop:10,padding:10,backgroundColor:C.cream,border:"1px solid "+C.border,fontSize:12,color:C.text,fontFamily:"monospace",wordBreak:"break-all",lineHeight:1.6}}>
+          {memberEmails.map(m => m.email).join(", ")}
+        </div>
+      )}
+      {showCompose && (
+        <div style={{marginTop:12,display:"flex",flexDirection:"column",gap:10,padding:12,backgroundColor:C.cream,border:"1px solid "+C.border}}>
+          <p style={{fontSize:11,color:C.textLight,margin:0}}>Replies will go to your school email.</p>
+          <div>
+            <label style={{fontSize:11,fontWeight:600,color:C.textLight,textTransform:"uppercase",letterSpacing:"0.5px",display:"block",marginBottom:4}}>Subject</label>
+            <input type="text" placeholder="e.g. Meeting this Wednesday" value={subject} onChange={e=>setSubject(e.target.value)} style={inputStyle}/>
+          </div>
+          <div>
+            <label style={{fontSize:11,fontWeight:600,color:C.textLight,textTransform:"uppercase",letterSpacing:"0.5px",display:"block",marginBottom:4}}>Message</label>
+            <textarea rows={4} placeholder="Write your message to all club members..." value={message} onChange={e=>setMessage(e.target.value)} style={{...inputStyle,resize:"vertical"}}/>
+          </div>
+          {(() => { const ready = subject.trim() && message.trim() && !sending; return (
+            <button onClick={ready?sendEmail:undefined} disabled={!ready} style={{cursor:ready?"pointer":"not-allowed",border:"none",fontFamily:"'Libre Franklin', sans-serif",fontWeight:600,fontSize:12,padding:"6px 14px",borderRadius:3,backgroundColor:ready?C.gold:"#ccc",color:ready?C.navy:"#888",opacity:ready?1:0.7,transition:"all 0.2s"}}>{sending ? "Sending..." : "Send to All Members"}</button>
+          );})()}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── PROFILE ───
+const ProfilePage = ({showToast, selectedIndustries, setSelectedIndustries, selectedAreas, setSelectedAreas, emailAlerts, setEmailAlerts, internshipHistory, setInternshipHistory, currentUser, serverActivities, joinedClubs, setJoinedClubs, clubEmailPrefs, setClubEmailPrefs, navigate}) => {
+  const [showForm, setShowForm] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const emptyEntry = {org:"",role:"",industry:"Finance & Banking",startDate:"",endDate:"",description:"",summary:"",careerNotes:""};
+  const [entry, setEntry] = useState(emptyEntry);
+
+  const toggleInd = (ind) => setSelectedIndustries(prev => prev.includes(ind) ? prev.filter(i=>i!==ind) : [...prev,ind]);
+  const toggleArea = (area) => setSelectedAreas(prev => prev.includes(area) ? prev.filter(a=>a!==area) : [...prev,area]);
+
+  const startEdit = (h) => {
+    setEntry({org:h.org||"",role:h.role||"",industry:h.industry||"Finance & Banking",startDate:h.startDate||"",endDate:h.endDate||"",description:h.description||"",summary:h.summary||"",careerNotes:h.careerNotes||""});
+    setEditingId(h.id);
+    setShowForm(true);
+  };
+
+  const cancelForm = () => {
+    setEntry(emptyEntry);
+    setEditingId(null);
+    setShowForm(false);
+  };
+
+  const submitEntry = () => {
+    if (!entry.org || !entry.role) return;
+    const dates = (entry.startDate && entry.endDate) ?
+      new Date(entry.startDate).toLocaleDateString("en-US",{month:"short",year:"numeric"})+" \u2013 "+new Date(entry.endDate).toLocaleDateString("en-US",{month:"short",year:"numeric"}) :
+      "Dates TBD";
+    if (editingId) {
+      setInternshipHistory(prev => prev.map(h => h.id === editingId ? {...entry, dates, id:editingId} : h));
+      showToast("Internship entry updated!");
+    } else {
+      setInternshipHistory(prev => [{...entry, dates, id:Date.now()}, ...prev]);
+      showToast("Internship entry added!");
+    }
+    setEntry(emptyEntry);
+    setEditingId(null);
+    setShowForm(false);
+  };
+
+  const inputStyle = {width:"100%",padding:8,border:"1px solid "+C.border,fontSize:13,boxSizing:"border-box",fontFamily:"'Libre Franklin', sans-serif"};
+
+  return (
+    <div style={{padding:"32px 40px",animation:"fadeIn 0.3s ease"}}>
+      <h1 style={{fontFamily:"Georgia, serif",fontSize:26,color:C.navy,margin:"0 0 24px"}}>My Profile</h1>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:24}}>
+        {/* Left column */}
+        <div style={{display:"flex",flexDirection:"column",gap:24}}>
+          {/* Industry Interests */}
+          <div style={{backgroundColor:C.white,border:"1px solid "+C.border,padding:24}}>
+            <h3 style={{fontFamily:"Georgia, serif",fontSize:18,color:C.navy,margin:"0 0 16px"}}>Industry Interests</h3>
+            <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+              {INDUSTRIES.map(ind => (
+                <div key={ind} onClick={()=>toggleInd(ind)} style={{padding:"6px 14px",fontSize:12,fontWeight:500,cursor:"pointer",border:"1px solid "+(selectedIndustries.includes(ind)?C.gold:C.border),backgroundColor:selectedIndustries.includes(ind)?C.gold+"15":C.white,color:selectedIndustries.includes(ind)?C.goldMuted:C.textLight,transition:"all 0.15s ease"}}>{ind}</div>
+              ))}
+            </div>
+            <div style={{marginTop:20,display:"flex",alignItems:"center",gap:8}}>
+              <div onClick={()=>{setEmailAlerts(!emailAlerts);showToast(emailAlerts?"Email alerts turned off":"Email alerts turned on!");}} style={{width:36,height:20,borderRadius:10,cursor:"pointer",backgroundColor:emailAlerts?C.gold:C.border,position:"relative",transition:"background-color 0.2s ease"}}>
+                <div style={{width:16,height:16,borderRadius:"50%",backgroundColor:C.white,position:"absolute",top:2,left:emailAlerts?18:2,transition:"left 0.2s ease",boxShadow:"0 1px 2px rgba(0,0,0,0.2)"}}/>
+              </div>
+              <span style={{fontSize:13,color:C.text}}>Email me when new opportunities match my interests</span>
+            </div>
+          </div>
+
+          {/* My Clubs (president) */}
+          {currentUser && serverActivities.filter(a => (a.president_email||"").toLowerCase() === currentUser.email.toLowerCase()).length > 0 && (
+            <div style={{backgroundColor:C.white,border:"1px solid "+C.border,padding:24}}>
+              <h3 style={{fontFamily:"Georgia, serif",fontSize:18,color:C.navy,margin:"0 0 4px"}}>My Clubs</h3>
+              <p style={{fontSize:12,color:C.textLight,margin:"0 0 16px"}}>Clubs you manage as president</p>
+              {serverActivities.filter(a => (a.president_email||"").toLowerCase() === currentUser.email.toLowerCase()).map(club => (
+                <ClubPresidentCard key={club.id} club={club} showToast={showToast} navigate={navigate}/>
+              ))}
+            </div>
+          )}
+
+            {/* Clubs Joined */}
+            {joinedClubs.length > 0 && (
+              <div style={{backgroundColor:C.white,border:"1px solid "+C.border,padding:24}}>
+                <h3 style={{fontFamily:"Georgia, serif",fontSize:18,color:C.navy,margin:"0 0 4px"}}>Clubs Joined</h3>
+                <p style={{fontSize:12,color:C.textLight,margin:"0 0 16px"}}>Clubs you've joined</p>
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  {joinedClubs.map(clubId => {
+                    const club = serverActivities.find(a => a.id === clubId);
+                    if (!club) return null;
+                    const emailKey = String(clubId);
+                    const emailEnabled = clubEmailPrefs[emailKey] !== false;
+                    const eventSubPage = club.event_sub_page || club.eventSubPage || "";
+                    return <div key={clubId} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 14px",border:"1px solid "+C.border}}>
+                      <div>
+                        <div style={{fontSize:14,fontWeight:600,color:C.navy}}>{club.title}</div>
+                        <div style={{fontSize:11,color:C.textLight}}>{club.category}{club.meet_day ? " \u00B7 "+club.meet_day : ""}</div>
+                        <div style={{display:"flex",alignItems:"center",gap:8,marginTop:8}}>
+                          <div onClick={()=>setClubEmailPrefs(prev => ({ ...prev, [emailKey]: !emailEnabled }))} style={{width:32,height:18,borderRadius:9,cursor:"pointer",backgroundColor:emailEnabled?C.gold:C.border,position:"relative",transition:"background-color 0.2s ease"}}>
+                            <div style={{width:14,height:14,borderRadius:"50%",backgroundColor:C.white,position:"absolute",top:2,left:emailEnabled?16:2,transition:"left 0.2s ease",boxShadow:"0 1px 2px rgba(0,0,0,0.2)"}}/>
+                          </div>
+                          <span style={{fontSize:11,color:C.textLight}}>Receive club emails</span>
+                          {eventSubPage && <span onClick={()=>navigate(eventSubPage)} style={{fontSize:11,color:C.goldMuted,fontWeight:600,cursor:"pointer"}}>Event Page</span>}
+                        </div>
+                      </div>
+                      <div onClick={()=>{setJoinedClubs(prev=>prev.filter(x=>x!==clubId));setClubEmailPrefs(prev=>{const next={...prev}; delete next[emailKey]; return next;});showToast("Left "+club.title);}} style={{cursor:"pointer",fontSize:11,color:C.alert,fontWeight:500}}>Leave</div>
+                    </div>;
+                  }).filter(Boolean)}
+                </div>
+              </div>
+            )}
+
+        </div>
+
+        {/* Right column: Internship History */}
+        <div style={{backgroundColor:C.white,border:"1px solid "+C.border,padding:24}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+            <div>
+              <h3 style={{fontFamily:"Georgia, serif",fontSize:18,color:C.navy,margin:0}}>Internship History</h3>
+              <p style={{fontSize:12,color:C.textLight,margin:"4px 0 0"}}>Log your past and current internship experiences.</p>
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              {!showForm && <Btn size="sm" variant={editMode?"primary":"ghost"} onClick={()=>setEditMode(!editMode)}>{editMode?"Done Editing":"Edit"}</Btn>}
+              <Btn size="sm" variant="secondary" onClick={()=>{if(showForm){cancelForm();}else{setEntry(emptyEntry);setEditingId(null);setShowForm(true);}}}>+ Add Entry</Btn>
+            </div>
+          </div>
+          {showForm && (
+            <div style={{padding:16,backgroundColor:C.cream,border:"1px solid "+C.border,marginBottom:16,display:"flex",flexDirection:"column",gap:10}}>
+              <div style={{fontSize:14,fontWeight:600,color:C.navy,marginBottom:4}}>{editingId ? "Edit Internship" : "Log New Internship"}</div>
+              {[
+                {label:"Organization",key:"org",placeholder:"e.g. Hudson Institute"},
+                {label:"Role Title",key:"role",placeholder:"e.g. Policy Research Intern"},
+                {label:"Industry",key:"industry",type:"select"},
+                {label:"Start Date",key:"startDate",type:"date"},
+                {label:"End Date",key:"endDate",type:"date"},
+              ].map((f,i) => (
+                <div key={i}>
+                  <label style={{fontSize:11,fontWeight:600,color:C.textLight,textTransform:"uppercase",letterSpacing:"0.5px",display:"block",marginBottom:4}}>{f.label}</label>
+                  {f.type==="select" ? (
+                    <select value={entry[f.key]} onChange={e=>setEntry({...entry,[f.key]:e.target.value})} style={{...inputStyle,cursor:"pointer"}}>
+                      {INDUSTRIES.map(ind=><option key={ind} value={ind}>{ind}</option>)}
+                    </select>
+                  ) : (
+                    <input type={f.type||"text"} placeholder={f.placeholder||""} value={entry[f.key]} onChange={e=>setEntry({...entry,[f.key]:e.target.value})} style={inputStyle}/>
+                  )}
+                </div>
+              ))}
+              <div>
+                <label style={{fontSize:11,fontWeight:600,color:C.textLight,textTransform:"uppercase",letterSpacing:"0.5px",display:"block",marginBottom:4}}>Description / Key Takeaways</label>
+                <textarea rows={2} placeholder="What did you work on? What did you learn?" value={entry.description} onChange={e=>setEntry({...entry,description:e.target.value})} style={{...inputStyle,resize:"vertical"}}/>
+              </div>
+              <div>
+                <label style={{fontSize:11,fontWeight:600,color:C.textLight,textTransform:"uppercase",letterSpacing:"0.5px",display:"block",marginBottom:4}}>Post-Internship Summary</label>
+                <textarea rows={2} placeholder="Summary of the internship experience" value={entry.summary} onChange={e=>setEntry({...entry,summary:e.target.value})} style={{...inputStyle,resize:"vertical"}}/>
+              </div>
+              <div>
+                <label style={{fontSize:11,fontWeight:600,color:C.textLight,textTransform:"uppercase",letterSpacing:"0.5px",display:"block",marginBottom:4}}>Career Development Notes</label>
+                <textarea rows={2} placeholder="How did this contribute to your career development?" value={entry.careerNotes} onChange={e=>setEntry({...entry,careerNotes:e.target.value})} style={{...inputStyle,resize:"vertical"}}/>
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                <Btn size="sm" onClick={submitEntry}>{editingId ? "Save Changes" : "Submit"}</Btn>
+                <Btn size="sm" variant="ghost" onClick={cancelForm}>Cancel</Btn>
+              </div>
+            </div>
+          )}
+          <div style={{display:"flex",flexDirection:"column",gap:12}}>
+            {internshipHistory.map((h,i) => (
+              <div key={h.id||i} style={{padding:"12px 16px",border:"1px solid "+(editingId===h.id?C.gold:C.border),display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div>
+                  <div style={{fontSize:14,fontWeight:600,color:C.navy}}>{h.role}</div>
+                  <div style={{fontSize:12,color:C.textLight}}>{h.org} {"\u00B7"} {h.dates}</div>
+                  {h.description && <p style={{fontSize:11,color:C.textLight,margin:"4px 0 0",lineHeight:1.4}}>{h.description}</p>}
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                  <Badge color={C.navyLight}>{h.industry}</Badge>
+                  {editMode && <>
+                    <div onClick={()=>startEdit(h)} style={{cursor:"pointer",fontSize:11,color:C.goldMuted,fontWeight:500}} title="Edit">{"\u270E"}</div>
+                    <div onClick={()=>{setInternshipHistory(prev=>prev.filter(x=>x.id!==h.id));showToast("Entry removed");}} style={{cursor:"pointer",fontSize:11,color:C.alert,fontWeight:500}} title="Delete">{"\u2715"}</div>
+                  </>}
+                </div>
+              </div>
+            ))}
+            {internshipHistory.length === 0 && (
+              <p style={{fontSize:13,color:C.textLight,textAlign:"center",padding:20}}>No internship entries yet. Click "+ Add Entry" to log your experiences.</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+    </div>
+  );
+};
+
+// ─── COMMUNITY ───
+const CommunityPage = ({joinedClubs, setJoinedClubs, clubEmailPrefs, setClubEmailPrefs, showToast, serverActivities, navigate, refreshActivities}) => {
+  useEffect(() => { refreshActivities(); }, []);
+  const isJoined = (id) => joinedClubs.includes(id);
+  const emailEnabled = (id) => clubEmailPrefs[String(id)] !== false;
+  const toggleJoin = (club) => {
+    const key = String(club.id);
+    if (isJoined(club.id)) {
+      setJoinedClubs(prev => prev.filter(x=>x!==club.id));
+      setClubEmailPrefs(prev => { const next = { ...prev }; delete next[key]; return next; });
+      showToast("Left "+club.title);
+    } else {
+      setJoinedClubs(prev => [...prev, club.id]);
+      setClubEmailPrefs(prev => ({ ...prev, [key]: true }));
+      if (club.presidentEmail || club.president_email) {
+        showToast("Joined "+club.title+"! The president has been notified at "+(club.presidentEmail || club.president_email));
+      } else {
+        showToast("Joined "+club.title+"!");
+      }
+    }
+  };
+  // Merge: server activities first (source of truth), then hardcoded fallback
+  const seen = new Set();
+  const allActivities = [...serverActivities, ...ACTIVITIES].filter(a => {
+    const key = a.title.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).map(a => ({
+    ...a,
+    desc: a.desc || a.description || "",
+    meetDay: a.meetDay || a.meet_day || "",
+    presidentEmail: a.presidentEmail || a.president_email || "",
+    eventTitle: a.event_title || a.eventTitle || "",
+    eventDate: a.event_date || a.eventDate || "",
+    eventLocation: a.event_location || a.eventLocation || "",
+    eventSubPage: a.event_sub_page || a.eventSubPage || "",
+  }));
+
+  return (
+    <div style={{padding:"32px 40px",animation:"fadeIn 0.3s ease"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+        <h1 style={{fontFamily:"Georgia, serif",fontSize:26,color:C.navy,margin:0}}>Community</h1>
+      </div>
+      <p style={{color:C.textLight,fontSize:13,margin:"0 0 24px"}}>Student activities, clubs, and campus life</p>
+      <div style={{backgroundColor:C.gold+"15",border:"1px solid "+C.gold+"40",padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,marginBottom:24}}>
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          <span style={{fontSize:20,flexShrink:0}}>{"\u2709"}</span>
+          <div>
+            <div style={{fontSize:14,fontWeight:600,color:C.navy,marginBottom:2}}>Run a club or activity?</div>
+            <p style={{fontSize:13,color:C.text,margin:0,lineHeight:1.5}}>List it here so other students can find and join.</p>
+          </div>
+        </div>
+        <Btn size="sm" onClick={()=>navigate("submit-activity")}>List Your Club</Btn>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:16,marginBottom:24}}>
+        {allActivities.map(club => {
+          const openEventPage = !!(club.show_as_event && club.eventSubPage);
+          return (
+          <div key={club.id} onClick={openEventPage ? ()=>navigate(club.eventSubPage) : undefined} style={{backgroundColor:C.white,border:"1px solid "+C.border,overflow:"hidden",cursor:openEventPage?"pointer":"default"}}>
+            <div style={{height:8,backgroundColor:isJoined(club.id)?C.gold:C.navy}}/>
+            <div style={{padding:20}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                <h3 style={{fontFamily:"Georgia, serif",fontSize:16,color:C.navy,margin:0}}>{club.title}</h3>
+                <Badge>{club.category}</Badge>
+              </div>
+              <p style={{fontSize:13,color:C.textLight,lineHeight:1.5,margin:"0 0 8px"}}>{club.desc}</p>
+              {club.presidentEmail && (
+                <div style={{fontSize:11,color:C.textLight,marginBottom:8}}>
+                  President: <a href={"mailto:"+club.presidentEmail} onClick={e=>e.stopPropagation()} style={{color:C.goldMuted,fontWeight:500}}>{club.presidentEmail}</a>
+                </div>
+              )}
+              {club.show_as_event && (
+                <div style={{fontSize:11,color:C.textLight,marginBottom:8,padding:"8px 10px",border:"1px solid "+C.border,backgroundColor:C.cream}}>
+                  <div style={{fontWeight:700,color:C.navy,marginBottom:2}}>{club.eventTitle || "Community Event"}</div>
+                  <div>
+                    {club.eventDate ? new Date(club.eventDate).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"}) : "Date TBD"}
+                    {club.eventLocation ? " � " + club.eventLocation : ""}
+                  </div>
+                  {club.eventSubPage && <div onClick={e=>{e.stopPropagation();navigate(club.eventSubPage);}} style={{marginTop:6,color:C.goldMuted,fontWeight:600,cursor:"pointer"}}>Learn More</div>}
+                </div>
+              )}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:12,borderTop:"1px solid "+C.border}}>
+                <span style={{fontSize:11,color:C.textLight}}>{club.members} member{club.members!==1?"s":""} {club.meetDay?"\u00B7 "+club.meetDay:""}</span>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  {isJoined(club.id) && (
+                    <div style={{display:"flex",alignItems:"center",gap:6}}>
+                      <div onClick={e=>{e.stopPropagation();setClubEmailPrefs(prev => ({ ...prev, [String(club.id)]: !emailEnabled(club.id) }));}} style={{width:30,height:17,borderRadius:9,cursor:"pointer",backgroundColor:emailEnabled(club.id)?C.gold:C.border,position:"relative",transition:"background-color 0.2s ease"}}>
+                        <div style={{width:13,height:13,borderRadius:"50%",backgroundColor:C.white,position:"absolute",top:2,left:emailEnabled(club.id)?15:2,transition:"left 0.2s ease"}}/>
+                      </div>
+                      <span style={{fontSize:10,color:C.textLight}}>Emails</span>
+                    </div>
+                  )}
+                  <Btn size="sm" variant={isJoined(club.id)?"primary":"secondary"} onClick={e=>{e.stopPropagation();toggleJoin(club);}}>{isJoined(club.id)?"Joined":"Join Club"}</Btn>
+                </div>
+              </div>
+            </div>
+          </div>
+        );})}
+      </div>
+
+    </div>
+  );
+};
+
+// ─── EVENTS ───
+const EventsPage = ({navigate, serverEvents=[]}) => {
+  const [eventFilter, setEventFilter] = useState("All");
+  // Merge server events with hardcoded fallback, server takes precedence
+  const seenEvt = new Set();
+  const mergedEvents = [...serverEvents.map(e => ({...e, desc: e.description || e.desc, subPage: e.sub_page || e.subPage})), ...EVENTS].filter(e => {
+    const key = e.title.toLowerCase();
+    if (seenEvt.has(key)) return false;
+    seenEvt.add(key);
+    return true;
+  });
+  const types = ["All", ...Array.from(new Set(mergedEvents.map(e=>e.type)))];
+  const filtered = eventFilter==="All" ? mergedEvents : mergedEvents.filter(e=>e.type===eventFilter);
+
+  return (
+    <div style={{padding:"32px 40px",animation:"fadeIn 0.3s ease"}}>
+      <h1 style={{fontFamily:"Georgia, serif",fontSize:26,color:C.navy,margin:"0 0 8px"}}>UATX Sponsored Programs & Travel</h1>
+      <p style={{color:C.textLight,fontSize:13,margin:"0 0 24px"}}>Conferences, study abroad, and travel programs sponsored by the university</p>
+      <div style={{display:"flex",gap:8,marginBottom:24,flexWrap:"wrap"}}>
+        {types.map(t => (
+          <div key={t} onClick={()=>setEventFilter(t)} style={{padding:"6px 16px",fontSize:12,fontWeight:600,cursor:"pointer",backgroundColor:eventFilter===t?C.navy:C.white,color:eventFilter===t?C.gold:C.textLight,border:"1px solid "+(eventFilter===t?C.navy:C.border),transition:"all 0.15s ease"}}>{t}</div>
+        ))}
+      </div>
+      <div style={{fontSize:12,color:C.textLight,marginBottom:16}}>{filtered.length} event{filtered.length!==1?"s":""} found</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:20}}>
+        {filtered.map(event => (
+          <div key={event.id} style={{backgroundColor:C.white,border:"1px solid "+C.border,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+            <div style={{height:120,background:"linear-gradient(135deg, "+C.navy+" 0%, "+C.navyLight+" 100%)",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",overflow:"hidden"}}>
+              {event.img && <img src={event.img} alt={event.org} style={{position:"absolute",top:8,right:8,width:40,height:40,objectFit:"contain",borderRadius:4,backgroundColor:C.white+"dd",padding:4}} onError={e=>{e.target.style.display="none"}}/>}
+              <span style={{color:C.gold,fontFamily:"Georgia, serif",fontSize:16,fontWeight:700,textAlign:"center",padding:"0 16px",lineHeight:1.3}}>{event.title}</span>
+            </div>
+            <div style={{padding:20,display:"flex",flexDirection:"column",flex:1}}>
+              <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                <Badge>{event.type}</Badge>
+                {event.url && <a href={event.url} target="_blank" rel="noopener noreferrer" style={{fontSize:11,color:C.goldMuted,textDecoration:"none",fontWeight:500}}>{"\u2197"} Website</a>}
+              </div>
+              <p style={{fontSize:13,color:C.textLight,lineHeight:1.5,margin:"10px 0",flex:1}}>{event.desc}</p>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:12,borderTop:"1px solid "+C.border}}>
+                <span style={{fontSize:12,color:C.text,fontWeight:600}}>{new Date(event.date).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"})}</span>
+                <Btn size="sm" onClick={()=>navigate(event.subPage)}>Learn More</Btn>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+    </div>
+  );
+};
+
+// ─── FOOTER ───
+const Footer = () => (
+  <footer style={{backgroundColor:"#0e162a",padding:"40px 40px 32px",marginTop:0}}>
+    <div style={{display:"flex",justifyContent:"space-between",gap:40,marginBottom:32}}>
+      <div style={{flex:1}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+          <img src="/images/Home/logo.png" alt="UATX" style={{width:32,height:32,objectFit:"contain"}}/>
+          <span style={{color:C.cream,fontFamily:"Georgia, serif",fontSize:15,fontWeight:700}}>UATX Student Portal</span>
+        </div>
+        <p style={{fontSize:12,color:C.cream+"88",lineHeight:1.6,maxWidth:280,margin:0}}>Your gateway to internships, fellowships, events, and career development resources at the University of Austin.</p>
+      </div>
+      <div>
+        <div style={{fontSize:11,fontWeight:700,color:C.gold,textTransform:"uppercase",letterSpacing:"1px",marginBottom:12}}>Contact</div>
+        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+          <a href="mailto:pvasilik@student.uaustin.org" style={{fontSize:12,color:C.cream+"bb",textDecoration:"none"}}>Peter Vasilik — pvasilik@student.uaustin.org</a>
+          <span style={{fontSize:12,color:C.cream+"88"}}>University of Austin, Austin, TX</span>
+        </div>
+      </div>
+      <div>
+        <div style={{fontSize:11,fontWeight:700,color:C.gold,textTransform:"uppercase",letterSpacing:"1px",marginBottom:12}}>Quick Links</div>
+        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+          <a href="https://www.uaustin.org" target="_blank" rel="noopener noreferrer" style={{fontSize:12,color:C.cream+"bb",textDecoration:"none"}}>University of Austin</a>
+          <a href="https://www.linkedin.com/groups/12870638/" target="_blank" rel="noopener noreferrer" style={{fontSize:12,color:C.cream+"bb",textDecoration:"none"}}>LinkedIn Talent Network</a>
+          <a href="https://www.uaustin.org/privacy-policy" target="_blank" rel="noopener noreferrer" style={{fontSize:12,color:C.cream+"bb",textDecoration:"none"}}>Privacy Policy</a>
+        </div>
+      </div>
+    </div>
+    <div style={{borderTop:"1px solid "+C.cream+"22",paddingTop:16,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+      <span style={{fontSize:11,color:C.cream+"55"}}>&copy; {new Date().getFullYear()} University of Austin. All rights reserved.</span>
+      <span style={{fontSize:11,color:C.cream+"44"}}>Student Opportunity Portal v1.0</span>
+    </div>
+  </footer>
+);
+
+// ─── SIGN IN PAGE (Google OAuth) ───
+const SignInPage = ({onSignIn}) => {
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [devEmail, setDevEmail] = useState("pvasilik@student.uaustin.org");
+  const [devName, setDevName] = useState("Local Admin");
+  const btnRef = useRef(null);
+  const hasGoogleClientId = !!window.__GOOGLE_CLIENT_ID;
+
+  useEffect(() => {
+    if (!hasGoogleClientId) return;
+
+    const initGoogle = () => {
+      if (!window.google?.accounts?.id) {
+        setTimeout(initGoogle, 200);
+        return;
+      }
+      google.accounts.id.initialize({
+        client_id: window.__GOOGLE_CLIENT_ID || "",
+        callback: async (response) => {
+          setLoading(true);
+          setError(null);
+          try {
+            const data = await api("/api/auth/google", { method: "POST", body: JSON.stringify({ credential: response.credential }) });
+            if (data.error) { setError(data.error); setLoading(false); return; }
+            onSignIn(data.user);
+          } catch (e) {
+            setError("Sign-in failed. Please try again.");
+            setLoading(false);
+          }
+        },
+        // No hosted_domain restriction — server validates both @student.uaustin.org and @uaustin.org
+        auto_select: false,
+      });
+      if (btnRef.current) {
+        google.accounts.id.renderButton(btnRef.current, {
+          type: "standard",
+          theme: "outline",
+          size: "large",
+          text: "signin_with",
+          shape: "rectangular",
+          width: 320,
+        });
+      }
+    };
+    initGoogle();
+  }, [hasGoogleClientId]);
+
+  const handleDevLogin = async () => {
+    if (!devEmail.trim()) {
+      setError("Enter an email for local sign-in.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await api("/api/auth/dev-login", {
+        method: "POST",
+        body: JSON.stringify({ email: devEmail.trim(), name: devName.trim() || "Local Admin" }),
+      });
+      if (data.error) {
+        setError(data.error);
+        setLoading(false);
+        return;
+      }
+      onSignIn(data.user);
+    } catch (e) {
+      setError("Local sign-in failed.");
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{minHeight:"100vh",background:"linear-gradient(135deg, "+C.navy+" 0%, "+C.navyDark+" 100%)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{width:400,backgroundColor:C.navyLight,padding:40,boxShadow:"0 8px 32px rgba(0,0,0,0.4)",border:"1px solid rgba(201,168,76,0.15)"}}>
+        <div style={{textAlign:"center",marginBottom:32}}>
+          <img src="/images/Home/logo.png" alt="UATX" style={{width:64,height:64,objectFit:"contain",marginBottom:16}}/>
+          <h1 style={{fontFamily:"Georgia, serif",fontSize:24,color:C.cream,margin:"0 0 4px"}}>Student Portal</h1>
+          <p style={{fontSize:13,color:C.creamDark,margin:0}}>Sign in with your UATX Google account</p>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:16}}>
+          {loading ? (
+            <p style={{fontSize:13,color:C.creamDark}}>Signing in...</p>
+          ) : (
+            hasGoogleClientId ? (
+              <div ref={btnRef} style={{minHeight:44}}></div>
+            ) : (
+              <div style={{width:"100%",display:"flex",flexDirection:"column",gap:10}}>
+                <input
+                  value={devEmail}
+                  onChange={e=>setDevEmail(e.target.value)}
+                  placeholder="email@student.uaustin.org"
+                  style={{width:"100%",padding:"10px 12px",backgroundColor:C.navyDark,color:C.cream,border:"1px solid "+C.navyLight,fontSize:13,fontFamily:"'Libre Franklin', sans-serif"}}
+                />
+                <input
+                  value={devName}
+                  onChange={e=>setDevName(e.target.value)}
+                  placeholder="Name"
+                  style={{width:"100%",padding:"10px 12px",backgroundColor:C.navyDark,color:C.cream,border:"1px solid "+C.navyLight,fontSize:13,fontFamily:"'Libre Franklin', sans-serif"}}
+                />
+                <button
+                  onClick={handleDevLogin}
+                  style={{width:"100%",padding:"10px 12px",backgroundColor:C.gold,color:C.navy,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'Libre Franklin', sans-serif"}}
+                >
+                  Localhost Dev Sign In
+                </button>
+              </div>
+            )
+          )}
+          {error && <p style={{fontSize:12,color:C.alert,textAlign:"center",margin:0,maxWidth:320}}>{error}</p>}
+          <p style={{fontSize:11,color:C.creamDark,textAlign:"center",margin:"8px 0 0"}}>
+            {hasGoogleClientId
+              ? <>Sign in with your <strong>@student.uaustin.org</strong> or <strong>@uaustin.org</strong> account</>
+              : <>Google client ID is not configured locally. Use dev sign-in above.</>
+            }
+          </p>
+          <p style={{fontSize:11,color:C.creamDark,textAlign:"center",margin:0}}>Need help? Contact <a href="mailto:pvasilik@student.uaustin.org" style={{color:C.gold,fontWeight:600}}>pvasilik@student.uaustin.org</a></p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── APP ───
+const App = () => {
+  const [currentUser, setCurrentUser] = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [activeTab, setActiveTab] = useState("home");
+  const [subPage, setSubPage] = useState(null);
+
+  // Persisted state (localStorage as fast cache, server as source of truth)
+  const [savedOpps, setSavedOpps] = useState(() => load("savedOpps", []));
+  const [joinedClubs, setJoinedClubs] = useState(() => load("joinedClubs", []));
+  const [clubEmailPrefs, setClubEmailPrefs] = useState(() => load("clubEmailPrefs", {}));
+  const [selectedIndustries, setSelectedIndustries] = useState(() => load("industries", []));
+  const [selectedAreas, setSelectedAreas] = useState(() => load("areas", []));
+  const [emailAlerts, setEmailAlerts] = useState(() => load("emailAlerts", true));
+  const [internshipHistory, setInternshipHistory] = useState(() => load("history", []));
+  const [serverOpps, setServerOpps] = useState([]);
+  const [serverActivities, setServerActivities] = useState([]);
+  const [serverEvents, setServerEvents] = useState([]);
+
+  // Toast state
+  const [toasts, setToasts] = useState([]);
+  const showToast = (msg) => {
+    const id = Date.now();
+    setToasts(prev => [...prev, {id, msg}]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3500);
+  };
+
+  // Check for existing session on mount
+  useEffect(() => {
+    api("/api/auth/me").then(data => {
+      if (data.user) {
+        _lsUserId = data.user.id;
+        setCurrentUser(data.user);
+        loadServerPrefs();
+        loadServerOpps();
+        loadServerActivities();
+        loadServerEvents();
+      }
+      setAuthChecked(true);
+    }).catch(() => setAuthChecked(true));
+  }, []);
+
+  // Load preferences from server (overwrite local cache)
+  const loadServerPrefs = () => {
+    api("/api/preferences").then(data => {
+      if (data.preferences) {
+        const p = data.preferences;
+        if (p.selected_industries !== undefined) { setSelectedIndustries(p.selected_industries); save("industries", p.selected_industries); }
+        if (p.selected_areas !== undefined) { setSelectedAreas(p.selected_areas); save("areas", p.selected_areas); }
+        if (p.email_alerts !== undefined) { setEmailAlerts(p.email_alerts); save("emailAlerts", p.email_alerts); }
+        if (p.saved_opps !== undefined) { setSavedOpps(p.saved_opps); save("savedOpps", p.saved_opps); }
+        if (p.joined_clubs !== undefined) { setJoinedClubs(p.joined_clubs); save("joinedClubs", p.joined_clubs); }
+        if (p.club_email_prefs !== undefined) { setClubEmailPrefs(p.club_email_prefs || {}); save("clubEmailPrefs", p.club_email_prefs || {}); }
+        if (p.internship_history !== undefined) { setInternshipHistory(p.internship_history); save("history", p.internship_history); }
+      }
+    }).catch(() => {});
+  };
+
+  // Load server-created opportunities
+  const loadServerOpps = () => {
+    api("/api/opportunities").then(data => {
+      if (data.opportunities) {
+        const opps = data.opportunities.map((rawOpp) => {
+          const o = { ...rawOpp };
+          o.logo = normalizePublicUrl(o.logo || "", true) || null;
+          o.apply_url = normalizePublicUrl(o.apply_url || "", false) || "";
+
+          if (o.detail_content) {
+            const pageKey = "opp-server-" + o.id;
+            o.subPage = pageKey;
+            const deadlineStr = o.deadline ? new Date(o.deadline).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"}) : "Rolling";
+            const detailHtml = renderDetailMarkdown(o.detail_content);
+            SUBPAGE_CONTENT[pageKey] = {
+              title: o.org + " - " + o.title,
+              backTo: "opportunities",
+              backLabel: "Back to Opportunities",
+              render: () => (
+                <div>
+                  <p style={ds.p}>
+                    <strong style={{color:C.gold}}>{o.type || "Internship"}</strong>
+                    {o.location ? " - " + o.location : ""}
+                    {" - Deadline: " + deadlineStr}
+                    {o.paid ? <span style={{color:C.success,fontWeight:600}}> - Paid</span> : null}
+                  </p>
+                  <hr style={ds.hr}/>
+                  <div className="opp-detail-rich" dangerouslySetInnerHTML={{__html:detailHtml}}/>
+                  {o.apply_url ? (
+                    <p style={{...ds.p,marginTop:20}}>
+                      <a
+                        href={o.apply_url}
+                        target="_blank"
+                        rel="noopener"
+                        style={{display:"inline-block",padding:"10px 24px",background:"#c9a84c",color:"#1a2332",fontWeight:700,textDecoration:"none",borderRadius:4,fontSize:14}}
+                      >
+                        Apply Now ->
+                      </a>
+                    </p>
+                  ) : null}
+                </div>
+              ),
+            };
+          } else {
+            // Inherit subPage from hardcoded INTERNSHIPS if this opp matches one
+            const key = (o.org + "|" + o.title).toLowerCase();
+            const match = INTERNSHIPS.find(h => (h.org + "|" + h.title).toLowerCase() === key);
+            if (match && match.subPage) o.subPage = match.subPage;
+          }
+          return o;
+        });
+        setServerOpps(opps.filter(o => !isPastDeadline(o.deadline)));
+      }
+    }).catch(() => {});
+  };
+
+  // Load server activities
+  const loadServerActivities = () => {
+    api("/api/activities").then(data => {
+      if (data.activities) {
+        const activities = data.activities.map((raw) => {
+          const a = { ...raw };
+          a.show_as_event = !!a.show_as_event;
+          a.event_title = a.event_title || "";
+          a.event_date = a.event_date || "";
+          a.event_location = a.event_location || "";
+          a.event_description = a.event_description || a.detail_content || a.description || "";
+          if (a.show_as_event && a.event_description.trim()) {
+            const pageKey = "club-event-" + a.id;
+            a.event_sub_page = pageKey;
+            const detailHtml = renderDetailMarkdown(a.event_description);
+            SUBPAGE_CONTENT[pageKey] = {
+              title: a.event_title || (a.title + " Event"),
+              backTo: "community",
+              backLabel: "Back to Community",
+              render: () => (
+                <div>
+                  <p style={ds.p}>
+                    <strong style={{color:C.gold}}>{a.title}</strong>
+                    {a.event_date ? " - " + new Date(a.event_date).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"}) : ""}
+                    {a.event_location ? " - " + a.event_location : ""}
+                  </p>
+                  <hr style={ds.hr}/>
+                  <div className="opp-detail-rich" dangerouslySetInnerHTML={{__html:detailHtml}}/>
+                </div>
+              ),
+            };
+          }
+          return a;
+        });
+        setServerActivities(activities);
+      }
+    }).catch(() => {});
+  };
+
+  // Load server events
+  const loadServerEvents = () => {
+    api("/api/events").then(data => {
+      if (data.events) setServerEvents(data.events);
+    }).catch(() => {});
+  };
+
+  // Debounced preference sync to server
+  const debouncedSync = useRef(null);
+  if (!debouncedSync.current) {
+    debouncedSync.current = debounce((prefs) => {
+      api("/api/preferences", { method: "PUT", body: JSON.stringify(prefs) }).catch(() => {});
+    }, 500);
+  }
+
+  // Keep a ref to latest prefs so sync always reads fresh values
+  const prefsRef = useRef({});
+  prefsRef.current = {
+    selected_industries: selectedIndustries,
+    selected_areas: selectedAreas,
+    email_alerts: emailAlerts,
+    saved_opps: savedOpps,
+    joined_clubs: joinedClubs,
+    club_email_prefs: clubEmailPrefs,
+    internship_history: internshipHistory
+  };
+
+  const syncToServer = () => {
+    if (!currentUser) return;
+    debouncedSync.current(prefsRef.current);
+  };
+
+  // Auto-save effects (localStorage + server sync)
+  useEffect(() => { save("savedOpps", savedOpps); syncToServer(); }, [savedOpps]);
+  useEffect(() => { save("joinedClubs", joinedClubs); syncToServer(); }, [joinedClubs]);
+  useEffect(() => { save("clubEmailPrefs", clubEmailPrefs); syncToServer(); }, [clubEmailPrefs]);
+  useEffect(() => { save("industries", selectedIndustries); syncToServer(); }, [selectedIndustries]);
+  useEffect(() => { save("areas", selectedAreas); syncToServer(); }, [selectedAreas]);
+  useEffect(() => { save("emailAlerts", emailAlerts); syncToServer(); }, [emailAlerts]);
+  useEffect(() => { save("history", internshipHistory); syncToServer(); }, [internshipHistory]);
+
+  // Handle sign-in callback
+  const handleSignIn = (user) => {
+    _lsUserId = user.id;
+    setCurrentUser(user);
+    loadServerPrefs();
+    loadServerOpps();
+    loadServerActivities();
+    loadServerEvents();
+  };
+
+  // Handle sign-out
+  const handleSignOut = () => {
+    api("/api/auth/logout", { method: "POST" }).catch(() => {});
+    setCurrentUser(null);
+    setActiveTab("home");
+    setSubPage(null);
+  };
+
+  // Navigation with browser history support
+  const mainTabs = ["home","opportunities","calendar","profile","community","events"];
+  const navigateTo = (tab, sub) => {
+    if (mainTabs.includes(tab)) {
+      setActiveTab(tab);
+      setSubPage(sub || null);
+    } else {
+      setSubPage(tab);
+      if (tab.startsWith("event-")) setActiveTab("events");
+      else if (tab.startsWith("opp-")) setActiveTab("opportunities");
+      else if (tab.startsWith("club-event-")) setActiveTab("community");
+      else setActiveTab("home");
+    }
+    window.scrollTo(0, 0);
+  };
+  const navigate = (target) => {
+    const state = mainTabs.includes(target) ? { tab: target } : { tab: null, sub: target };
+    window.history.pushState(state, "", "");
+    navigateTo(target);
+  };
+
+  // Handle browser back/forward buttons
+  useEffect(() => {
+    // Set initial history state
+    window.history.replaceState({ tab: "home" }, "", "");
+    const onPopState = (e) => {
+      const s = e.state;
+      if (!s) return;
+      if (s.sub) navigateTo(s.sub);
+      else if (s.tab) navigateTo(s.tab);
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  // Merge opportunities: server DB is source of truth, then custom user listings
+  // Server opps first so admin edits take precedence over hardcoded INTERNSHIPS
+  const seen = new Set();
+  const allInternships = [...serverOpps, ...INTERNSHIPS].filter(o => {
+    const key = (o.org + "|" + o.title).toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return !isPastDeadline(o.deadline);
+  });
+
+  const pages = {
+    home: <HomePage navigate={navigate}/>,
+    opportunities: <OpportunitiesPage navigate={navigate} showToast={showToast} savedOpps={savedOpps} setSavedOpps={setSavedOpps} selectedIndustries={selectedIndustries} serverOpps={serverOpps}/>,
+    calendar: <CalendarPage allInternships={allInternships} navigate={navigate}/>,
+    profile: <ProfilePage showToast={showToast} selectedIndustries={selectedIndustries} setSelectedIndustries={setSelectedIndustries} selectedAreas={selectedAreas} setSelectedAreas={setSelectedAreas} emailAlerts={emailAlerts} setEmailAlerts={setEmailAlerts} internshipHistory={internshipHistory} setInternshipHistory={setInternshipHistory} currentUser={currentUser} serverActivities={serverActivities} joinedClubs={joinedClubs} setJoinedClubs={setJoinedClubs} clubEmailPrefs={clubEmailPrefs} setClubEmailPrefs={setClubEmailPrefs} navigate={navigate}/>,
+    community: <CommunityPage joinedClubs={joinedClubs} setJoinedClubs={setJoinedClubs} clubEmailPrefs={clubEmailPrefs} setClubEmailPrefs={setClubEmailPrefs} showToast={showToast} serverActivities={serverActivities} navigate={navigate} refreshActivities={loadServerActivities}/>,
+    events: <EventsPage navigate={navigate} serverEvents={serverEvents}/>,
+  };
+
+  // Show loading spinner while checking auth
+  if (!authChecked) return (
+    <div style={{minHeight:"100vh",background:"linear-gradient(135deg, "+C.navy+" 0%, "+C.navyDark+" 100%)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <p style={{color:C.cream+"88",fontSize:14}}>Loading...</p>
+    </div>
+  );
+
+  if (!currentUser) return <SignInPage onSignIn={handleSignIn}/>;
+
+  return (
+    <>
+      <TopNav activeTab={activeTab} subPage={subPage} navigate={navigate} onSignOut={handleSignOut} currentUser={currentUser}/>
+      <div style={{marginTop:72,flex:1,display:"flex",flexDirection:"column"}}>
+        <div style={{flex:"1 0 auto"}}>
+          {subPage ? <DetailPage subPage={subPage} navigate={navigate}/> : pages[activeTab]}
+        </div>
+        <Footer/>
+      </div>
+      <Toast toasts={toasts}/>
+    </>
+  );
+};
+
+ReactDOM.render(<App/>, document.getElementById("root"));
+
+// Lenis smooth scroll
+const lenis = new Lenis({ duration: 0.7, easing: t => Math.min(1, 1.001 - Math.pow(2, -10 * t)) });
+function raf(time) { lenis.raf(time); requestAnimationFrame(raf); }
+requestAnimationFrame(raf);
+</script>
+</body>
+</html>
