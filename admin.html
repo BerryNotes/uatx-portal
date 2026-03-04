@@ -6,6 +6,7 @@
   <title>UATX Portal — Admin</title>
   <link rel="icon" type="image/png" href="/images/Home/logo.png">
   <link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:FILL@0..1" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Libre Franklin', sans-serif; background: #0d1520; color: #c4c4d4; min-height: 100vh; }
@@ -121,13 +122,14 @@
     .check-row { display: flex; align-items: center; gap: 8px; }
     .check-row input[type="checkbox"] { accent-color: #c9a84c; }
     .check-row label { font-size: 13px; color: #c4c4d4; cursor: pointer; }
+    .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 450, 'GRAD' 0, 'opsz' 20; font-size: 18px; line-height: 1; }
     .detail-toolbar { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0 8px; align-items: center; }
-    .detail-toolbar button { background: #111a26; color: #c4c4d4; border: 1px solid #243044; border-radius: 3px; font-size: 11px; font-family: inherit; font-weight: 600; padding: 4px 8px; cursor: pointer; }
+    .detail-toolbar button { background: transparent; color: #c4c4d4; border: 1px solid transparent; border-radius: 3px; font-size: 11px; font-family: inherit; font-weight: 600; padding: 4px 8px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; min-height: 30px; }
     .detail-toolbar button:hover { border-color: #c9a84c; color: #d4b96a; }
-    .detail-toolbar select { background: #111a26; color: #c4c4d4; border: 1px solid #243044; border-radius: 3px; font-size: 11px; font-family: inherit; font-weight: 600; padding: 4px 8px; cursor: pointer; }
-    .detail-toolbar select:hover { border-color: #c9a84c; color: #d4b96a; }
-    .detail-toolbar .font-size-btn { width: 30px; text-align: center; padding: 4px 0; }
-    .detail-toolbar .detail-font-readout { min-width: 34px; text-align: center; font-size: 11px; font-weight: 700; color: #f5f0e8; border: 1px solid #243044; border-radius: 3px; padding: 4px 6px; background: #0d1520; }
+    .detail-toolbar .icon-btn { min-width: 30px; padding: 0 6px; }
+    .detail-toolbar .font-size-btn { min-width: 30px; padding: 0 6px; font-size: 18px; line-height: 1; }
+    .detail-toolbar .detail-font-readout { min-width: 34px; text-align: center; font-size: 11px; font-weight: 700; color: #f5f0e8; border: 1px solid #243044; border-radius: 3px; padding: 6px 8px; background: #0d1520; }
+    .detail-toolbar .detail-divider { width: 1px; height: 24px; background: #243044; margin: 0 2px; }
     .detail-help { font-size: 11px; color: #6b7280; margin-top: 6px; line-height: 1.4; }
     .admin-rich-editor { min-height: 120px; background: #111a26; color: #f5f0e8; border: 1px solid #243044; border-radius: 3px; padding: 10px 12px; font-size: 13px; line-height: 1.6; outline: none; }
     .admin-rich-editor:focus { border-color: #c9a84c; }
@@ -779,58 +781,21 @@ function setupDetailToolbar(toolbar, textareaId) {
   toolbar.dataset.richReady = "1";
   toolbar.dataset.target = textareaId;
 
-  const decBtn = document.createElement("button");
-  decBtn.type = "button";
-  decBtn.className = "font-size-btn";
-  decBtn.textContent = "-";
-  decBtn.dataset.action = "font-dec";
-  const readout = document.createElement("span");
-  readout.className = "detail-font-readout";
-  readout.textContent = "13";
-  const incBtn = document.createElement("button");
-  incBtn.type = "button";
-  incBtn.className = "font-size-btn";
-  incBtn.textContent = "+";
-  incBtn.dataset.action = "font-inc";
-
-  toolbar.prepend(incBtn);
-  toolbar.prepend(readout);
-  toolbar.prepend(decBtn);
-
-  const buttons = Array.from(toolbar.querySelectorAll("button"));
-  buttons.forEach((btn) => {
-    btn.removeAttribute("onclick");
-    if (btn.dataset.action) return;
-    const text = btn.textContent.trim().toLowerCase();
-    if (text === "bold") btn.dataset.action = "bold";
-    else if (text === "italic") btn.dataset.action = "italic";
-    else if (text.indexOf("bullet") !== -1) btn.dataset.action = "bullet";
-    else if (text.indexOf("number") !== -1) btn.dataset.action = "number";
-  });
-
-  const hasUnderline = buttons.some((btn) => btn.dataset.action === "underline");
-  if (!hasUnderline) {
-    const underlineBtn = document.createElement("button");
-    underlineBtn.type = "button";
-    underlineBtn.textContent = "Underline";
-    underlineBtn.dataset.action = "underline";
-    const italicBtn = buttons.find((btn) => btn.dataset.action === "italic");
-    if (italicBtn && italicBtn.nextSibling) italicBtn.parentNode.insertBefore(underlineBtn, italicBtn.nextSibling);
-    else toolbar.appendChild(underlineBtn);
-  }
-
-  const sizeSelect = toolbar.querySelector("select");
-  if (sizeSelect) {
-    sizeSelect.removeAttribute("onchange");
-    sizeSelect.addEventListener("change", () => {
-      if (!sizeSelect.value) return;
-      applyDetailFormat(textareaId, sizeSelect.value);
-      sizeSelect.selectedIndex = 0;
-    });
-  }
+  toolbar.innerHTML = `
+    <button type="button" class="font-size-btn" data-action="font-dec" aria-label="Decrease font size">-</button>
+    <span class="detail-font-readout" aria-label="Current font size">13</span>
+    <button type="button" class="font-size-btn" data-action="font-inc" aria-label="Increase font size">+</button>
+    <span class="detail-divider" aria-hidden="true"></span>
+    <button type="button" class="icon-btn" data-action="bold" aria-label="Bold"><span class="material-symbols-outlined">format_bold</span></button>
+    <button type="button" class="icon-btn" data-action="italic" aria-label="Italic"><span class="material-symbols-outlined">format_italic</span></button>
+    <button type="button" class="icon-btn" data-action="underline" aria-label="Underline"><span class="material-symbols-outlined">format_underlined</span></button>
+    <span class="detail-divider" aria-hidden="true"></span>
+    <button type="button" class="icon-btn" data-action="bullet" aria-label="Bulleted list"><span class="material-symbols-outlined">format_list_bulleted</span></button>
+    <button type="button" class="icon-btn" data-action="number" aria-label="Numbered list"><span class="material-symbols-outlined">format_list_numbered</span></button>
+  `;
 
   toolbar.addEventListener("mousedown", (e) => {
-    if (e.target.closest("button") || e.target.closest("select")) e.preventDefault();
+    if (e.target.closest("button")) e.preventDefault();
   });
   toolbar.addEventListener("click", (e) => {
     const btn = e.target.closest("button");
