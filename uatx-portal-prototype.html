@@ -1882,7 +1882,7 @@ const TopNav = ({activeTab, subPage, navigate, onSignOut, currentUser}) => {
 };
 
 // ─── DETAIL PAGE ───
-const DetailPage = ({subPage, navigate, currentUser, showToast, serverActivities=[], allClubEvents=[], refreshActivities, refreshClubEvents}) => {
+const DetailPage = ({subPage, navigate, currentUser, showToast, serverActivities=[], allClubEvents=[], refreshActivities, refreshClubEvents, backOverrideTab=null}) => {
   const allActivities = buildMergedActivities(serverActivities);
   const clubDetailId = parseClubSubPageId(subPage, CLUB_DETAIL_PAGE_PREFIX);
   if (clubDetailId !== null) {
@@ -1925,14 +1925,16 @@ const DetailPage = ({subPage, navigate, currentUser, showToast, serverActivities
 
   const page = SUBPAGE_CONTENT[subPage];
   if (!page) return <div style={{padding:"32px 40px"}}><p>Page not found.</p></div>;
+  const backToTarget = (page.backTo === "events" && backOverrideTab === "community-events") ? "community-events" : page.backTo;
+  const backLabel = (page.backTo === "events" && backOverrideTab === "community-events") ? "Back to Community Events" : page.backLabel;
   return (
     <div style={{animation:"fadeIn 0.3s ease"}}>
       <div style={{background:"linear-gradient(135deg, "+C.navy+" 0%, "+C.navyLight+" 100%)",padding:"36px 40px"}}>
         <h1 style={{color:C.cream,fontFamily:"Georgia, serif",fontSize:28,fontWeight:700,margin:0}}>{page.title}</h1>
       </div>
       <div style={{padding:"32px 40px"}}>
-        <div onClick={()=>navigate(page.backTo)} style={{cursor:"pointer",color:C.goldMuted,fontSize:13,fontWeight:500,marginBottom:24,display:"inline-flex",alignItems:"center",gap:6}}>
-          {"\u25C0"} {page.backLabel}
+        <div onClick={()=>navigate(backToTarget)} style={{cursor:"pointer",color:C.goldMuted,fontSize:13,fontWeight:500,marginBottom:24,display:"inline-flex",alignItems:"center",gap:6}}>
+          {"\u25C0"} {backLabel}
         </div>
         {page.render ? page.render() : <Section items={page.content}/>}
       </div>
@@ -3154,7 +3156,7 @@ const CommunityPage = ({mode="all", joinedClubs, setJoinedClubs, clubEmailPrefs=
             const shortDesc = (event.desc || "").trim();
             const preview = shortDesc.length > 170 ? shortDesc.slice(0, 167) + "..." : shortDesc;
             return (
-              <div key={event.id} style={{backgroundColor:C.white,border:"1px solid "+C.border,borderLeft:"3px solid "+C.navy,overflow:"hidden",cursor:event.subPage?"pointer":"default"}} onClick={()=>event.subPage && navigate(event.subPage)}>
+              <div key={event.id} style={{backgroundColor:C.white,border:"1px solid "+C.border,borderLeft:"3px solid "+C.navy,overflow:"hidden",cursor:event.subPage?"pointer":"default"}} onClick={()=>event.subPage && navigate(event.subPage, {backTab: "community-events"})}>
                 <div style={{padding:"12px 18px"}}>
                   <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:8}}>
                     {event.img ? (
@@ -3285,7 +3287,11 @@ const EventsPage = ({navigate, serverEvents=[]}) => {
               <p style={{fontSize:13,color:C.textLight,lineHeight:1.5,margin:"10px 0",flex:1}}>{event.desc}</p>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:12,borderTop:"1px solid "+C.border}}>
                 <span style={{fontSize:12,color:C.text,fontWeight:600}}>{new Date(event.date).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"})}</span>
-                <Btn size="sm" onClick={()=>navigate(event.subPage)}>Learn More</Btn>
+                {event.subPage ? (
+                  <Btn size="sm" onClick={()=>navigate(event.subPage)}>Learn More</Btn>
+                ) : (
+                  <span style={{fontSize:11,color:C.textLight,fontWeight:600}}>Details coming soon</span>
+                )}
               </div>
             </div>
           </div>
@@ -3413,6 +3419,7 @@ const App = () => {
   const [authChecked, setAuthChecked] = useState(false);
   const [activeTab, setActiveTab] = useState("home");
   const [subPage, setSubPage] = useState(null);
+  const [detailBackTab, setDetailBackTab] = useState(null);
 
   // Persisted state (localStorage as fast cache, server as source of truth)
   const [savedOpps, setSavedOpps] = useState(() => load("savedOpps", []));
@@ -3529,14 +3536,21 @@ const App = () => {
             e.type = normalizeCommunityEventCategory(e.type);
           }
           const detailText = (e.detail_content || "").trim();
+          const summaryText = String(e.desc || "").trim();
           const pageKey = "event-server-" + e.id;
 
-          if (detailText || !e.sub_page) {
+          if (e.sub_page) {
+            e.subPage = e.sub_page || e.subPage;
+          } else {
+            const sourceText = detailText || summaryText;
+            if (!sourceText) {
+              e.subPage = "";
+              return e;
+            }
             const content = [];
             const dateStr = e.date ? new Date(e.date).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"}) : "Date TBD";
             content.push({p:'<strong style="color:#c9a84c">' + (e.type || "Event") + "</strong>" + (e.org ? " &middot; " + e.org : "") + " &middot; " + dateStr});
             content.push({hr:true});
-            const sourceText = detailText || e.desc || "";
             content.push(...parseRichDetailContent(sourceText));
             if (e.url) {
               content.push({hr:true});
@@ -3549,8 +3563,6 @@ const App = () => {
               content: content,
             };
             e.subPage = pageKey;
-          } else {
-            e.subPage = e.sub_page || e.subPage;
           }
           return e;
         });
@@ -3637,14 +3649,16 @@ const App = () => {
     setCurrentUser(null);
     setActiveTab("home");
     setSubPage(null);
+    setDetailBackTab(null);
   };
 
   // Navigation with browser history support
   const mainTabs = ["home","opportunities","calendar","profile","community-events","clubs","events"];
-  const navigateTo = (tab, sub) => {
+  const navigateTo = (tab, sub, options={}) => {
     if (mainTabs.includes(tab)) {
       setActiveTab(tab);
       setSubPage(sub || null);
+      setDetailBackTab(null);
     } else {
       setSubPage(tab);
       if (tab.startsWith("event-")) setActiveTab("events");
@@ -3654,13 +3668,14 @@ const App = () => {
       else if (tab === "submit-activity") setActiveTab("clubs");
       else if (tab.startsWith("opp-")) setActiveTab("opportunities");
       else setActiveTab("home");
+      setDetailBackTab(mainTabs.includes(options.backTab) ? options.backTab : null);
     }
     window.scrollTo(0, 0);
   };
-  const navigate = (target) => {
-    const state = mainTabs.includes(target) ? { tab: target } : { tab: null, sub: target };
+  const navigate = (target, options={}) => {
+    const state = mainTabs.includes(target) ? { tab: target } : { tab: null, sub: target, backTab: options.backTab || null };
     window.history.pushState(state, "", "");
-    navigateTo(target);
+    navigateTo(target, null, options);
   };
 
   // Handle browser back/forward buttons
@@ -3670,7 +3685,7 @@ const App = () => {
     const onPopState = (e) => {
       const s = e.state;
       if (!s) return;
-      if (s.sub) navigateTo(s.sub);
+      if (s.sub) navigateTo(s.sub, null, {backTab: s.backTab || null});
       else if (s.tab) navigateTo(s.tab);
     };
     window.addEventListener("popstate", onPopState);
@@ -3711,7 +3726,7 @@ const App = () => {
       <TopNav activeTab={activeTab} subPage={subPage} navigate={navigate} onSignOut={handleSignOut} currentUser={currentUser}/>
       <div style={{marginTop:72,minHeight:"calc(100vh - 72px)",display:"flex",flexDirection:"column"}}>
         <div style={{flex:"1 0 auto"}}>
-          {subPage ? <DetailPage subPage={subPage} navigate={navigate} currentUser={currentUser} showToast={showToast} serverActivities={serverActivities} allClubEvents={allClubEvents} refreshActivities={loadServerActivities} refreshClubEvents={loadClubEvents}/> : pages[activeTab]}
+          {subPage ? <DetailPage subPage={subPage} navigate={navigate} currentUser={currentUser} showToast={showToast} serverActivities={serverActivities} allClubEvents={allClubEvents} refreshActivities={loadServerActivities} refreshClubEvents={loadClubEvents} backOverrideTab={detailBackTab}/> : pages[activeTab]}
         </div>
         <Footer onInvert={()=>setInverted(v=>!v)}/>
       </div>
