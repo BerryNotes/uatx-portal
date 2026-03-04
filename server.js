@@ -5,6 +5,7 @@ const path = require("path");
 const fs = require("fs");
 
 const {
+  db,
   SQLiteStore,
   seedAdminEmails,
   isOnRoster,
@@ -723,9 +724,188 @@ app.get("/api/activities/:id/members", requireAuth, (req, res) => {
 
 // ─── ADMIN ROUTES ───
 
+const ROSTER_EXPORT_COLUMNS = [
+  { key: "roster_name", label: "Roster Name" },
+  { key: "roster_email", label: "Roster Email" },
+  { key: "roster_is_admin", label: "Roster Admin" },
+  { key: "roster_added_at", label: "Roster Added At" },
+  { key: "registered", label: "Registered In Portal" },
+  { key: "user_id", label: "Portal User ID" },
+  { key: "user_name", label: "Portal Name" },
+  { key: "user_email", label: "Portal Email" },
+  { key: "user_is_admin", label: "Portal Admin" },
+  { key: "welcome_email_sent", label: "Welcome Email Sent" },
+  { key: "user_created_at", label: "Portal Created At" },
+  { key: "avatar_url", label: "Avatar URL" },
+  { key: "google_sub", label: "Google Subject ID" },
+  { key: "selected_industries", label: "Selected Industries" },
+  { key: "selected_areas", label: "Selected Areas" },
+  { key: "email_alerts", label: "Email Alerts Enabled" },
+  { key: "saved_opps_count", label: "Saved Opportunities Count" },
+  { key: "joined_clubs_count", label: "Joined Clubs Count" },
+  { key: "internship_history_count", label: "Internship History Count" },
+  { key: "saved_opps_json", label: "Saved Opportunities (JSON)" },
+  { key: "joined_clubs_json", label: "Joined Clubs (JSON)" },
+  { key: "club_email_prefs_json", label: "Club Email Prefs (JSON)" },
+  { key: "internship_history_json", label: "Internship History (JSON)" },
+];
+
+function safeParseJson(raw, fallback) {
+  if (typeof raw !== "string" || !raw.trim()) return fallback;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+}
+
+function formatJsonArrayList(raw) {
+  const parsed = safeParseJson(raw, []);
+  return Array.isArray(parsed) ? parsed.map((v) => String(v)).join("; ") : "";
+}
+
+function normalizeCsvCell(value) {
+  const str = value === null || value === undefined ? "" : String(value);
+  if (!/[",\n\r]/.test(str)) return str;
+  return `"${str.replace(/"/g, '""')}"`;
+}
+
+function normalizeHtmlCell(value) {
+  return String(value === null || value === undefined ? "" : value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function getRosterExportRows() {
+  const rows = db.prepare(`
+    SELECT
+      r.name AS roster_name,
+      r.email AS roster_email,
+      r.is_admin AS roster_is_admin,
+      r.created_at AS roster_added_at,
+      CASE WHEN u.id IS NOT NULL THEN 1 ELSE 0 END AS registered,
+      u.id AS user_id,
+      u.name AS user_name,
+      u.email AS user_email,
+      u.is_admin AS user_is_admin,
+      u.welcome_email_sent AS welcome_email_sent,
+      u.created_at AS user_created_at,
+      u.avatar_url AS avatar_url,
+      u.google_sub AS google_sub,
+      up.selected_industries AS selected_industries_json,
+      up.selected_areas AS selected_areas_json,
+      up.email_alerts AS email_alerts,
+      up.saved_opps AS saved_opps_json,
+      up.joined_clubs AS joined_clubs_json,
+      up.club_email_prefs AS club_email_prefs_json,
+      up.internship_history AS internship_history_json
+    FROM roster r
+    LEFT JOIN users u ON LOWER(u.email) = LOWER(r.email)
+    LEFT JOIN user_preferences up ON up.user_id = u.id
+    ORDER BY r.created_at DESC
+  `).all();
+
+  return rows.map((row) => {
+    const savedOpps = safeParseJson(row.saved_opps_json, []);
+    const joinedClubs = safeParseJson(row.joined_clubs_json, []);
+    const internshipHistory = safeParseJson(row.internship_history_json, []);
+    return {
+      roster_name: row.roster_name || "",
+      roster_email: row.roster_email || "",
+      roster_is_admin: row.roster_is_admin ? "Yes" : "No",
+      roster_added_at: row.roster_added_at || "",
+      registered: row.registered ? "Yes" : "No",
+      user_id: row.user_id || "",
+      user_name: row.user_name || "",
+      user_email: row.user_email || "",
+      user_is_admin: row.user_is_admin ? "Yes" : "No",
+      welcome_email_sent: row.welcome_email_sent ? "Yes" : "No",
+      user_created_at: row.user_created_at || "",
+      avatar_url: row.avatar_url || "",
+      google_sub: row.google_sub || "",
+      selected_industries: formatJsonArrayList(row.selected_industries_json),
+      selected_areas: formatJsonArrayList(row.selected_areas_json),
+      email_alerts: row.email_alerts === null || row.email_alerts === undefined ? "" : (row.email_alerts ? "Yes" : "No"),
+      saved_opps_count: Array.isArray(savedOpps) ? savedOpps.length : 0,
+      joined_clubs_count: Array.isArray(joinedClubs) ? joinedClubs.length : 0,
+      internship_history_count: Array.isArray(internshipHistory) ? internshipHistory.length : 0,
+      saved_opps_json: row.saved_opps_json || "[]",
+      joined_clubs_json: row.joined_clubs_json || "[]",
+      club_email_prefs_json: row.club_email_prefs_json || "{}",
+      internship_history_json: row.internship_history_json || "[]",
+    };
+  });
+}
+
+function buildRosterCsv(rows) {
+  const header = ROSTER_EXPORT_COLUMNS.map((col) => normalizeCsvCell(col.label)).join(",");
+  const lines = rows.map((row) =>
+    ROSTER_EXPORT_COLUMNS.map((col) => normalizeCsvCell(row[col.key])).join(",")
+  );
+  return [header, ...lines].join("\n");
+}
+
+function buildRosterExcelHtml(rows) {
+  const header = ROSTER_EXPORT_COLUMNS.map((col) => `<th>${normalizeHtmlCell(col.label)}</th>`).join("");
+  const body = rows
+    .map((row) => {
+      const cells = ROSTER_EXPORT_COLUMNS.map(
+        (col) => `<td style="mso-number-format:'\\@';">${normalizeHtmlCell(row[col.key])}</td>`
+      ).join("");
+      return `<tr>${cells}</tr>`;
+    })
+    .join("");
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+</head>
+<body>
+  <table border="1">
+    <thead><tr>${header}</tr></thead>
+    <tbody>${body}</tbody>
+  </table>
+</body>
+</html>`;
+}
+
+function exportDateStamp() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 // Roster
 app.get("/api/admin/roster", requireAdmin, (req, res) => {
   res.json({ roster: getAllRoster() });
+});
+
+app.get("/api/admin/roster/export.csv", requireAdmin, (req, res) => {
+  const rows = getRosterExportRows();
+  const csv = buildRosterCsv(rows);
+  const filename = `uatx-roster-export-${exportDateStamp()}.csv`;
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.send("\uFEFF" + csv);
+});
+
+app.get("/api/admin/roster/export.xls", requireAdmin, (req, res) => {
+  const rows = getRosterExportRows();
+  const html = buildRosterExcelHtml(rows);
+  const filename = `uatx-roster-export-${exportDateStamp()}.xls`;
+  res.setHeader("Content-Type", "application/vnd.ms-excel; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.send("\uFEFF" + html);
+});
+
+app.get("/api/admin/roster/export.exl", requireAdmin, (req, res) => {
+  const rows = getRosterExportRows();
+  const html = buildRosterExcelHtml(rows);
+  const filename = `uatx-roster-export-${exportDateStamp()}.exl`;
+  res.setHeader("Content-Type", "application/vnd.ms-excel; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.send("\uFEFF" + html);
 });
 
 app.post("/api/admin/roster", requireAdmin, (req, res) => {

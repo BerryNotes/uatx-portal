@@ -32,6 +32,18 @@
     .tab-panel.active { display: block; }
 
     .content { max-width: 960px; margin: 0 auto; padding: 24px 20px; }
+    #tab-community .content { max-width: none; width: 100%; margin: 0; padding: 24px 32px; }
+    .community-admin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; align-items: start; width: 100%; }
+    .community-admin-column { min-width: 0; }
+    .community-create-card { background: #111a26; border: 1px solid #243044; padding: 20px; margin-bottom: 24px; border-radius: 4px; }
+    .community-admin-column:first-child { padding-right: 16px; border-right: 1px solid #243044; }
+    .community-admin-column:last-child { padding-left: 16px; }
+    @media (max-width: 1100px) {
+      #tab-community .content { padding: 24px 20px; }
+      .community-admin-grid { grid-template-columns: 1fr; }
+      .community-admin-column:first-child { padding-right: 0; border-right: none; }
+      .community-admin-column:last-child { padding-left: 0; }
+    }
 
     /* Tables */
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -174,7 +186,11 @@
           <h2>Student Roster</h2>
           <span class="count" id="roster-count"></span>
         </div>
-        <button class="btn btn-outline" onclick="toggleCSV()">CSV Import</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-outline" onclick="downloadRosterExport('csv')">Export CSV</button>
+          <button class="btn btn-outline" onclick="downloadRosterExport('exl')">Export EXL</button>
+          <button class="btn btn-outline" onclick="toggleCSV()">CSV Import</button>
+        </div>
       </div>
 
       <div class="form-row">
@@ -319,114 +335,117 @@
   <!-- COMMUNITY TAB -->
   <div class="tab-panel" id="tab-community">
     <div class="content">
-      <div class="section-header">
-        <div style="display:flex;align-items:center">
-          <h2>Clubs</h2>
-          <span class="count" id="activity-count"></span>
-        </div>
-      </div>
-
-      <div style="background:#111a26;border:1px solid #243044;padding:20px;margin-bottom:24px;border-radius:4px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-          <div style="font-size:13px;font-weight:600;color:#f5f0e8">Create</div>
-          <div style="display:flex;gap:8px">
-            <button id="create-mode-club" class="btn btn-gold" type="button" onclick="setCommunityCreateMode('club')">Clubs</button>
-            <button id="create-mode-community-event" class="btn btn-outline" type="button" onclick="setCommunityCreateMode('community-event')">Community Events</button>
-          </div>
-        </div>
-        <div id="club-create-form">
-          <div style="font-size:13px;font-weight:600;color:#f5f0e8;margin-bottom:12px">New Club</div>
-          <div class="form-row">
-            <div class="field"><label>Title</label><input id="act-title" style="width:240px"></div>
-            <div class="field">
-              <label>Category</label>
-              <select id="act-category" style="width:160px">
-                <option value="">Select...</option>
-                <option>Academic</option>
-                <option>Social</option>
-                <option>Sports</option>
-                <option>Arts</option>
-                <option>Service</option>
-                <option>Professional</option>
-                <option>Religious</option>
-                <option>Cultural</option>
-                <option>Political</option>
-                <option>Media</option>
-              </select>
-            </div>
-            <div class="field"><label>Meet Day</label><input id="act-meetday" placeholder="e.g. Tuesdays" style="width:160px"></div>
-          </div>
-          <div class="form-row">
-            <div class="field"><label>President Email</label><input id="act-president" placeholder="president@uaustin.org" style="width:260px"></div>
-          </div>
-          <div class="field" style="margin-bottom:16px">
-            <label>Description</label>
-            <textarea id="act-desc" style="width:100%"></textarea>
-          </div>
-          <button class="btn btn-gold" onclick="createActivity()">Save Club</button>
-        </div>
-        <div id="community-event-create-form" style="display:none">
-          <div style="font-size:13px;font-weight:600;color:#f5f0e8;margin-bottom:12px">New Community Event</div>
-          <div class="form-row">
-            <div class="field"><label>Title</label><input id="comm-evt-title" style="width:240px"></div>
-            <div class="field"><label>Organization</label><input id="comm-evt-org" style="width:180px"></div>
-            <div class="field">
-              <label>Category</label>
-              <select id="comm-evt-type" style="width:160px">
-                <option>Student Life</option>
-                <option>Residential Life</option>
-              </select>
+      <div class="community-admin-grid">
+        <div class="community-admin-column">
+          <div class="section-header">
+            <div style="display:flex;align-items:center">
+              <h2>Clubs</h2>
+              <span class="count" id="activity-count"></span>
             </div>
           </div>
-          <div class="form-row">
-            <div class="field"><label>Date</label><input id="comm-evt-date" type="date" style="width:160px"></div>
-            <div class="field"><label>URL</label><input id="comm-evt-url" placeholder="https://..." style="width:280px"></div>
-            <div class="field"><label>Image Path</label><input id="comm-evt-img" placeholder="/images/UATX Sponsered Events & Travel/..." style="width:280px"></div>
-          </div>
-          <div class="field" style="margin-bottom:16px">
-            <label>Description</label>
-            <textarea id="comm-evt-desc" style="width:100%"></textarea>
-          </div>
-          <div class="field" style="margin-bottom:16px">
-            <label>Page Description (shown on Learn More page)</label>
-            <div class="detail-toolbar">
-              <button type="button" onclick="applyDetailFormat('comm-evt-detail','bold')">Bold</button>
-              <button type="button" onclick="applyDetailFormat('comm-evt-detail','italic')">Italic</button>
-              <button type="button" onclick="applyDetailFormat('comm-evt-detail','bullet')">Bullets</button>
-              <button type="button" onclick="applyDetailFormat('comm-evt-detail','number')">Numbered</button>
-              <select onchange="if(this.value){applyDetailFormat('comm-evt-detail', this.value); this.selectedIndex=0;}">
-                <option value="">Font Size</option>
-                <option value="h2">Large</option>
-                <option value="h3">Medium</option>
-                <option value="h4">Small</option>
-                <option value="paragraph">Body</option>
-              </select>
+
+          <div class="community-create-card">
+            <div id="club-create-form">
+              <div style="font-size:13px;font-weight:600;color:#f5f0e8;margin-bottom:12px">New Club</div>
+              <div class="form-row">
+                <div class="field"><label>Title</label><input id="act-title" style="width:240px"></div>
+                <div class="field">
+                  <label>Category</label>
+                  <select id="act-category" style="width:160px">
+                    <option value="">Select...</option>
+                    <option>Academic</option>
+                    <option>Social</option>
+                    <option>Sports</option>
+                    <option>Arts</option>
+                    <option>Service</option>
+                    <option>Professional</option>
+                    <option>Religious</option>
+                    <option>Cultural</option>
+                    <option>Political</option>
+                    <option>Media</option>
+                  </select>
+                </div>
+                <div class="field"><label>Meet Day</label><input id="act-meetday" placeholder="e.g. Tuesdays" style="width:160px"></div>
+              </div>
+              <div class="form-row">
+                <div class="field"><label>President Email</label><input id="act-president" placeholder="president@uaustin.org" style="width:260px"></div>
+              </div>
+              <div class="field" style="margin-bottom:16px">
+                <label>Description</label>
+                <textarea id="act-desc" style="width:100%"></textarea>
+              </div>
+              <button class="btn btn-gold" onclick="createActivity()">Save Club</button>
             </div>
-            <textarea id="comm-evt-detail" style="width:100%;min-height:100px" placeholder="Add full event details. Use blank lines to separate paragraphs."></textarea>
-            <div class="detail-help">Use the toolbar to style content. Blank lines separate paragraphs.</div>
           </div>
-          <button class="btn btn-gold" onclick="createCommunityEventAdmin()">Save Community Event</button>
+
+          <div style="margin-bottom:16px">
+            <input id="activity-search" placeholder="Search clubs..." oninput="filterActivities()" style="width:100%;background:#111a26;color:#f5f0e8;border:1px solid #243044;padding:10px 14px;font-size:13px;font-family:inherit;border-radius:3px;outline:none">
+          </div>
+
+          <div id="activity-body"></div>
+          <div class="empty" id="activity-empty" style="display:none">No clubs found.</div>
+        </div>
+
+        <div class="community-admin-column">
+          <div class="section-header">
+            <div style="display:flex;align-items:center">
+              <h2>Community Events</h2>
+              <span class="count" id="community-event-count"></span>
+            </div>
+          </div>
+
+          <div class="community-create-card">
+            <div id="community-event-create-form">
+              <div style="font-size:13px;font-weight:600;color:#f5f0e8;margin-bottom:12px">New Community Event</div>
+              <div class="form-row">
+                <div class="field"><label>Title</label><input id="comm-evt-title" style="width:240px"></div>
+                <div class="field"><label>Organization</label><input id="comm-evt-org" style="width:180px"></div>
+                <div class="field">
+                  <label>Category</label>
+                  <select id="comm-evt-type" style="width:160px">
+                    <option>Student Life</option>
+                    <option>Residential Life</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="field"><label>Date</label><input id="comm-evt-date" type="date" style="width:160px"></div>
+                <div class="field"><label>URL</label><input id="comm-evt-url" placeholder="https://..." style="width:280px"></div>
+                <div class="field"><label>Image Path</label><input id="comm-evt-img" placeholder="/images/UATX Sponsered Events & Travel/..." style="width:280px"></div>
+              </div>
+              <div class="field" style="margin-bottom:16px">
+                <label>Description</label>
+                <textarea id="comm-evt-desc" style="width:100%"></textarea>
+              </div>
+              <div class="field" style="margin-bottom:16px">
+                <label>Page Description (shown on Learn More page)</label>
+                <div class="detail-toolbar">
+                  <button type="button" onclick="applyDetailFormat('comm-evt-detail','bold')">Bold</button>
+                  <button type="button" onclick="applyDetailFormat('comm-evt-detail','italic')">Italic</button>
+                  <button type="button" onclick="applyDetailFormat('comm-evt-detail','bullet')">Bullets</button>
+                  <button type="button" onclick="applyDetailFormat('comm-evt-detail','number')">Numbered</button>
+                  <select onchange="if(this.value){applyDetailFormat('comm-evt-detail', this.value); this.selectedIndex=0;}">
+                    <option value="">Font Size</option>
+                    <option value="h2">Large</option>
+                    <option value="h3">Medium</option>
+                    <option value="h4">Small</option>
+                    <option value="paragraph">Body</option>
+                  </select>
+                </div>
+                <textarea id="comm-evt-detail" style="width:100%;min-height:100px" placeholder="Add full event details. Use blank lines to separate paragraphs."></textarea>
+                <div class="detail-help">Use the toolbar to style content. Blank lines separate paragraphs.</div>
+              </div>
+              <button class="btn btn-gold" onclick="createCommunityEventAdmin()">Save Community Event</button>
+            </div>
+          </div>
+
+          <div style="margin-bottom:16px">
+            <input id="community-event-search" placeholder="Search community events..." oninput="filterCommunityEvents()" style="width:100%;background:#111a26;color:#f5f0e8;border:1px solid #243044;padding:10px 14px;font-size:13px;font-family:inherit;border-radius:3px;outline:none">
+          </div>
+          <div id="community-event-body"></div>
+          <div class="empty" id="community-event-empty" style="display:none">No community events found.</div>
         </div>
       </div>
-
-      <div style="margin-bottom:16px">
-        <input id="activity-search" placeholder="Search clubs..." oninput="filterActivities()" style="width:100%;background:#111a26;color:#f5f0e8;border:1px solid #243044;padding:10px 14px;font-size:13px;font-family:inherit;border-radius:3px;outline:none">
-      </div>
-
-      <div id="activity-body"></div>
-      <div class="empty" id="activity-empty" style="display:none">No clubs found.</div>
-
-      <div class="section-header" style="margin-top:28px">
-        <div style="display:flex;align-items:center">
-          <h2>Community Events</h2>
-          <span class="count" id="community-event-count"></span>
-        </div>
-      </div>
-      <div style="margin-bottom:16px">
-        <input id="community-event-search" placeholder="Search community events..." oninput="filterCommunityEvents()" style="width:100%;background:#111a26;color:#f5f0e8;border:1px solid #243044;padding:10px 14px;font-size:13px;font-family:inherit;border-radius:3px;outline:none">
-      </div>
-      <div id="community-event-body"></div>
-      <div class="empty" id="community-event-empty" style="display:none">No community events found.</div>
     </div>
   </div>
 
@@ -564,19 +583,6 @@ function setEventDateMinimums() {
   if (createDate) createDate.min = minDate;
   if (communityCreateDate) communityCreateDate.min = minDate;
   if (editDate) editDate.min = minDate;
-}
-
-let communityCreateMode = "club";
-function setCommunityCreateMode(mode) {
-  communityCreateMode = mode === "community-event" ? "community-event" : "club";
-  const clubBtn = document.getElementById("create-mode-club");
-  const eventBtn = document.getElementById("create-mode-community-event");
-  const clubForm = document.getElementById("club-create-form");
-  const eventForm = document.getElementById("community-event-create-form");
-  if (clubBtn) clubBtn.className = "btn " + (communityCreateMode === "club" ? "btn-gold" : "btn-outline");
-  if (eventBtn) eventBtn.className = "btn " + (communityCreateMode === "community-event" ? "btn-gold" : "btn-outline");
-  if (clubForm) clubForm.style.display = communityCreateMode === "club" ? "block" : "none";
-  if (eventForm) eventForm.style.display = communityCreateMode === "community-event" ? "block" : "none";
 }
 
 // ─── INIT ───
@@ -853,7 +859,6 @@ async function init() {
     document.getElementById("app").style.display = "block";
     document.getElementById("user-info").textContent = currentUser.email;
     setEventDateMinimums();
-    setCommunityCreateMode("club");
     setExpiredView("opportunities");
     populateOpportunityIndustrySelect();
     enhanceDetailEditors();
@@ -1237,6 +1242,245 @@ async function removeStudent(id) {
   const data = await res.json();
   lastRoster = data.roster; filterRoster();
   toast("Student removed");
+}
+
+function getFilenameFromDisposition(disposition, fallback) {
+  if (!disposition) return fallback;
+  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match && utf8Match[1]) {
+    try { return decodeURIComponent(utf8Match[1]); } catch (e) { /* ignore */ }
+  }
+  const simpleMatch = disposition.match(/filename="?([^";]+)"?/i);
+  return simpleMatch && simpleMatch[1] ? simpleMatch[1] : fallback;
+}
+
+const ROSTER_EXPORT_COLUMNS = [
+  { key: "roster_name", label: "Roster Name" },
+  { key: "roster_email", label: "Roster Email" },
+  { key: "roster_is_admin", label: "Roster Admin" },
+  { key: "roster_added_at", label: "Roster Added At" },
+  { key: "registered", label: "Registered In Portal" },
+  { key: "user_id", label: "Portal User ID" },
+  { key: "user_name", label: "Portal Name" },
+  { key: "user_email", label: "Portal Email" },
+  { key: "user_is_admin", label: "Portal Admin" },
+  { key: "welcome_email_sent", label: "Welcome Email Sent" },
+  { key: "user_created_at", label: "Portal Created At" },
+  { key: "avatar_url", label: "Avatar URL" },
+  { key: "google_sub", label: "Google Subject ID" },
+  { key: "selected_industries", label: "Selected Industries" },
+  { key: "selected_areas", label: "Selected Areas" },
+  { key: "email_alerts", label: "Email Alerts Enabled" },
+  { key: "saved_opps_count", label: "Saved Opportunities Count" },
+  { key: "joined_clubs_count", label: "Joined Clubs Count" },
+  { key: "internship_history_count", label: "Internship History Count" },
+  { key: "saved_opps_json", label: "Saved Opportunities (JSON)" },
+  { key: "joined_clubs_json", label: "Joined Clubs (JSON)" },
+  { key: "club_email_prefs_json", label: "Club Email Prefs (JSON)" },
+  { key: "internship_history_json", label: "Internship History (JSON)" },
+];
+
+function exportDateStamp() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function parseJsonSafe(raw, fallback) {
+  if (typeof raw !== "string" || !raw.trim()) return fallback;
+  try { return JSON.parse(raw); } catch (e) { return fallback; }
+}
+
+function parseArrayField(raw) {
+  if (Array.isArray(raw)) return raw;
+  const parsed = parseJsonSafe(raw, []);
+  return Array.isArray(parsed) ? parsed : [];
+}
+
+function parseObjectField(raw) {
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) return raw;
+  const parsed = parseJsonSafe(raw, {});
+  return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+}
+
+function csvEscape(value) {
+  const str = value === null || value === undefined ? "" : String(value);
+  if (!/[",\n\r]/.test(str)) return str;
+  return `"${str.replace(/"/g, '""')}"`;
+}
+
+function htmlEscape(value) {
+  return String(value === null || value === undefined ? "" : value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function downloadBlobFile(content, mimeType, filename, withBom) {
+  const payload = withBom ? "\uFEFF" + content : content;
+  const blob = new Blob([payload], { type: mimeType });
+  const href = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = href;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(href);
+}
+
+function buildRosterCsv(rows) {
+  const header = ROSTER_EXPORT_COLUMNS.map((col) => csvEscape(col.label)).join(",");
+  const lines = rows.map((row) => ROSTER_EXPORT_COLUMNS.map((col) => csvEscape(row[col.key])).join(","));
+  return [header, ...lines].join("\n");
+}
+
+function buildRosterExcelHtml(rows) {
+  const header = ROSTER_EXPORT_COLUMNS.map((col) => `<th>${htmlEscape(col.label)}</th>`).join("");
+  const body = rows.map((row) => {
+    const cells = ROSTER_EXPORT_COLUMNS.map((col) => `<td style="mso-number-format:'\\@';">${htmlEscape(row[col.key])}</td>`).join("");
+    return `<tr>${cells}</tr>`;
+  }).join("");
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body>
+  <table border="1">
+    <thead><tr>${header}</tr></thead>
+    <tbody>${body}</tbody>
+  </table>
+</body>
+</html>`;
+}
+
+async function fetchStudentDetailMap(emails) {
+  const out = {};
+  const uniqueEmails = Array.from(new Set((emails || []).filter(Boolean)));
+  const batchSize = 8;
+  for (let i = 0; i < uniqueEmails.length; i += batchSize) {
+    const batch = uniqueEmails.slice(i, i + batchSize);
+    const results = await Promise.all(batch.map(async (email) => {
+      try {
+        const res = await fetch("/api/admin/student/" + encodeURIComponent(email));
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (!data || !data.student) return null;
+        return [String(email).toLowerCase(), data];
+      } catch (e) {
+        return null;
+      }
+    }));
+    results.forEach((entry) => {
+      if (!entry) return;
+      out[entry[0]] = entry[1];
+    });
+  }
+  return out;
+}
+
+async function buildRosterExportRowsFallback() {
+  if (!Array.isArray(lastRoster) || lastRoster.length === 0) {
+    const rosterRes = await fetch("/api/admin/roster");
+    const rosterData = await rosterRes.json();
+    if (rosterRes.ok) lastRoster = rosterData.roster || [];
+  }
+
+  if (!Array.isArray(lastStudents) || lastStudents.length === 0) {
+    const studentsRes = await fetch("/api/admin/students");
+    const studentsData = await studentsRes.json();
+    if (studentsRes.ok) lastStudents = studentsData.students || [];
+  }
+
+  const studentsByEmail = new Map(
+    (lastStudents || []).map((s) => [String(s.email || "").toLowerCase(), s])
+  );
+  const detailMap = await fetchStudentDetailMap((lastRoster || []).map((r) => r.email));
+
+  return (lastRoster || []).map((r) => {
+    const email = String(r.email || "").toLowerCase();
+    const student = studentsByEmail.get(email) || null;
+    const detail = detailMap[email] || null;
+    const prefs = detail && detail.preferences ? detail.preferences : null;
+
+    const selectedIndustries = prefs ? parseArrayField(prefs.selected_industries) : parseArrayField(student && student.selected_industries);
+    const selectedAreas = prefs ? parseArrayField(prefs.selected_areas) : parseArrayField(student && student.selected_areas);
+    const emailAlerts = prefs && Object.prototype.hasOwnProperty.call(prefs, "email_alerts")
+      ? !!prefs.email_alerts
+      : (student && student.email_alerts !== null && student.email_alerts !== undefined ? !!student.email_alerts : null);
+
+    const savedOpps = prefs ? parseArrayField(prefs.saved_opps) : [];
+    const joinedClubs = prefs ? parseArrayField(prefs.joined_clubs) : [];
+    const internshipHistory = prefs ? parseArrayField(prefs.internship_history) : [];
+    const clubEmailPrefs = prefs ? parseObjectField(prefs.club_email_prefs) : {};
+
+    const mergedStudent = detail && detail.student ? detail.student : student;
+
+    return {
+      roster_name: r.name || "",
+      roster_email: r.email || "",
+      roster_is_admin: r.is_admin ? "Yes" : "No",
+      roster_added_at: r.created_at || "",
+      registered: r.registered ? "Yes" : "No",
+      user_id: mergedStudent && mergedStudent.id ? mergedStudent.id : "",
+      user_name: mergedStudent && mergedStudent.name ? mergedStudent.name : "",
+      user_email: mergedStudent && mergedStudent.email ? mergedStudent.email : "",
+      user_is_admin: mergedStudent ? (mergedStudent.is_admin ? "Yes" : "No") : "",
+      welcome_email_sent: mergedStudent ? (mergedStudent.welcome_email_sent ? "Yes" : "No") : "",
+      user_created_at: mergedStudent && mergedStudent.created_at ? mergedStudent.created_at : "",
+      avatar_url: mergedStudent && mergedStudent.avatar_url ? mergedStudent.avatar_url : "",
+      google_sub: mergedStudent && mergedStudent.google_sub ? mergedStudent.google_sub : "",
+      selected_industries: selectedIndustries.map((v) => String(v)).join("; "),
+      selected_areas: selectedAreas.map((v) => String(v)).join("; "),
+      email_alerts: emailAlerts === null ? "" : (emailAlerts ? "Yes" : "No"),
+      saved_opps_count: savedOpps.length,
+      joined_clubs_count: joinedClubs.length,
+      internship_history_count: internshipHistory.length,
+      saved_opps_json: JSON.stringify(savedOpps),
+      joined_clubs_json: JSON.stringify(joinedClubs),
+      club_email_prefs_json: JSON.stringify(clubEmailPrefs),
+      internship_history_json: JSON.stringify(internshipHistory),
+    };
+  });
+}
+
+async function downloadRosterExport(format) {
+  const ext = format === "xls" || format === "exl" ? format : "csv";
+  const endpointExt = ext === "exl" ? "xls" : ext;
+  const fallbackName = "uatx-roster-export-" + exportDateStamp() + "." + ext;
+  try {
+    const res = await fetch("/api/admin/roster/export." + endpointExt);
+    if (res.ok) {
+      const blob = await res.blob();
+      const filename = getFilenameFromDisposition(res.headers.get("Content-Disposition"), fallbackName);
+      const href = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = href;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(href);
+      toast(ext === "csv" ? "CSV export downloaded" : "Excel export downloaded");
+      return;
+    }
+  } catch (e) {
+    // fallback below
+  }
+
+  try {
+    const rows = await buildRosterExportRowsFallback();
+    if (ext === "csv") {
+      const csv = buildRosterCsv(rows);
+      downloadBlobFile(csv, "text/csv;charset=utf-8", fallbackName, true);
+      toast("CSV export downloaded");
+      return;
+    }
+    const xlsHtml = buildRosterExcelHtml(rows);
+    downloadBlobFile(xlsHtml, "application/vnd.ms-excel;charset=utf-8", fallbackName, true);
+    toast("Excel export downloaded");
+  } catch (err) {
+    toast("Export failed", true);
+  }
 }
 
 function toggleCSV() {
@@ -1912,7 +2156,6 @@ async function createCommunityEventAdmin() {
   setDetailFieldValue("comm-evt-detail", "");
   document.getElementById("comm-evt-type").selectedIndex = 0;
   lastEvents = data.events || [];
-  setCommunityCreateMode("community-event");
   filterEvents();
   filterCommunityEvents();
   filterExpired();
