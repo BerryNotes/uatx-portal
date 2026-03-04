@@ -3536,34 +3536,30 @@ const App = () => {
             e.type = normalizeCommunityEventCategory(e.type);
           }
           const detailText = (e.detail_content || "").trim();
-          const summaryText = String(e.desc || "").trim();
           const pageKey = "event-server-" + e.id;
 
-          if (e.sub_page) {
-            e.subPage = e.sub_page || e.subPage;
-          } else {
-            const sourceText = detailText || summaryText;
-            if (!sourceText) {
-              e.subPage = "";
-              return e;
-            }
-            const content = [];
-            const dateStr = e.date ? new Date(e.date).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"}) : "Date TBD";
-            content.push({p:'<strong style="color:#c9a84c">' + (e.type || "Event") + "</strong>" + (e.org ? " &middot; " + e.org : "") + " &middot; " + dateStr});
-            content.push({hr:true});
-            content.push(...parseRichDetailContent(sourceText));
-            if (e.url) {
-              content.push({hr:true});
-              content.push({p:'<a href="' + e.url + '" target="_blank" rel="noopener" style="display:inline-block;padding:10px 24px;background:#c9a84c;color:#1a2332;font-weight:700;text-decoration:none;border-radius:4px;font-size:14px;">Visit Event Website &rarr;</a>'});
-            }
-            SUBPAGE_CONTENT[pageKey] = {
-              title: e.title,
-              backTo: "events",
-              backLabel: "Back to Programs & Travel",
-              content: content,
-            };
-            e.subPage = pageKey;
+          if (!detailText) {
+            e.subPage = "";
+            delete SUBPAGE_CONTENT[pageKey];
+            return e;
           }
+
+          const content = [];
+          const dateStr = e.date ? new Date(e.date).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"}) : "Date TBD";
+          content.push({p:'<strong style="color:#c9a84c">' + (e.type || "Event") + "</strong>" + (e.org ? " &middot; " + e.org : "") + " &middot; " + dateStr});
+          content.push({hr:true});
+          content.push(...parseRichDetailContent(detailText));
+          if (e.url) {
+            content.push({hr:true});
+            content.push({p:'<a href="' + e.url + '" target="_blank" rel="noopener" style="display:inline-block;padding:10px 24px;background:#c9a84c;color:#1a2332;font-weight:700;text-decoration:none;border-radius:4px;font-size:14px;">Visit Event Website &rarr;</a>'});
+          }
+          SUBPAGE_CONTENT[pageKey] = {
+            title: e.title,
+            backTo: "events",
+            backLabel: "Back to Programs & Travel",
+            content: content,
+          };
+          e.subPage = pageKey;
           return e;
         });
         setServerEvents(events);
@@ -3661,7 +3657,7 @@ const App = () => {
       setDetailBackTab(null);
     } else {
       setSubPage(tab);
-      if (tab.startsWith("event-")) setActiveTab("events");
+      if (tab.startsWith("event-")) setActiveTab(options.backTab === "community-events" ? "community-events" : "events");
       else if (tab.startsWith("club-event-")) setActiveTab("calendar");
       else if (tab.startsWith(CLUB_DETAIL_PAGE_PREFIX)) setActiveTab("clubs");
       else if (tab.startsWith(CLUB_MANAGE_PAGE_PREFIX)) setActiveTab("profile");
