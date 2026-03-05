@@ -147,6 +147,8 @@
     .detail-toolbar .detail-divider { width: 1px; height: 24px; background: #243044; margin: 0 2px; }
     .detail-help { font-size: 11px; color: #6b7280; margin-top: 6px; line-height: 1.4; }
     .admin-rich-editor { min-height: 120px; background: #111a26; color: #f5f0e8; border: 1px solid #243044; border-radius: 3px; padding: 10px 12px; font-size: 13px; line-height: 1.6; outline: none; }
+    .admin-rich-editor, .admin-rich-editor * { color: #f5f0e8 !important; }
+    .admin-rich-editor a, .admin-rich-editor a * { color: #d4b96a !important; }
     .admin-rich-editor:focus { border-color: #c9a84c; }
     .admin-rich-editor:empty:before { content: attr(data-placeholder); color: #6b7280; pointer-events: none; }
     .admin-rich-editor ul, .admin-rich-editor ol { margin: 0 0 10px 20px; padding: 0; }
@@ -770,10 +772,35 @@ function getRichEditor(textareaId) {
   return document.querySelector('.admin-rich-editor[data-target="' + textareaId + '"]');
 }
 
+function sanitizeRichEditorNode(node) {
+  if (!node || node.nodeType !== 1) return;
+  if (node.hasAttribute("color")) node.removeAttribute("color");
+  if (node.hasAttribute("bgcolor")) node.removeAttribute("bgcolor");
+  if (node.tagName === "FONT") node.removeAttribute("color");
+  if (!node.hasAttribute("style")) return;
+
+  const cleanedStyle = String(node.getAttribute("style") || "")
+    .split(";")
+    .map((rule) => rule.trim())
+    .filter(Boolean)
+    .filter((rule) => !/^(color|background|background-color)\s*:/i.test(rule))
+    .join("; ");
+
+  if (cleanedStyle) node.setAttribute("style", cleanedStyle);
+  else node.removeAttribute("style");
+}
+
+function sanitizeRichEditorContent(editor) {
+  if (!editor) return;
+  sanitizeRichEditorNode(editor);
+  editor.querySelectorAll("*").forEach((node) => sanitizeRichEditorNode(node));
+}
+
 function syncRichEditorValue(textareaId) {
   const textarea = document.getElementById(textareaId);
   const editor = getRichEditor(textareaId);
   if (!textarea || !editor) return;
+  sanitizeRichEditorContent(editor);
   let html = String(editor.innerHTML || "");
   html = html.replace(/<div><br><\/div>/gi, "").replace(/^<br>$/i, "").trim();
   textarea.value = html;
@@ -909,6 +936,12 @@ function enhanceDetailEditors() {
     editor.innerHTML = normalizeRichEditorHtml(textarea.value || "");
     editor.addEventListener("input", () => syncRichEditorValue(textareaId));
     editor.addEventListener("blur", () => syncRichEditorValue(textareaId));
+    editor.addEventListener("paste", () => {
+      setTimeout(() => {
+        sanitizeRichEditorContent(editor);
+        syncRichEditorValue(textareaId);
+      }, 0);
+    });
     toolbar.insertAdjacentElement("afterend", editor);
 
     textarea.style.display = "none";
