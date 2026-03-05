@@ -320,9 +320,10 @@
               <h2>Clubs</h2>
               <span class="count" id="activity-count"></span>
             </div>
+            <button class="btn btn-outline" type="button" id="club-create-toggle" onclick="toggleCreatePanel('club')">Create New Club</button>
           </div>
 
-          <div class="community-create-card">
+          <div class="community-create-card" id="club-create-card" style="display:none">
             <div id="club-create-form">
               <div style="font-size:13px;font-weight:600;color:#f5f0e8;margin-bottom:12px">New Club</div>
               <div class="form-row">
@@ -370,7 +371,10 @@
                 <textarea id="act-detail" style="width:100%;min-height:100px" placeholder="Add full club details. Use blank lines to separate paragraphs."></textarea>
                 <div class="detail-help">Use the toolbar to style content. Blank lines separate paragraphs.</div>
               </div>
-              <button class="btn btn-gold" onclick="createActivity()">Save Club</button>
+              <div style="display:flex;gap:8px;align-items:center">
+                <button class="btn btn-gold" type="button" onclick="createActivity()">Save Club</button>
+                <button class="btn btn-outline" type="button" onclick="toggleCreatePanel('club', false)">Cancel</button>
+              </div>
             </div>
           </div>
 
@@ -388,9 +392,10 @@
               <h2>Community Events</h2>
               <span class="count" id="community-event-count"></span>
             </div>
+            <button class="btn btn-outline" type="button" id="community-event-create-toggle" onclick="toggleCreatePanel('communityEvent')">Create New Event</button>
           </div>
 
-          <div class="community-create-card">
+          <div class="community-create-card" id="community-event-create-card" style="display:none">
             <div id="community-event-create-form">
               <div style="font-size:13px;font-weight:600;color:#f5f0e8;margin-bottom:12px">New Community Event</div>
               <div class="form-row">
@@ -431,7 +436,10 @@
                 <textarea id="comm-evt-detail" style="width:100%;min-height:100px" placeholder="Add full event details. Use blank lines to separate paragraphs."></textarea>
                 <div class="detail-help">Use the toolbar to style content. Blank lines separate paragraphs.</div>
               </div>
-              <button class="btn btn-gold" onclick="createCommunityEventAdmin()">Save Community Event</button>
+              <div style="display:flex;gap:8px;align-items:center">
+                <button class="btn btn-gold" type="button" onclick="createCommunityEventAdmin()">Save Community Event</button>
+                <button class="btn btn-outline" type="button" onclick="toggleCreatePanel('communityEvent', false)">Cancel</button>
+              </div>
             </div>
           </div>
 
@@ -453,9 +461,10 @@
           <h2>Programs & Travel</h2>
           <span class="count" id="event-count"></span>
         </div>
+        <button class="btn btn-outline" type="button" id="program-event-create-toggle" onclick="toggleCreatePanel('programEvent')">Create New Event</button>
       </div>
 
-      <div style="background:#111a26;border:1px solid #243044;padding:20px;margin-bottom:24px;border-radius:4px">
+      <div style="background:#111a26;border:1px solid #243044;padding:20px;margin-bottom:24px;border-radius:4px;display:none" id="program-event-create-card">
         <div style="font-size:13px;font-weight:600;color:#f5f0e8;margin-bottom:12px">New Event</div>
         <div class="form-row">
           <div class="field"><label>Title</label><input id="evt-title" style="width:240px"></div>
@@ -502,7 +511,10 @@
           <textarea id="evt-detail" style="width:100%;min-height:100px" placeholder="Add full event details. Use blank lines to separate paragraphs."></textarea>
           <div class="detail-help">Use the toolbar to style content. Blank lines separate paragraphs.</div>
         </div>
-        <button class="btn btn-gold" onclick="createEventAdmin()">Save</button>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn btn-gold" type="button" onclick="createEventAdmin()">Save</button>
+          <button class="btn btn-outline" type="button" onclick="toggleCreatePanel('programEvent', false)">Cancel</button>
+        </div>
       </div>
 
       <div style="margin-bottom:16px">
@@ -944,6 +956,45 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
     document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
   });
 });
+
+const CREATE_PANEL_CONFIG = {
+  club: {
+    cardId: "club-create-card",
+    buttonId: "club-create-toggle",
+    openLabel: "Hide New Club Form",
+    closedLabel: "Create New Club",
+  },
+  communityEvent: {
+    cardId: "community-event-create-card",
+    buttonId: "community-event-create-toggle",
+    openLabel: "Hide New Event Form",
+    closedLabel: "Create New Event",
+  },
+  programEvent: {
+    cardId: "program-event-create-card",
+    buttonId: "program-event-create-toggle",
+    openLabel: "Hide New Event Form",
+    closedLabel: "Create New Event",
+  },
+};
+
+function setCreatePanelOpen(panelKey, shouldOpen) {
+  const config = CREATE_PANEL_CONFIG[panelKey];
+  if (!config) return;
+  const card = document.getElementById(config.cardId);
+  const button = document.getElementById(config.buttonId);
+  if (card) card.style.display = shouldOpen ? "block" : "none";
+  if (button) button.textContent = shouldOpen ? config.openLabel : config.closedLabel;
+}
+
+function toggleCreatePanel(panelKey, forceOpen) {
+  const config = CREATE_PANEL_CONFIG[panelKey];
+  if (!config) return;
+  const card = document.getElementById(config.cardId);
+  if (!card) return;
+  const nextOpen = typeof forceOpen === "boolean" ? forceOpen : card.style.display === "none";
+  setCreatePanelOpen(panelKey, nextOpen);
+}
 
 // ─── ROSTER ───
 let lastStudents = [];
@@ -1939,6 +1990,7 @@ async function createActivity() {
   document.getElementById("act-category").selectedIndex = 0;
   lastActivities = data.activities;
   renderActivities(data.activities);
+  setCreatePanelOpen("club", false);
   toast("Club created");
 }
 
@@ -2536,6 +2588,7 @@ async function createEventAdmin() {
   filterEvents();
   filterCommunityEvents();
   filterExpired();
+  setCreatePanelOpen("programEvent", false);
   toast("Program/travel event created");
 }
 
@@ -2567,6 +2620,7 @@ async function createCommunityEventAdmin() {
   filterEvents();
   filterCommunityEvents();
   filterExpired();
+  setCreatePanelOpen("communityEvent", false);
   toast("Community event created");
 }
 
