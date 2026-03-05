@@ -75,8 +75,8 @@ if (IS_PROD) {
   });
 }
 
-app.use(express.json({ limit: "100kb" }));
-app.use(express.urlencoded({ extended: false, limit: "100kb" }));
+app.use(express.json({ limit: "5mb" }));
+app.use(express.urlencoded({ extended: false, limit: "5mb" }));
 
 // Simple in-memory rate limiter
 const rateLimits = new Map();
@@ -1053,9 +1053,421 @@ app.delete("/api/admin/activities/:id", requireAdmin, (req, res) => {
   res.json({ ok: true, activities: getAllActivities() });
 });
 
+const GOOGLE_CALENDAR_HOST_ALLOWLIST = ["google.com", "googleusercontent.com"];
+
+function isBlockedIcsHost(hostname) {
+  const host = String(hostname || "").toLowerCase().trim();
+  if (!host) return true;
+  if (host === "localhost" || host.endsWith(".localhost")) return true;
+  if (host === "::1") return true;
+  if (host.endsWith(".local")) return true;
+
+  // Block common private/loopback IPv4 ranges for outbound fetch safety.
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) {
+    const parts = host.split(".").map((part) => Number(part));
+    if (parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return true;
+    if (parts[0] === 10) return true;
+    if (parts[0] === 127) return true;
+    if (parts[0] === 192 && parts[1] === 168) return true;
+    if (parts[0] === 169 && parts[1] === 254) return true;
+    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+  }
+
+  return false;
+}
+
+function normalizeIcsSourceInput(inputValue) {
+  const raw = String(inputValue || "").trim();
+  if (!raw) return "";
+  if (/^webcals?:\/\//i.test(raw)) return "https://" + raw.replace(/^webcals?:\/\//i, "");
+  if (raw.startsWith("//")) return "https:" + raw;
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (raw.includes("@")) return raw;
+  if (/^[a-z0-9.-]+\.[a-z]{2,}([/:?#].*)?$/i.test(raw)) return "https://" + raw;
+  return raw;
+}
+
+function decodeIcsText(value) {
+  return String(value || "")
+    .replace(/\\n/gi, "\n")
+    .replace(/\\,/g, ",")
+    .replace(/\\;/g, ";")
+    .replace(/\\\\/g, "\\");
+}
+
+function unfoldIcsLines(icsText) {
+  const sourceLines = String(icsText || "").replace(/\r\n/g, "\n").split("\n");
+  const unfolded = [];
+  for (const line of sourceLines) {
+    if ((line.startsWith(" ") || line.startsWith("\t")) && unfolded.length) {
+      unfolded[unfolded.length - 1] += line.slice(1);
+    } else {
+      unfolded.push(line);
+    }
+  }
+  return unfolded;
+}
+
+function parseIcsProperty(line) {
+  const idx = line.indexOf(":");
+  if (idx < 0) return null;
+  const left = line.slice(0, idx);
+  const value = line.slice(idx + 1);
+  const parts = left.split(";");
+  const name = String(parts.shift() || "").trim().toUpperCase();
+  const params = {};
+  for (const part of parts) {
+    const eqIdx = part.indexOf("=");
+    if (eqIdx < 0) continue;
+    const key = part.slice(0, eqIdx).trim().toUpperCase();
+    const paramValue = part.slice(eqIdx + 1).trim().replace(/^"|"$/g, "");
+    if (key) params[key] = paramValue;
+  }
+  return { name, params, value };
+}
+
+function parseIcsDateToIso(rawValue) {
+  const raw = String(rawValue || "").trim();
+  if (!raw) return null;
+  const ymd = raw.match(/^(\d{4})(\d{2})(\d{2})/);
+  if (ymd) return `${ymd[1]}-${ymd[2]}-${ymd[3]}`;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return null;
+  const tzOffsetMs = parsed.getTimezoneOffset() * 60000;
+  return new Date(parsed.getTime() - tzOffsetMs).toISOString().split("T")[0];
+}
+
+function isAllowedGoogleCalendarHost(hostname) {
+  const host = String(hostname || "").toLowerCase();
+  return GOOGLE_CALENDAR_HOST_ALLOWLIST.some(
+    (suffix) => host === suffix || host.endsWith(`.${suffix}`)
+  );
+}
+
+function buildGoogleCalendarIcsUrlFromId(calendarId) {
+  const id = String(calendarId || "").trim().replace(/^mailto:/i, "");
+  if (!id) return "";
+  return `https://calendar.google.com/calendar/ical/${encodeURIComponent(id)}/public/basic.ics`;
+}
+
+function resolveGoogleCalendarIcsUrl(inputValue) {
+  const raw = normalizeIcsSourceInput(inputValue);
+  if (!raw) return "";
+
+  // Calendar IDs are common in Google Calendar settings.
+  if (!/^https?:\/\//i.test(raw)) {
+    if (raw.includes("@")) return buildGoogleCalendarIcsUrlFromId(raw);
+    return "";
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return "";
+  }
+  const protocol = String(parsed.protocol || "").toLowerCase();
+  if (protocol !== "https:" && protocol !== "http:") return "";
+  if (isBlockedIcsHost(parsed.hostname)) return "";
+
+  // For Google links, convert calendar page URLs with cid/src into ICS feeds.
+  if (isAllowedGoogleCalendarHost(parsed.hostname)) {
+    const cid = parsed.searchParams.get("cid") || parsed.searchParams.get("src");
+    if (cid) return buildGoogleCalendarIcsUrlFromId(cid);
+  }
+
+  const lowerPath = parsed.pathname.toLowerCase();
+  if (lowerPath.endsWith(".ics") || lowerPath.endsWith(".ical")) return parsed.toString();
+
+  // Accept common iCal query-based endpoints (for non-Google providers).
+  const query = parsed.search.toLowerCase();
+  if (query.includes("ical") || query.includes(".ics") || query.includes("format=ics")) {
+    return parsed.toString();
+  }
+
+  return "";
+}
+
+function validateIcsPayload(rawText) {
+  const text = String(rawText || "");
+  if (!text.trim()) {
+    return { error: "iCalendar file is empty." };
+  }
+  if (text.length > 4_000_000) {
+    return { error: "Calendar feed is too large to import." };
+  }
+  if (!/BEGIN:VCALENDAR/i.test(text)) {
+    return { error: "The provided source is not a valid iCalendar feed." };
+  }
+  return { text };
+}
+
+function parseGoogleCalendarIcs(icsText) {
+  const lines = unfoldIcsLines(icsText);
+  let calendarName = "";
+  let current = null;
+  const rawEvents = [];
+
+  for (const line of lines) {
+    const prop = parseIcsProperty(line);
+    if (!prop) continue;
+
+    if (prop.name === "BEGIN" && String(prop.value).toUpperCase() === "VEVENT") {
+      current = {};
+      continue;
+    }
+    if (prop.name === "END" && String(prop.value).toUpperCase() === "VEVENT") {
+      if (current) rawEvents.push(current);
+      current = null;
+      continue;
+    }
+
+    if (!current) {
+      if (prop.name === "X-WR-CALNAME") calendarName = decodeIcsText(prop.value).trim();
+      continue;
+    }
+
+    if (prop.name === "UID") current.uid = decodeIcsText(prop.value).trim();
+    if (prop.name === "SUMMARY") current.summary = decodeIcsText(prop.value).trim();
+    if (prop.name === "DESCRIPTION") current.description = decodeIcsText(prop.value).trim();
+    if (prop.name === "DTSTART") current.dtstart = prop.value;
+    if (prop.name === "LOCATION") current.location = decodeIcsText(prop.value).trim();
+    if (prop.name === "URL") current.url = decodeIcsText(prop.value).trim();
+    if (prop.name === "ORGANIZER") {
+      current.organizer_cn = prop.params.CN ? decodeIcsText(prop.params.CN).trim() : "";
+      current.organizer_raw = decodeIcsText(prop.value).trim();
+    }
+  }
+
+  const events = rawEvents
+    .map((raw) => {
+      const title = String(raw.summary || "").trim();
+      if (!title) return null;
+      const date = parseIcsDateToIso(raw.dtstart);
+      const location = String(raw.location || "").trim();
+      const description = String(raw.description || "").trim();
+      const org = String(raw.organizer_cn || "").trim() || calendarName || "";
+      const url = normalizePublicUrl(raw.url || "", { allowRelative: false }) || "";
+
+      const descParts = [];
+      if (description) descParts.push(description.replace(/\s+/g, " ").trim());
+      if (location) descParts.push(`Location: ${location}`);
+
+      return {
+        source_uid: raw.uid || "",
+        title,
+        org,
+        type: "",
+        date,
+        location,
+        url,
+        img: null,
+        description: descParts.join(" | ").slice(0, 500),
+        detail_content: "",
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 500);
+
+  events.sort((a, b) => {
+    if (!a.date && !b.date) return a.title.localeCompare(b.title);
+    if (!a.date) return 1;
+    if (!b.date) return -1;
+    return a.date.localeCompare(b.date);
+  });
+
+  return { calendarName, events };
+}
+
+function buildEventDedupKey(event) {
+  return [
+    String(event.title || "").trim().toLowerCase(),
+    String(event.date || "").trim(),
+    String(event.org || "").trim().toLowerCase(),
+    event.is_community ? "community" : "program",
+  ].join("|");
+}
+
+function buildOpportunityDedupKey(opportunity) {
+  return [
+    String(opportunity.org || "").trim().toLowerCase(),
+    String(opportunity.title || "").trim().toLowerCase(),
+    String(opportunity.deadline || "").trim(),
+  ].join("|");
+}
+
 // Events (admin CRUD)
 app.get("/api/admin/events", requireAdmin, (req, res) => {
   res.json({ events: getAllEvents() });
+});
+
+app.post("/api/admin/events/google-calendar/preview", requireAdmin, async (req, res) => {
+  const body = req.body && typeof req.body === "object" ? req.body : {};
+  const uploadedIcsText = typeof body.ics_text === "string" ? body.ics_text : "";
+  const uploadedFileName = typeof body.file_name === "string" ? body.file_name.trim() : "";
+  const source = String(body.source || body.calendar_url || body.calendar_id || "").trim();
+  let icsText = "";
+  let sourceUrl = "";
+  let sourceName = "";
+
+  if (uploadedIcsText.trim()) {
+    const validated = validateIcsPayload(uploadedIcsText);
+    if (validated.error) return res.status(400).json({ error: validated.error });
+    icsText = validated.text;
+    sourceName = uploadedFileName || "Uploaded iCal file";
+  } else {
+    const icsUrl = resolveGoogleCalendarIcsUrl(source);
+    if (!icsUrl) {
+      return res.status(400).json({
+        error: "Provide a direct public ICS/iCal URL, a Google Calendar ID (example@group.calendar.google.com), or upload an .ics/.ical file.",
+      });
+    }
+
+    let response;
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+      try {
+        response = await fetch(icsUrl, {
+          signal: controller.signal,
+          redirect: "follow",
+          headers: { Accept: "text/calendar, text/plain;q=0.9, */*;q=0.5" },
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
+    } catch (err) {
+      return res.status(502).json({ error: "Could not reach Google Calendar feed." });
+    }
+
+    if (!response.ok) {
+      return res.status(400).json({ error: `Google Calendar feed returned HTTP ${response.status}.` });
+    }
+
+    const fetchedIcsText = await response.text();
+    const validated = validateIcsPayload(fetchedIcsText);
+    if (validated.error) return res.status(400).json({ error: validated.error });
+    icsText = validated.text;
+    sourceUrl = icsUrl;
+  }
+
+  const parsed = parseGoogleCalendarIcs(icsText);
+  res.json({
+    ok: true,
+    calendar_name: parsed.calendarName || sourceName,
+    source_url: sourceUrl,
+    events: parsed.events,
+  });
+});
+
+app.post("/api/admin/events/google-calendar/import", requireAdmin, (req, res) => {
+  const body = req.body && typeof req.body === "object" ? req.body : {};
+  const incoming = Array.isArray(body.events) ? body.events : [];
+  if (incoming.length === 0) return res.status(400).json({ error: "No events selected for import." });
+  if (incoming.length > 500) return res.status(400).json({ error: "Too many events selected." });
+
+  const existingEventKeys = new Set(getAllEvents().map((event) => buildEventDedupKey(event)));
+  const existingOppKeys = new Set(getAllOpportunities().map((opp) => buildOpportunityDedupKey(opp)));
+
+  let added = 0;
+  const skipped = [];
+  const importedUids = [];
+  const importedKeys = [];
+
+  for (const raw of incoming) {
+    const targetRaw = raw && typeof raw.target === "string" ? raw.target.trim().toLowerCase() : "";
+    const eventTarget = targetRaw === "community" || targetRaw === "opportunities" ? targetRaw : "programs";
+    const isCommunity = eventTarget === "community";
+    const selectedType = raw && typeof raw.import_type === "string" && raw.import_type.trim()
+      ? raw.import_type.trim()
+      : (raw && typeof raw.type === "string" ? raw.type.trim() : "");
+
+    if (eventTarget === "opportunities") {
+      const normalizedOpp = normalizeOpportunity({
+        org: raw && typeof raw.org === "string" ? raw.org : "",
+        title: raw && typeof raw.title === "string" ? raw.title : "",
+        description: raw && typeof raw.description === "string" ? raw.description : "",
+        industry: raw && typeof raw.industry === "string" ? raw.industry : "",
+        type: selectedType || "Program",
+        location: raw && typeof raw.location === "string" ? raw.location : "",
+        deadline: raw && typeof raw.date === "string" && raw.date.trim() ? raw.date : null,
+        paid: false,
+        featured: false,
+        logo: raw && typeof raw.img === "string" ? raw.img : "",
+        detail_content: raw && typeof raw.detail_content === "string" ? raw.detail_content : "",
+        apply_url: raw && typeof raw.url === "string" ? raw.url : "",
+      });
+
+      if (!normalizedOpp.org || !normalizedOpp.title) {
+        skipped.push({ title: normalizedOpp.title || "", reason: "Missing organization or title" });
+        continue;
+      }
+      if (isPastDateOnly(normalizedOpp.deadline)) {
+        skipped.push({ title: normalizedOpp.title, reason: "Deadline is in the past" });
+        continue;
+      }
+
+      const key = buildOpportunityDedupKey(normalizedOpp);
+      if (existingOppKeys.has(key)) {
+        skipped.push({ title: normalizedOpp.title, reason: "Duplicate opportunity" });
+        continue;
+      }
+
+      createOpportunity(normalizedOpp);
+      existingOppKeys.add(key);
+      added++;
+      importedKeys.push(key);
+    } else {
+      const payload = normalizeAdminEventPayload({
+        title: raw && typeof raw.title === "string" ? raw.title : "",
+        org: raw && typeof raw.org === "string" ? raw.org : "",
+        type: selectedType,
+        date: raw && typeof raw.date === "string" && raw.date.trim() ? raw.date : null,
+        description: raw && typeof raw.description === "string" ? raw.description : "",
+        detail_content: raw && typeof raw.detail_content === "string" ? raw.detail_content : "",
+        url: raw && typeof raw.url === "string" ? raw.url : "",
+        img: raw && typeof raw.img === "string" ? raw.img : "",
+        is_community: isCommunity,
+      });
+
+      if (!payload.title) {
+        skipped.push({ title: "", reason: "Missing title" });
+        continue;
+      }
+      if (!payload.is_community && !payload.type) payload.type = "Workshop";
+      if (isPastDateOnly(payload.date)) {
+        skipped.push({ title: payload.title, reason: "Date is in the past" });
+        continue;
+      }
+
+      const key = buildEventDedupKey(payload);
+      if (existingEventKeys.has(key)) {
+        skipped.push({ title: payload.title, reason: "Duplicate event" });
+        continue;
+      }
+
+      createEvent(payload);
+      existingEventKeys.add(key);
+      added++;
+      importedKeys.push(key);
+    }
+
+    if (raw && typeof raw.source_uid === "string" && raw.source_uid.trim()) {
+      importedUids.push(raw.source_uid.trim());
+    }
+  }
+
+  res.json({
+    ok: true,
+    target: "mixed",
+    added,
+    skipped: skipped.length,
+    skipped_items: skipped.slice(0, 50),
+    imported_uids: importedUids,
+    imported_keys: importedKeys,
+    events: getAllEvents(),
+    opportunities: getAllOpportunities(),
+  });
 });
 
 app.post("/api/admin/events", requireAdmin, (req, res) => {

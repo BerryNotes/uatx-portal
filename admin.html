@@ -175,6 +175,7 @@
     <button class="tab-btn" data-tab="opportunities">Opportunities</button>
     <button class="tab-btn" data-tab="community">Community</button>
     <button class="tab-btn" data-tab="events">Programs & Travel</button>
+    <button class="tab-btn" data-tab="import">Import</button>
     <button class="tab-btn" data-tab="expired">Expired</button>
   </div>
 
@@ -185,11 +186,6 @@
         <div style="display:flex;align-items:center">
           <h2>Student Roster</h2>
           <span class="count" id="roster-count"></span>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-outline" onclick="downloadRosterExport('csv')">Export CSV</button>
-          <button class="btn btn-outline" onclick="downloadRosterExport('exl')">Export EXL</button>
-          <button class="btn btn-outline" onclick="toggleCSV()">CSV Import</button>
         </div>
       </div>
 
@@ -207,24 +203,6 @@
           <label for="roster-admin">Admin</label>
         </div>
         <button class="btn btn-gold" onclick="addStudent()">Add</button>
-      </div>
-
-      <div class="csv-area" id="csv-area" style="display:none">
-        <div id="csv-drop" style="border:2px dashed #243044;border-radius:4px;padding:24px;text-align:center;cursor:pointer;transition:all 0.2s;margin-bottom:12px"
-          ondragover="event.preventDefault();this.style.borderColor='#c9a84c';this.style.background='rgba(201,168,76,0.06)'"
-          ondragleave="this.style.borderColor='#243044';this.style.background='transparent'"
-          ondrop="handleCSVDrop(event)"
-          onclick="document.getElementById('csv-file').click()">
-          <div style="font-size:13px;color:#6b7280;margin-bottom:4px">Drop a .csv file here or click to browse</div>
-          <div style="font-size:11px;color:#4b5563">Accepts .csv and .txt files</div>
-          <input type="file" id="csv-file" accept=".csv,.txt" style="display:none" onchange="handleCSVFile(this.files[0])">
-        </div>
-        <textarea id="csv-input" placeholder="Jane Smith, jsmith@student.uaustin.org&#10;John Doe, jdoe@student.uaustin.org"></textarea>
-        <p>One student per line: <code>name, email</code> or <code>email, name</code>. You can also paste or drop a CSV file above.</p>
-        <div style="margin-top:8px;display:flex;gap:8px">
-          <button class="btn btn-gold" onclick="uploadCSV()">Import</button>
-          <button class="btn btn-outline" onclick="toggleCSV()">Cancel</button>
-        </div>
       </div>
 
       <div style="margin-bottom:12px">
@@ -374,6 +352,24 @@
                 <label>Description</label>
                 <textarea id="act-desc" style="width:100%"></textarea>
               </div>
+              <div class="field" style="margin-bottom:16px">
+                <label>Page Description (shown on club page)</label>
+                <div class="detail-toolbar">
+                  <button type="button" onclick="applyDetailFormat('act-detail','bold')">Bold</button>
+                  <button type="button" onclick="applyDetailFormat('act-detail','italic')">Italic</button>
+                  <button type="button" onclick="applyDetailFormat('act-detail','bullet')">Bullets</button>
+                  <button type="button" onclick="applyDetailFormat('act-detail','number')">Numbered</button>
+                  <select onchange="if(this.value){applyDetailFormat('act-detail', this.value); this.selectedIndex=0;}">
+                    <option value="">Font Size</option>
+                    <option value="h2">Large</option>
+                    <option value="h3">Medium</option>
+                    <option value="h4">Small</option>
+                    <option value="paragraph">Body</option>
+                  </select>
+                </div>
+                <textarea id="act-detail" style="width:100%;min-height:100px" placeholder="Add full club details. Use blank lines to separate paragraphs."></textarea>
+                <div class="detail-help">Use the toolbar to style content. Blank lines separate paragraphs.</div>
+              </div>
               <button class="btn btn-gold" onclick="createActivity()">Save Club</button>
             </div>
           </div>
@@ -518,6 +514,73 @@
     </div>
   </div>
 
+  <!-- IMPORT TAB -->
+  <div class="tab-panel" id="tab-import">
+    <div class="content">
+      <div class="section-header">
+        <div style="display:flex;align-items:center">
+          <h2>Import Tools</h2>
+        </div>
+      </div>
+
+      <div style="background:#111a26;border:1px solid #243044;padding:20px;margin-bottom:24px;border-radius:4px">
+        <div style="font-size:13px;font-weight:600;color:#f5f0e8;margin-bottom:12px">Roster Import & Export</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+          <button class="btn btn-outline" onclick="downloadRosterExport('csv')">Export CSV</button>
+          <button class="btn btn-outline" onclick="downloadRosterExport('exl')">Export EXL</button>
+          <button class="btn btn-outline" onclick="toggleCSV()">CSV Import</button>
+        </div>
+        <div class="csv-area" id="csv-area" style="display:none">
+          <div id="csv-drop" style="border:2px dashed #243044;border-radius:4px;padding:24px;text-align:center;cursor:pointer;transition:all 0.2s;margin-bottom:12px"
+            ondragover="event.preventDefault();this.style.borderColor='#c9a84c';this.style.background='rgba(201,168,76,0.06)'"
+            ondragleave="this.style.borderColor='#243044';this.style.background='transparent'"
+            ondrop="handleCSVDrop(event)"
+            onclick="document.getElementById('csv-file').click()">
+            <div style="font-size:13px;color:#6b7280;margin-bottom:4px">Drop a .csv file here or click to browse</div>
+            <div style="font-size:11px;color:#4b5563">Accepts .csv and .txt files</div>
+            <input type="file" id="csv-file" accept=".csv,.txt" style="display:none" onchange="handleCSVFile(this.files[0])">
+          </div>
+          <textarea id="csv-input" placeholder="Jane Smith, jsmith@student.uaustin.org&#10;John Doe, jdoe@student.uaustin.org"></textarea>
+          <p>One student per line: <code>name, email</code> or <code>email, name</code>. You can also paste or drop a CSV file above.</p>
+          <div style="margin-top:8px;display:flex;gap:8px">
+            <button class="btn btn-gold" onclick="uploadCSV()">Import</button>
+            <button class="btn btn-outline" onclick="toggleCSV()">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <div style="background:#111a26;border:1px solid #243044;padding:20px;margin-bottom:24px;border-radius:4px">
+        <div style="font-size:13px;font-weight:600;color:#f5f0e8;margin-bottom:12px">Import from Google Calendar</div>
+        <div class="form-row">
+          <div class="field" style="flex:1;min-width:320px">
+            <label>Public Calendar URL or Calendar ID</label>
+            <input id="gcal-import-source" placeholder="https://.../calendar.ics, webcal://.../calendar.ics, or example@group.calendar.google.com" style="width:100%">
+          </div>
+          <div class="field" style="min-width:280px">
+            <label>Or Upload iCal File (.ics/.ical)</label>
+            <input id="gcal-import-file" type="file" accept=".ics,.ical,text/calendar" onchange="handleGoogleCalendarFileSelected(this.files && this.files[0])" style="width:100%">
+          </div>
+          <button class="btn btn-outline" type="button" onclick="previewGoogleCalendarEvents()">Preview</button>
+        </div>
+        <p style="font-size:11px;color:#6b7280;margin-top:-8px;margin-bottom:12px">
+          Paste a direct public iCal link (or Google Calendar ID) or upload an iCal file, then choose each event's destination and type before importing selected rows.
+        </p>
+        <div id="gcal-import-preview-wrap" style="display:none">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+            <div style="font-size:12px;color:#c4c4d4" id="gcal-import-preview-summary">0 items loaded</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-outline" type="button" onclick="setGoogleCalendarPreviewSelection(true)">Select All</button>
+              <button class="btn btn-outline" type="button" onclick="setGoogleCalendarPreviewSelection(false)">Clear</button>
+              <button class="btn btn-gold" type="button" onclick="importSelectedGoogleCalendarEvents()">Import Selected</button>
+            </div>
+          </div>
+          <div id="gcal-import-preview-body"></div>
+          <div class="empty" id="gcal-import-preview-empty" style="display:none">No importable events found.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- EXPIRED OPPORTUNITIES TAB -->
   <div class="tab-panel" id="tab-expired">
     <div class="content">
@@ -587,7 +650,7 @@ function setEventDateMinimums() {
 
 // ─── INIT ───
 const RICH_FONT_SIZES = [10, 11, 12, 13, 14, 16, 18, 20, 24, 30, 36];
-const DETAIL_EDITOR_IDS = ["opp-detail", "edit-detail", "evt-detail", "comm-evt-detail", "edit-evt-detail"];
+const DETAIL_EDITOR_IDS = ["opp-detail", "edit-detail", "evt-detail", "comm-evt-detail", "edit-evt-detail", "act-detail", "edit-act-detail"];
 
 const looksLikeRichHtml = (text) => /<(p|div|h2|h3|h4|ul|ol|li|strong|em|u|span|br|a|hr)\b/i.test(String(text || ""));
 
@@ -1774,6 +1837,24 @@ function renderActivities(activities) {
           <label>Description</label>
           <textarea id="edit-act-desc" style="min-height:60px">${esc(a.description || '')}</textarea>
         </div>
+        <div class="opp-edit-full field">
+          <label>Page Description (shown on club page)</label>
+          <div class="detail-toolbar">
+            <button type="button" onclick="applyDetailFormat('edit-act-detail','bold')">Bold</button>
+            <button type="button" onclick="applyDetailFormat('edit-act-detail','italic')">Italic</button>
+            <button type="button" onclick="applyDetailFormat('edit-act-detail','bullet')">Bullets</button>
+            <button type="button" onclick="applyDetailFormat('edit-act-detail','number')">Numbered</button>
+            <select onchange="if(this.value){applyDetailFormat('edit-act-detail', this.value); this.selectedIndex=0;}">
+              <option value="">Font Size</option>
+              <option value="h2">Large</option>
+              <option value="h3">Medium</option>
+              <option value="h4">Small</option>
+              <option value="paragraph">Body</option>
+            </select>
+          </div>
+          <textarea id="edit-act-detail" style="min-height:90px">${esc(a.detail_content || '')}</textarea>
+          <div class="detail-help">Use the toolbar to style content. Blank lines separate paragraphs.</div>
+        </div>
         <div style="display:flex;gap:8px">
           <button class="btn btn-gold" onclick="saveActivityEdit(${a.id})">Save</button>
           <button class="btn btn-outline" onclick="cancelActivityEdit()">Cancel</button>
@@ -1814,12 +1895,14 @@ function cancelActivityEdit() {
 }
 
 async function saveActivityEdit(id) {
+  syncRichEditorValue("edit-act-detail");
   const activity = {
     title: document.getElementById("edit-act-title").value.trim(),
     category: document.getElementById("edit-act-category").value,
     meet_day: document.getElementById("edit-act-meetday").value.trim(),
     president_email: document.getElementById("edit-act-president").value.trim(),
     description: document.getElementById("edit-act-desc").value.trim(),
+    detail_content: document.getElementById("edit-act-detail").value.trim(),
   };
   if (!activity.title) return toast("Title is required", true);
   const res = await fetch("/api/admin/activities/" + id, {
@@ -1835,12 +1918,14 @@ async function saveActivityEdit(id) {
 }
 
 async function createActivity() {
+  syncRichEditorValue("act-detail");
   const activity = {
     title: document.getElementById("act-title").value.trim(),
     category: document.getElementById("act-category").value,
     meet_day: document.getElementById("act-meetday").value.trim(),
     president_email: document.getElementById("act-president").value.trim(),
     description: document.getElementById("act-desc").value.trim(),
+    detail_content: document.getElementById("act-detail").value.trim(),
   };
   if (!activity.title) return toast("Title is required", true);
   const res = await fetch("/api/admin/activities", {
@@ -1850,6 +1935,7 @@ async function createActivity() {
   const data = await res.json();
   if (!res.ok) return toast(data.error, true);
   ["act-title","act-meetday","act-president","act-desc"].forEach(id => document.getElementById(id).value = "");
+  setDetailFieldValue("act-detail", "");
   document.getElementById("act-category").selectedIndex = 0;
   lastActivities = data.activities;
   renderActivities(data.activities);
@@ -1877,14 +1963,336 @@ async function deleteActivity(id) {
 // ─── EVENTS ───
 let lastEvents = [];
 let editingEventId = null;
+let googleCalendarPreview = [];
+let googleCalendarPreviewName = "";
+let googleCalendarImportFile = null;
 
-const EVENT_TYPES = ["Student Visit","VIP Event Partnership","Study Abroad","Summer Program","Seminar Series","Multiple Programs","Conference","Workshop"];
+const EVENT_TYPES = ["Student Visit","VIP Event Partnership","Study Abroad","Summer Program","Seminar Series","Multiple Programs","Conference","Workshop","Academic Term Date"];
 const COMMUNITY_EVENT_TYPES = ["Student Life", "Residential Life"];
+const OPPORTUNITY_IMPORT_TYPES = ["Internship","Fellowship","Program","Job"];
 const normalizeCommunityEventType = (value) => COMMUNITY_EVENT_TYPES.includes(value) ? value : "Student Life";
 const getProgramEvents = (events = lastEvents) => (events || []).filter(e => !e.is_community);
 const getCommunityEvents = (events = lastEvents) => (events || [])
   .filter(e => !!e.is_community)
   .map(e => ({ ...e, type: normalizeCommunityEventType(e.type) }));
+
+function buildEventImportDedupKey(event) {
+  return [
+    String(event.title || "").trim().toLowerCase(),
+    String(event.date || "").trim(),
+    String(event.org || "").trim().toLowerCase(),
+    event.is_community ? "community" : "program",
+  ].join("|");
+}
+
+function buildOpportunityImportDedupKey(opportunity) {
+  return [
+    String(opportunity.org || "").trim().toLowerCase(),
+    String(opportunity.title || "").trim().toLowerCase(),
+    String(opportunity.date || "").trim(),
+  ].join("|");
+}
+
+function normalizeGoogleCalendarImportTarget(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "community" || normalized === "opportunities") return normalized;
+  return "programs";
+}
+
+function getGoogleCalendarTargetLabel(target) {
+  const normalized = normalizeGoogleCalendarImportTarget(target);
+  if (normalized === "community") return "Community Events";
+  if (normalized === "opportunities") return "Opportunities";
+  return "Programs & Travel";
+}
+
+function getGoogleCalendarTypeOptions(target) {
+  const normalized = normalizeGoogleCalendarImportTarget(target);
+  if (normalized === "community") return COMMUNITY_EVENT_TYPES;
+  if (normalized === "opportunities") return OPPORTUNITY_IMPORT_TYPES;
+  return EVENT_TYPES;
+}
+
+function getGoogleCalendarDefaultType(target) {
+  const normalized = normalizeGoogleCalendarImportTarget(target);
+  if (normalized === "community") return "Student Life";
+  if (normalized === "opportunities") return "Program";
+  return "Workshop";
+}
+
+function handleGoogleCalendarFileSelected(file) {
+  googleCalendarImportFile = file || null;
+  const sourceInput = document.getElementById("gcal-import-source");
+  if (googleCalendarImportFile && sourceInput) {
+    sourceInput.value = "";
+  }
+}
+
+function readGoogleCalendarImportFile(file) {
+  return new Promise((resolve, reject) => {
+    if (!file) return resolve("");
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
+    reader.onerror = () => reject(new Error("Could not read file"));
+    reader.readAsText(file);
+  });
+}
+
+function onGoogleCalendarPreviewTargetChange(index, nextTarget) {
+  const event = googleCalendarPreview[index];
+  if (!event || event.imported) return;
+  const target = normalizeGoogleCalendarImportTarget(nextTarget);
+  const typeOptions = getGoogleCalendarTypeOptions(target);
+  const currentType = String(event.import_type || "").trim();
+  const importType = typeOptions.includes(currentType) ? currentType : getGoogleCalendarDefaultType(target);
+  googleCalendarPreview[index] = { ...event, target, import_type: importType };
+  renderGoogleCalendarPreview();
+}
+
+function onGoogleCalendarPreviewTypeChange(index, nextType) {
+  const event = googleCalendarPreview[index];
+  if (!event || event.imported) return;
+  const target = normalizeGoogleCalendarImportTarget(event.target);
+  const typeOptions = getGoogleCalendarTypeOptions(target);
+  const importType = typeOptions.includes(nextType) ? nextType : getGoogleCalendarDefaultType(target);
+  googleCalendarPreview[index] = { ...event, import_type: importType };
+}
+
+function onGoogleCalendarPreviewCardClick(index, domEvent) {
+  const event = googleCalendarPreview[index];
+  if (!event || event.imported) return;
+  const target = domEvent && domEvent.target && typeof domEvent.target.closest === "function"
+    ? domEvent.target.closest("input,select,option,label,a,button,textarea")
+    : null;
+  if (target) return;
+  googleCalendarPreview[index] = { ...event, selected: !event.selected };
+  renderGoogleCalendarPreview();
+}
+
+function getGoogleCalendarImportSummaryText() {
+  const total = googleCalendarPreview.length;
+  const selected = googleCalendarPreview.filter(e => e.selected && !e.imported).length;
+  const imported = googleCalendarPreview.filter(e => e.imported).length;
+  const sourceText = googleCalendarPreviewName ? ` from ${googleCalendarPreviewName}` : "";
+  let text = `${selected}/${total} selected${sourceText}`;
+  if (imported) text += ` | ${imported} already imported`;
+  return text;
+}
+
+function updateGoogleCalendarImportSummary() {
+  const summary = document.getElementById("gcal-import-preview-summary");
+  if (!summary) return;
+  summary.textContent = getGoogleCalendarImportSummaryText();
+}
+
+function renderGoogleCalendarPreview() {
+  const wrap = document.getElementById("gcal-import-preview-wrap");
+  const body = document.getElementById("gcal-import-preview-body");
+  const empty = document.getElementById("gcal-import-preview-empty");
+  if (!wrap || !body || !empty) return;
+
+  wrap.style.display = "block";
+  updateGoogleCalendarImportSummary();
+
+  if (!googleCalendarPreview.length) {
+    body.innerHTML = "";
+    empty.style.display = "block";
+    return;
+  }
+
+  empty.style.display = "none";
+  body.innerHTML = googleCalendarPreview.map((e, idx) => {
+    const target = normalizeGoogleCalendarImportTarget(e.target);
+    const typeOptions = getGoogleCalendarTypeOptions(target);
+    const selectedType = typeOptions.includes(e.import_type) ? e.import_type : getGoogleCalendarDefaultType(target);
+    const targetOptionsHtml = ["programs", "community", "opportunities"].map((value) => (
+      '<option value="' + value + '"' + (value === target ? ' selected' : '') + '>' + esc(getGoogleCalendarTargetLabel(value)) + '</option>'
+    )).join("");
+    const typeOptionsHtml = typeOptions.map((type) => (
+      '<option value="' + attr(type) + '"' + (type === selectedType ? ' selected' : '') + '>' + esc(type) + '</option>'
+    )).join("");
+    const importedBadge = e.imported
+      ? '<span class="badge-registered" style="margin-left:8px">Imported</span>'
+      : '';
+    return `<div class="opp-card" style="${e.imported ? 'opacity:0.72' : ''}" onclick="onGoogleCalendarPreviewCardClick(${idx}, event)">
+      <div style="display:flex;gap:10px;align-items:flex-start">
+        <input
+          type="checkbox"
+          ${e.selected ? "checked" : ""}
+          ${e.imported ? "disabled" : ""}
+          onchange="toggleGoogleCalendarPreviewSelection(${idx}, this.checked)"
+          style="margin-top:4px;accent-color:#c9a84c"
+        />
+        <div style="flex:1;min-width:0">
+          <div class="opp-card-title">${esc(e.title)}${importedBadge}</div>
+          <div class="opp-card-org">${esc(e.org || '')}</div>
+          <div style="display:grid;grid-template-columns:repeat(2,minmax(180px,1fr));gap:8px;margin:10px 0 8px">
+            <label style="font-size:11px;color:#98a2b3;display:flex;flex-direction:column;gap:5px">
+              <span>Add To</span>
+              <select ${e.imported ? "disabled" : ""} onchange="onGoogleCalendarPreviewTargetChange(${idx}, this.value)" style="background:#0b1220;color:#f5f0e8;border:1px solid #243044;padding:7px 10px;border-radius:4px">
+                ${targetOptionsHtml}
+              </select>
+            </label>
+            <label style="font-size:11px;color:#98a2b3;display:flex;flex-direction:column;gap:5px">
+              <span>Type</span>
+              <select ${e.imported ? "disabled" : ""} onchange="onGoogleCalendarPreviewTypeChange(${idx}, this.value)" style="background:#0b1220;color:#f5f0e8;border:1px solid #243044;padding:7px 10px;border-radius:4px">
+                ${typeOptionsHtml}
+              </select>
+            </label>
+          </div>
+          <div class="opp-card-meta">
+            ${selectedType ? '<span>' + esc(selectedType) + '</span>' : ''}
+            <span>${e.date ? formatDate(e.date) : 'No date'}</span>
+            ${e.url ? '<span><a href="' + attr(e.url) + '" target="_blank" style="color:#c9a84c;text-decoration:none">Link &rarr;</a></span>' : ''}
+          </div>
+          ${e.description ? '<div class="opp-card-desc">' + esc(e.description).substring(0, 260) + (e.description.length > 260 ? '...' : '') + '</div>' : ''}
+        </div>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function toggleGoogleCalendarPreviewSelection(index, selected) {
+  const event = googleCalendarPreview[index];
+  if (!event || event.imported) return;
+  event.selected = !!selected;
+  updateGoogleCalendarImportSummary();
+}
+
+function setGoogleCalendarPreviewSelection(selected) {
+  googleCalendarPreview = googleCalendarPreview.map((event) => (
+    event.imported ? event : { ...event, selected: !!selected }
+  ));
+  renderGoogleCalendarPreview();
+}
+
+async function previewGoogleCalendarEvents() {
+  const sourceInput = document.getElementById("gcal-import-source");
+  const source = sourceInput ? sourceInput.value.trim() : "";
+  const file = source ? null : googleCalendarImportFile;
+  if (!source && !file) return toast("Calendar URL/ID or iCal file is required", true);
+
+  let payload = { source };
+  if (file) {
+    let icsText = "";
+    try {
+      icsText = await readGoogleCalendarImportFile(file);
+    } catch (err) {
+      return toast("Could not read iCal file", true);
+    }
+    if (!icsText.trim()) return toast("iCal file is empty", true);
+    payload = {
+      source,
+      file_name: file.name || "",
+      ics_text: icsText,
+    };
+  }
+
+  let res;
+  let data = {};
+  try {
+    res = await fetch("/api/admin/events/google-calendar/preview", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify(payload),
+    });
+    const rawText = await res.text();
+    try {
+      data = rawText ? JSON.parse(rawText) : {};
+    } catch {
+      data = { error: rawText ? rawText.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim() : "" };
+    }
+  } catch (err) {
+    return toast("Could not load Google Calendar feed", true);
+  }
+
+  if (!res.ok) {
+    const fallback = "Could not load iCal feed (HTTP " + res.status + ")";
+    return toast(data.error || fallback, true);
+  }
+
+  googleCalendarPreviewName = data.calendar_name || "";
+  googleCalendarPreview = (data.events || []).map((event) => ({
+    source_uid: String(event.source_uid || ""),
+    title: String(event.title || "").trim(),
+    org: String(event.org || "").trim(),
+    type: String(event.type || "").trim(),
+    date: normalizeDateOnly(event.date) || null,
+    location: String(event.location || "").trim(),
+    url: String(event.url || "").trim(),
+    img: String(event.img || "").trim() || null,
+    description: String(event.description || "").trim(),
+    detail_content: String(event.detail_content || "").trim(),
+    target: "programs",
+    import_type: String(event.type || "").trim() || getGoogleCalendarDefaultType("programs"),
+    selected: true,
+    imported: false,
+  }));
+  renderGoogleCalendarPreview();
+  toast(`Loaded ${googleCalendarPreview.length} item(s)`);
+}
+
+async function importSelectedGoogleCalendarEvents() {
+  const selectedEvents = googleCalendarPreview
+    .filter((event) => event.selected && !event.imported)
+    .map(({ selected, imported, ...event }) => event);
+  if (!selectedEvents.length) return toast("Select at least one event to import", true);
+
+  let res;
+  let data = {};
+  try {
+    res = await fetch("/api/admin/events/google-calendar/import", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({
+        events: selectedEvents,
+      }),
+    });
+    data = await res.json();
+  } catch (err) {
+    return toast("Import failed", true);
+  }
+  if (!res.ok) return toast(data.error || "Import failed", true);
+
+  lastCustomOpps = data.opportunities || [];
+  renderOpportunities(lastCustomOpps);
+  lastEvents = data.events || [];
+  filterEvents();
+  filterCommunityEvents();
+  filterExpired();
+
+  const importedUids = new Set(Array.isArray(data.imported_uids) ? data.imported_uids : []);
+  const importedKeys = new Set(Array.isArray(data.imported_keys) ? data.imported_keys : []);
+  if (importedUids.size || importedKeys.size) {
+    googleCalendarPreview = googleCalendarPreview.map((event) => (
+      (importedUids.has(event.source_uid) || importedKeys.has(
+        normalizeGoogleCalendarImportTarget(event.target) === "opportunities"
+          ? buildOpportunityImportDedupKey({
+              org: event.org,
+              title: event.title,
+              date: event.date,
+            })
+          : buildEventImportDedupKey({
+              title: event.title,
+              date: event.date,
+              org: event.org,
+              is_community: normalizeGoogleCalendarImportTarget(event.target) === "community",
+            })
+      ))
+        ? { ...event, selected: false, imported: true }
+        : event
+    ));
+  } else {
+    googleCalendarPreview = googleCalendarPreview.map((event) => (
+      event.selected ? { ...event, selected: false, imported: true } : event
+    ));
+  }
+  renderGoogleCalendarPreview();
+
+  let msg = `Imported ${data.added || 0} item(s)`;
+  if (data.skipped) msg += `, skipped ${data.skipped}`;
+  toast(msg);
+}
 
 async function loadEvents() {
   const res = await fetch("/api/admin/events");

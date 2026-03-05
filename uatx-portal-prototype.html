@@ -163,6 +163,23 @@ const normalizeCommunityEventCategory = (value) => {
   const raw = String(value || "").trim();
   return COMMUNITY_EVENT_CATEGORIES.includes(raw) ? raw : "Student Life";
 };
+const CALENDAR_ONLY_EVENT_TYPE = "Academic Term Date";
+const CALENDAR_ONLY_EVENT_TYPES = new Set([CALENDAR_ONLY_EVENT_TYPE.toLowerCase(), "academic calendar"]);
+const isCalendarOnlyEventType = (value) => CALENDAR_ONLY_EVENT_TYPES.has(String(value || "").trim().toLowerCase());
+const getEventSubPageId = (event) => String((event && (event.subPage || event.sub_page)) || "").trim();
+const hasEventDetailPage = (event) => {
+  const subPageId = getEventSubPageId(event);
+  if (!subPageId) return false;
+  const page = SUBPAGE_CONTENT[subPageId];
+  if (!page) return false;
+  if (typeof page.render === "function") return true;
+  return Array.isArray(page.content) && page.content.length > 0;
+};
+const normalizeEventForDisplay = (event) => ({
+  ...event,
+  desc: event.description || event.desc || "",
+  subPage: getEventSubPageId(event),
+});
 
 const getEventSortValue = (dateValue) => {
   if (!dateValue) return Number.POSITIVE_INFINITY;
@@ -629,25 +646,25 @@ const EVENTS = [
   { id:16, title:"Judge Altman Speaker Event", date:"2026-04-15", type:"Speaker Event", org:"UATX", subPage:"", desc:"5:30-7:30 PM." },
   { id:17, title:"Brent Bellm Speaker Event", date:"2026-05-07", type:"Speaker Event", org:"UATX", subPage:"", desc:"5:30-7:30 PM." },
   { id:18, title:"Memorial Day Memoir Reading", date:"2026-05-22", type:"Student Event", org:"UATX", subPage:"", desc:"12:45-2:00 PM." },
-  { id:19, title:"Last Day of Instruction", date:"2027-03-15", type:"Academic Calendar", org:"UATX", subPage:"", desc:"Winter term final week milestone." },
-  { id:20, title:"Final Exams", date:"2027-03-16", type:"Academic Calendar", org:"UATX", subPage:"", desc:"Tuesday-Monday, March 16-22, 2027." },
-  { id:21, title:"Spring Break Begins", date:"2027-03-23", type:"Academic Calendar", org:"UATX", subPage:"", desc:"Wednesday, March 23 - Friday, April 2, 2027." },
-  { id:22, title:"Winter Term Final Grades Due", date:"2027-04-02", type:"Academic Calendar", org:"UATX", subPage:"", desc:"Final grades due by Friday, April 2, 2027." },
-  { id:23, title:"Spring Term Begins", date:"2027-04-05", type:"Academic Calendar", org:"UATX", subPage:"", desc:"Monday, April 5, 2027." },
-  { id:24, title:"Last Day to Drop/Add", date:"2027-04-14", type:"Academic Calendar", org:"UATX", subPage:"", desc:"Wednesday, April 14, 2027." },
-  { id:25, title:"Roster Verification", date:"2027-04-15", type:"Academic Calendar", org:"UATX", subPage:"", desc:"Thursday, April 15, 2027." },
-  { id:26, title:"Last Day to Withdraw from Any Classes", date:"2027-05-07", type:"Academic Calendar", org:"UATX", subPage:"", desc:"Friday, May 7, 2027." },
-  { id:27, title:"Memorial Day - No Classes", date:"2027-05-31", type:"Academic Calendar", org:"UATX", subPage:"", desc:"Monday, May 31, 2027." },
-  { id:28, title:"Last Day of Instruction (Spring Term)", date:"2027-06-14", type:"Academic Calendar", org:"UATX", subPage:"", desc:"Monday, June 14, 2027." },
-  { id:29, title:"Final Exams (Spring Term)", date:"2027-06-15", type:"Academic Calendar", org:"UATX", subPage:"", desc:"Tuesday-Friday, June 15-18, 2027." },
-  { id:30, title:"High Table Dinner", date:"2027-06-18", type:"Academic Calendar", org:"UATX", subPage:"", desc:"Friday, June 18, 2027." },
-  { id:31, title:"Summer Term Begins", date:"2027-06-21", type:"Academic Calendar", org:"UATX", subPage:"", desc:"Summer Term 2027 (8-weeks) begins." },
-  { id:32, title:"Spring Term Final Grades Due", date:"2027-06-25", type:"Academic Calendar", org:"UATX", subPage:"", desc:"Friday, June 25, 2027." },
-  { id:33, title:"Last Day to Drop/Add (Summer Term)", date:"2027-06-30", type:"Academic Calendar", org:"UATX", subPage:"", desc:"Wednesday, June 30, 2027." },
-  { id:34, title:"Roster Verification (Summer Term)", date:"2027-07-01", type:"Academic Calendar", org:"UATX", subPage:"", desc:"Thursday, July 1, 2027." },
-  { id:35, title:"Last Day to Withdraw (Summer Term)", date:"2027-07-16", type:"Academic Calendar", org:"UATX", subPage:"", desc:"Friday, July 16, 2027." },
-  { id:36, title:"Last Day of Summer Term", date:"2027-08-13", type:"Academic Calendar", org:"UATX", subPage:"", desc:"Friday, August 13, 2027." },
-  { id:37, title:"Summer Term Final Grades Due", date:"2027-08-20", type:"Academic Calendar", org:"UATX", subPage:"", desc:"Friday, August 20, 2027." },
+  { id:19, title:"Last Day of Instruction", date:"2027-03-15", type:CALENDAR_ONLY_EVENT_TYPE, org:"UATX", subPage:"", desc:"Winter term final week milestone." },
+  { id:20, title:"Final Exams", date:"2027-03-16", type:CALENDAR_ONLY_EVENT_TYPE, org:"UATX", subPage:"", desc:"Tuesday-Monday, March 16-22, 2027." },
+  { id:21, title:"Spring Break Begins", date:"2027-03-23", type:CALENDAR_ONLY_EVENT_TYPE, org:"UATX", subPage:"", desc:"Wednesday, March 23 - Friday, April 2, 2027." },
+  { id:22, title:"Winter Term Final Grades Due", date:"2027-04-02", type:CALENDAR_ONLY_EVENT_TYPE, org:"UATX", subPage:"", desc:"Final grades due by Friday, April 2, 2027." },
+  { id:23, title:"Spring Term Begins", date:"2027-04-05", type:CALENDAR_ONLY_EVENT_TYPE, org:"UATX", subPage:"", desc:"Monday, April 5, 2027." },
+  { id:24, title:"Last Day to Drop/Add", date:"2027-04-14", type:CALENDAR_ONLY_EVENT_TYPE, org:"UATX", subPage:"", desc:"Wednesday, April 14, 2027." },
+  { id:25, title:"Roster Verification", date:"2027-04-15", type:CALENDAR_ONLY_EVENT_TYPE, org:"UATX", subPage:"", desc:"Thursday, April 15, 2027." },
+  { id:26, title:"Last Day to Withdraw from Any Classes", date:"2027-05-07", type:CALENDAR_ONLY_EVENT_TYPE, org:"UATX", subPage:"", desc:"Friday, May 7, 2027." },
+  { id:27, title:"Memorial Day - No Classes", date:"2027-05-31", type:CALENDAR_ONLY_EVENT_TYPE, org:"UATX", subPage:"", desc:"Monday, May 31, 2027." },
+  { id:28, title:"Last Day of Instruction (Spring Term)", date:"2027-06-14", type:CALENDAR_ONLY_EVENT_TYPE, org:"UATX", subPage:"", desc:"Monday, June 14, 2027." },
+  { id:29, title:"Final Exams (Spring Term)", date:"2027-06-15", type:CALENDAR_ONLY_EVENT_TYPE, org:"UATX", subPage:"", desc:"Tuesday-Friday, June 15-18, 2027." },
+  { id:30, title:"High Table Dinner", date:"2027-06-18", type:CALENDAR_ONLY_EVENT_TYPE, org:"UATX", subPage:"", desc:"Friday, June 18, 2027." },
+  { id:31, title:"Summer Term Begins", date:"2027-06-21", type:CALENDAR_ONLY_EVENT_TYPE, org:"UATX", subPage:"", desc:"Summer Term 2027 (8-weeks) begins." },
+  { id:32, title:"Spring Term Final Grades Due", date:"2027-06-25", type:CALENDAR_ONLY_EVENT_TYPE, org:"UATX", subPage:"", desc:"Friday, June 25, 2027." },
+  { id:33, title:"Last Day to Drop/Add (Summer Term)", date:"2027-06-30", type:CALENDAR_ONLY_EVENT_TYPE, org:"UATX", subPage:"", desc:"Wednesday, June 30, 2027." },
+  { id:34, title:"Roster Verification (Summer Term)", date:"2027-07-01", type:CALENDAR_ONLY_EVENT_TYPE, org:"UATX", subPage:"", desc:"Thursday, July 1, 2027." },
+  { id:35, title:"Last Day to Withdraw (Summer Term)", date:"2027-07-16", type:CALENDAR_ONLY_EVENT_TYPE, org:"UATX", subPage:"", desc:"Friday, July 16, 2027." },
+  { id:36, title:"Last Day of Summer Term", date:"2027-08-13", type:CALENDAR_ONLY_EVENT_TYPE, org:"UATX", subPage:"", desc:"Friday, August 13, 2027." },
+  { id:37, title:"Summer Term Final Grades Due", date:"2027-08-20", type:CALENDAR_ONLY_EVENT_TYPE, org:"UATX", subPage:"", desc:"Friday, August 20, 2027." },
 ];
 
 // ─── DATA: ACTIVITIES ───
@@ -2039,7 +2056,7 @@ const OpportunitiesPage = ({navigate, showToast, savedOpps, setSavedOpps, select
   const cardRefs = useRef({});
   const sidebarItemRefs = useRef({});
 
-  const allItemsRaw = [...serverOpps, ...INTERNSHIPS].filter((o) => !isOpportunityExpired(o.deadline));
+  const allItemsRaw = (serverOpps || []).filter((o) => !isOpportunityExpired(o.deadline));
   const seenKeys = new Set();
   const allItems = allItemsRaw.filter(o => {
     const key = (o.org + "|" + o.title).toLowerCase();
@@ -3162,15 +3179,24 @@ const CommunityPage = ({mode="all", joinedClubs, setJoinedClubs, clubEmailPrefs=
   };
   const allActivities = buildMergedActivities(serverActivities);
 
-  const adminCommunityEvents = serverEvents
-    .filter(e => e.is_community)
-    .map(e => ({
-      ...e,
-      type: normalizeCommunityEventCategory(e.type),
-      desc: e.description || e.desc || "",
-      source: "community"
-    }));
-  const communityEvents = [...adminCommunityEvents]
+  const seenCommunityEvents = new Set();
+  const communityEvents = [...serverEvents, ...EVENTS]
+    .map(normalizeEventForDisplay)
+    .filter((event) => {
+      const key = ((event.title || "").trim().toLowerCase()) + "|" + (normalizeDateOnly(event.date) || "");
+      if (!key || seenCommunityEvents.has(key)) return false;
+      seenCommunityEvents.add(key);
+      return true;
+    })
+    .filter((event) => {
+      if (isCalendarOnlyEventType(event.type)) return false;
+      return !!event.is_community || !hasEventDetailPage(event);
+    })
+    .map((event) => ({
+      ...event,
+      type: event.is_community ? normalizeCommunityEventCategory(event.type) : (event.type || "Campus Event"),
+      source: event.is_community ? "community" : "program",
+    }))
     .filter(e => e.date && new Date(e.date) >= new Date(new Date().toDateString()))
     .sort((a,b) => new Date(a.date) - new Date(b.date));
 
@@ -3282,12 +3308,12 @@ const EventsPage = ({navigate, serverEvents=[]}) => {
   const [eventFilter, setEventFilter] = useState("All");
   // Merge server events with hardcoded fallback, server takes precedence
   const seenEvt = new Set();
-  const mergedEvents = [...serverEvents.map(e => ({...e, desc: e.description || e.desc, subPage: e.subPage || e.sub_page})), ...EVENTS].filter(e => {
+  const mergedEvents = [...serverEvents, ...EVENTS].map(normalizeEventForDisplay).filter(e => {
     const key = e.title.toLowerCase();
     if (seenEvt.has(key)) return false;
     seenEvt.add(key);
     return true;
-  }).filter(e => !e.is_community && !isEventExpired(e.date));
+  }).filter(e => !e.is_community && !isCalendarOnlyEventType(e.type) && hasEventDetailPage(e) && !isEventExpired(e.date));
   const types = ["All", ...Array.from(new Set(mergedEvents.map(e=>e.type)))];
   const filtered = eventFilter==="All" ? mergedEvents : mergedEvents.filter(e=>e.type===eventFilter);
 
@@ -3302,7 +3328,8 @@ const EventsPage = ({navigate, serverEvents=[]}) => {
       </div>
       <div style={{fontSize:12,color:C.textLight,marginBottom:16}}>{filtered.length} event{filtered.length!==1?"s":""} found</div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:20}}>
-        {filtered.map(event => (
+        {filtered.map(event => {
+          return (
           <div key={event.id} style={{backgroundColor:C.white,border:"1px solid "+C.border,overflow:"hidden",display:"flex",flexDirection:"column"}}>
             <div style={{height:120,background:"linear-gradient(135deg, "+C.navy+" 0%, "+C.navyLight+" 100%)",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",overflow:"hidden"}}>
               {event.img && <img src={event.img} alt={event.org} style={{position:"absolute",top:8,right:8,width:40,height:40,objectFit:"contain",borderRadius:4,backgroundColor:C.white+"dd",padding:4}} onError={e=>{e.target.style.display="none"}}/>}
@@ -3316,15 +3343,12 @@ const EventsPage = ({navigate, serverEvents=[]}) => {
               <p style={{fontSize:13,color:C.textLight,lineHeight:1.5,margin:"10px 0",flex:1}}>{event.desc}</p>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:12,borderTop:"1px solid "+C.border}}>
                 <span style={{fontSize:12,color:C.text,fontWeight:600}}>{new Date(event.date).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"})}</span>
-                {event.subPage ? (
-                  <Btn size="sm" onClick={()=>navigate(event.subPage)}>Learn More</Btn>
-                ) : (
-                  <span style={{fontSize:11,color:C.textLight,fontWeight:600}}>Details coming soon</span>
-                )}
+                <Btn size="sm" onClick={()=>navigate(event.subPage)}>Learn More</Btn>
               </div>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
     </div>
@@ -3717,10 +3741,9 @@ const App = () => {
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
-  // Merge opportunities: server DB is source of truth, then custom user listings
-  // Server opps first so admin edits take precedence over hardcoded INTERNSHIPS
+  // Opportunities come directly from server DB (source of truth)
   const seen = new Set();
-  const allInternships = [...serverOpps, ...INTERNSHIPS].filter((o) => !isOpportunityExpired(o.deadline)).filter(o => {
+  const allInternships = (serverOpps || []).filter((o) => !isOpportunityExpired(o.deadline)).filter(o => {
     const key = (o.org + "|" + o.title).toLowerCase();
     if (seen.has(key)) return false;
     seen.add(key);
