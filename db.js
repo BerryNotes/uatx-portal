@@ -106,6 +106,7 @@ db.exec(`
     detail_content TEXT NOT NULL DEFAULT '',
     url TEXT NOT NULL DEFAULT '',
     img TEXT,
+    tags TEXT NOT NULL DEFAULT '[]',
     is_community INTEGER NOT NULL DEFAULT 0,
     sub_page TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -158,6 +159,7 @@ try { db.exec("ALTER TABLE activities ADD COLUMN event_location TEXT NOT NULL DE
 try { db.exec("ALTER TABLE activities ADD COLUMN event_description TEXT NOT NULL DEFAULT ''"); } catch (e) {}
 try { db.exec("ALTER TABLE events ADD COLUMN is_community INTEGER NOT NULL DEFAULT 0"); } catch (e) {}
 try { db.exec("ALTER TABLE events ADD COLUMN detail_content TEXT NOT NULL DEFAULT ''"); } catch (e) {}
+try { db.exec("ALTER TABLE events ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'"); } catch (e) {}
 try { db.exec("ALTER TABLE club_events ADD COLUMN description TEXT NOT NULL DEFAULT ''"); } catch (e) {}
 try { db.exec("ALTER TABLE club_events ADD COLUMN detail_content TEXT NOT NULL DEFAULT ''"); } catch (e) {}
 
@@ -555,24 +557,42 @@ const eventsAll = db.prepare(
   "SELECT * FROM events ORDER BY date ASC"
 );
 const eventInsert = db.prepare(`
-  INSERT INTO events (title, date, type, org, description, detail_content, url, img, is_community, sub_page)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO events (title, date, type, org, description, detail_content, url, img, tags, is_community, sub_page)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 const eventDelete = db.prepare("DELETE FROM events WHERE id = ?");
 const eventUpdate = db.prepare(`
-  UPDATE events SET title=?, date=?, type=?, org=?, description=?, detail_content=?, url=?, img=?, is_community=?, sub_page=?
+  UPDATE events SET title=?, date=?, type=?, org=?, description=?, detail_content=?, url=?, img=?, tags=?, is_community=?, sub_page=?
   WHERE id=?
 `);
 
+function parseEventTags(value) {
+  if (Array.isArray(value)) {
+    return value.filter((tag) => typeof tag === "string" && tag.trim()).map((tag) => tag.trim());
+  }
+  if (typeof value !== "string" || !value.trim()) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((tag) => typeof tag === "string" && tag.trim()).map((tag) => tag.trim());
+  } catch (e) {
+    return [];
+  }
+}
+
 function getAllEvents() {
-  return eventsAll.all().map((e) => ({ ...e, is_community: !!e.is_community }));
+  return eventsAll.all().map((e) => ({
+    ...e,
+    tags: parseEventTags(e.tags),
+    is_community: !!e.is_community,
+  }));
 }
 
 function createEvent(e) {
   const info = eventInsert.run(
     e.title, e.date || null, e.type || "",
     e.org || "", e.description || "", e.detail_content || "", e.url || "",
-    e.img || null, e.is_community ? 1 : 0, e.sub_page || ""
+    e.img || null, JSON.stringify(parseEventTags(e.tags)), e.is_community ? 1 : 0, e.sub_page || ""
   );
   return info.lastInsertRowid;
 }
@@ -581,7 +601,7 @@ function updateEvent(id, e) {
   return eventUpdate.run(
     e.title, e.date || null, e.type || "",
     e.org || "", e.description || "", e.detail_content || "", e.url || "",
-    e.img || null, e.is_community ? 1 : 0, e.sub_page || "", id
+    e.img || null, JSON.stringify(parseEventTags(e.tags)), e.is_community ? 1 : 0, e.sub_page || "", id
   );
 }
 
@@ -597,7 +617,7 @@ function seedEvents(events) {
       eventInsert.run(
         e.title, e.date || null, e.type || "",
         e.org || "", e.description || e.desc || "", e.detail_content || "", e.url || "",
-        e.img || null, e.is_community ? 1 : 0, e.sub_page || e.subPage || ""
+        e.img || null, JSON.stringify(parseEventTags(e.tags)), e.is_community ? 1 : 0, e.sub_page || e.subPage || ""
       );
     }
   });

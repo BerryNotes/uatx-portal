@@ -270,6 +270,25 @@ function isEventDateHit(value) {
 }
 
 const COMMUNITY_EVENT_TYPES = new Set(["Student Life", "Residential Life"]);
+const COMMUNITY_EVENT_TAGS = new Set(["speaker", "food", "film", "deadline"]);
+
+function normalizeEventTags(value) {
+  const rawList = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(",")
+      : [];
+  const seen = new Set();
+  const out = [];
+  rawList.forEach((tag) => {
+    if (typeof tag !== "string") return;
+    const cleaned = tag.trim().replace(/\s+/g, " ").toLowerCase();
+    if (!cleaned || cleaned.length > 32 || seen.has(cleaned) || !COMMUNITY_EVENT_TAGS.has(cleaned)) return;
+    seen.add(cleaned);
+    out.push(cleaned);
+  });
+  return out.slice(0, 12);
+}
 
 function normalizeAdminEventPayload(rawEvent) {
   const event = rawEvent && typeof rawEvent === "object" ? { ...rawEvent } : {};
@@ -282,6 +301,7 @@ function normalizeAdminEventPayload(rawEvent) {
   event.img = typeof event.img === "string" ? event.img.trim() : "";
   event.date = typeof event.date === "string" && event.date.trim() ? event.date.trim() : null;
   event.sub_page = typeof event.sub_page === "string" ? event.sub_page.trim() : "";
+  event.tags = normalizeEventTags(event.tags);
   event.is_community = !!event.is_community;
 
   if (event.is_community && !COMMUNITY_EVENT_TYPES.has(event.type)) {
@@ -1563,11 +1583,31 @@ app.delete("/api/blog/posts/:id", requireAdmin, (req, res) => {
 
 // ─── START ───
 
-app.listen(PORT, () => {
+function logServerUrls(hostLabel) {
   console.log(`UATX Student Portal`);
   console.log(`──────────────────────────────`);
+  console.log(`  Host:   ${hostLabel}`);
   console.log(`  Home:   http://localhost:${PORT}`);
   console.log(`  Admin:  http://localhost:${PORT}/admin`);
   console.log(`  Blog:   http://localhost:${PORT}/blog`);
+  console.log(`  IPv4:   http://127.0.0.1:${PORT}`);
   console.log(`──────────────────────────────`);
-});
+}
+
+function startServer(host) {
+  const server = app.listen(PORT, host, () => {
+    logServerUrls(host);
+  });
+
+  server.on("error", (err) => {
+    if (host === "::" && err && err.code === "EAFNOSUPPORT") {
+      console.warn("[server] IPv6 unavailable, falling back to IPv4");
+      startServer("0.0.0.0");
+      return;
+    }
+    console.error("[server] Failed to start:", err);
+    process.exit(1);
+  });
+}
+
+startServer(process.env.HOST || "::");

@@ -417,6 +417,10 @@
                 <div class="field"><label>Image Path</label><input id="comm-evt-img" placeholder="/images/UATX Sponsered Events & Travel/..." style="width:280px"></div>
               </div>
               <div class="field" style="margin-bottom:16px">
+                <label>Tags</label>
+                <div id="comm-evt-tags-picker" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+              </div>
+              <div class="field" style="margin-bottom:16px">
                 <label>Description</label>
                 <textarea id="comm-evt-desc" style="width:100%"></textarea>
               </div>
@@ -490,6 +494,10 @@
           <div class="field"><label>Date</label><input id="evt-date" type="date" style="width:160px"></div>
           <div class="field"><label>URL</label><input id="evt-url" placeholder="https://..." style="width:280px"></div>
           <div class="field"><label>Image Path</label><input id="evt-img" placeholder="/images/UATX Sponsered Events & Travel/..." style="width:280px"></div>
+        </div>
+        <div class="field" style="margin-bottom:16px">
+          <label>Tags</label>
+          <div id="evt-tags-picker" style="display:flex;flex-wrap:wrap;gap:8px"></div>
         </div>
         <div class="field" style="margin-bottom:16px">
           <label>Description</label>
@@ -969,6 +977,7 @@ async function init() {
     setEventDateMinimums();
     setExpiredView("opportunities");
     populateOpportunityIndustrySelect();
+    renderStaticEventTagPickers();
     enhanceDetailEditors();
     loadRoster();
     loadOpportunities();
@@ -2054,12 +2063,59 @@ let googleCalendarImportFile = null;
 
 const EVENT_TYPES = ["Student Visit","VIP Event Partnership","Study Abroad","Summer Program","Seminar Series","Multiple Programs","Conference","Workshop","Academic Term Date"];
 const COMMUNITY_EVENT_TYPES = ["Student Life", "Residential Life"];
+const COMMUNITY_EVENT_TAGS = ["speaker", "food", "film", "deadline"];
+const COMMUNITY_EVENT_TAG_SET = new Set(COMMUNITY_EVENT_TAGS);
 const OPPORTUNITY_IMPORT_TYPES = ["Internship","Fellowship","Program","Job"];
 const normalizeCommunityEventType = (value) => COMMUNITY_EVENT_TYPES.includes(value) ? value : "Student Life";
-const getProgramEvents = (events = lastEvents) => (events || []).filter(e => !e.is_community);
+const normalizeEventTags = (value) => {
+  const rawList = Array.isArray(value) ? value : String(value || "").split(",");
+  const seen = new Set();
+  return rawList
+    .map((tag) => String(tag || "").trim().replace(/\s+/g, " ").toLowerCase())
+    .filter((tag) => {
+      if (!tag || tag.length > 32 || seen.has(tag) || !COMMUNITY_EVENT_TAG_SET.has(tag)) return false;
+      seen.add(tag);
+      return true;
+    })
+    .slice(0, 12);
+};
+const formatEventTagsInput = (value) => normalizeEventTags(value).join(", ");
+const renderEventTagBadges = (value) => {
+  const tags = normalizeEventTags(value);
+  if (!tags.length) return "";
+  return `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">${tags.map((tag) => `<span class="tag">${esc(tag)}</span>`).join("")}</div>`;
+};
+const getEventTagSelectorHtml = (selectorId, value = []) => {
+  const selected = new Set(normalizeEventTags(value));
+  return COMMUNITY_EVENT_TAGS.map((tag) => {
+    const active = selected.has(tag);
+    return `<button type="button" class="edit-tag${active ? ' selected' : ''}" data-tag="${attr(tag)}" onclick="toggleEventTagOption('${attr(selectorId)}','${attr(tag)}')">${esc(tag)}</button>`;
+  }).join("");
+};
+function toggleEventTagOption(selectorId, tag) {
+  const root = document.getElementById(selectorId);
+  if (!root) return;
+  const btn = root.querySelector('[data-tag="' + tag.replace(/"/g, '&quot;') + '"]');
+  if (!btn) return;
+  btn.classList.toggle("selected");
+}
+function getSelectedEventTags(selectorId) {
+  const root = document.getElementById(selectorId);
+  if (!root) return [];
+  return normalizeEventTags(Array.from(root.querySelectorAll(".edit-tag.selected")).map((el) => el.dataset.tag));
+}
+function renderStaticEventTagPickers() {
+  const communityPicker = document.getElementById("comm-evt-tags-picker");
+  if (communityPicker) communityPicker.innerHTML = getEventTagSelectorHtml("comm-evt-tags-picker");
+  const programPicker = document.getElementById("evt-tags-picker");
+  if (programPicker) programPicker.innerHTML = getEventTagSelectorHtml("evt-tags-picker");
+}
+const getProgramEvents = (events = lastEvents) => (events || [])
+  .filter(e => !e.is_community)
+  .map(e => ({ ...e, tags: normalizeEventTags(e.tags) }));
 const getCommunityEvents = (events = lastEvents) => (events || [])
   .filter(e => !!e.is_community)
-  .map(e => ({ ...e, type: normalizeCommunityEventType(e.type) }));
+  .map(e => ({ ...e, type: normalizeCommunityEventType(e.type), tags: normalizeEventTags(e.tags) }));
 
 function buildEventImportDedupKey(event) {
   return [
@@ -2393,7 +2449,7 @@ function filterEvents() {
   const programs = getProgramEvents(lastEvents);
   if (!q) { renderEvents(programs); return; }
   const filtered = programs.filter(e =>
-    (e.title + " " + e.org + " " + e.type + " " + e.description).toLowerCase().includes(q)
+    (e.title + " " + e.org + " " + e.type + " " + e.description + " " + formatEventTagsInput(e.tags)).toLowerCase().includes(q)
   );
   renderEvents(filtered);
 }
@@ -2404,7 +2460,7 @@ function filterCommunityEvents() {
   const communityEvents = getCommunityEvents(lastEvents);
   if (!q) { renderCommunityEvents(communityEvents); return; }
   const filtered = communityEvents.filter(e =>
-    (e.title + " " + e.org + " " + e.type + " " + e.description).toLowerCase().includes(q)
+    (e.title + " " + e.org + " " + e.type + " " + e.description + " " + formatEventTagsInput(e.tags)).toLowerCase().includes(q)
   );
   renderCommunityEvents(filtered);
 }
@@ -2429,6 +2485,10 @@ function renderCommunityEvents(events) {
           <div class="field"><label>Date</label><input id="edit-evt-date" type="date" min="${todayISO()}" value="${e.date || ''}"></div>
           <div class="field"><label>URL</label><input id="edit-evt-url" value="${attr(e.url || '')}"></div>
           <div class="field"><label>Image Path</label><input id="edit-evt-img" value="${attr(e.img || '')}"></div>
+        </div>
+        <div class="opp-edit-full field">
+          <label>Tags</label>
+          <div id="edit-evt-tags-picker" style="display:flex;flex-wrap:wrap;gap:8px">${getEventTagSelectorHtml("edit-evt-tags-picker", e.tags)}</div>
         </div>
         <div class="opp-edit-full field">
           <label>Description</label>
@@ -2469,6 +2529,7 @@ function renderCommunityEvents(events) {
             <span style="color:#4a7c59;font-weight:600">Community</span>
             ${e.url ? '<span><a href="' + attr(e.url) + '" target="_blank" style="color:#c9a84c;text-decoration:none">Link &rarr;</a></span>' : ''}
           </div>
+          ${renderEventTagBadges(e.tags)}
           ${e.description ? '<div class="opp-card-desc">' + esc(e.description).substring(0, 200) + (e.description.length > 200 ? '...' : '') + '</div>' : ''}
         </div>
         ${e.img ? '<img src="' + attr(e.img) + '" style="width:48px;height:48px;border-radius:4px;object-fit:contain;background:#1a2332;flex-shrink:0" onerror="this.style.display=\'none\'">' : ''}
@@ -2504,6 +2565,10 @@ function renderEvents(events) {
           <div class="field"><label>Date</label><input id="edit-evt-date" type="date" min="${todayISO()}" value="${e.date || ''}"></div>
           <div class="field"><label>URL</label><input id="edit-evt-url" value="${attr(e.url || '')}"></div>
           <div class="field"><label>Image Path</label><input id="edit-evt-img" value="${attr(e.img || '')}"></div>
+        </div>
+        <div class="opp-edit-full field">
+          <label>Tags</label>
+          <div id="edit-evt-tags-picker" style="display:flex;flex-wrap:wrap;gap:8px">${getEventTagSelectorHtml("edit-evt-tags-picker", e.tags)}</div>
         </div>
         <div class="opp-edit-full field">
           <label>Description</label>
@@ -2543,6 +2608,7 @@ function renderEvents(events) {
             <span>${e.date ? formatDate(e.date) : 'No date'}</span>
             ${e.url ? '<span><a href="' + attr(e.url) + '" target="_blank" style="color:#c9a84c;text-decoration:none">Link &rarr;</a></span>' : ''}
           </div>
+          ${renderEventTagBadges(e.tags)}
           ${e.description ? '<div class="opp-card-desc">' + esc(e.description).substring(0, 200) + (e.description.length > 200 ? '...' : '') + '</div>' : ''}
         </div>
         ${e.img ? '<img src="' + attr(e.img) + '" style="width:48px;height:48px;border-radius:4px;object-fit:contain;background:#1a2332;flex-shrink:0" onerror="this.style.display=\'none\'">' : ''}
@@ -2573,6 +2639,7 @@ async function saveEventEdit(id) {
     date: document.getElementById("edit-evt-date").value || null,
     url: document.getElementById("edit-evt-url").value.trim(),
     img: document.getElementById("edit-evt-img").value.trim() || null,
+    tags: getSelectedEventTags("edit-evt-tags-picker"),
     description: document.getElementById("edit-evt-desc").value.trim(),
     detail_content: document.getElementById("edit-evt-detail").value.trim(),
     is_community: !!existing.is_community,
@@ -2602,6 +2669,7 @@ async function createEventAdmin() {
     date: document.getElementById("evt-date").value || null,
     url: document.getElementById("evt-url").value.trim(),
     img: document.getElementById("evt-img").value.trim() || null,
+    tags: getSelectedEventTags("evt-tags-picker"),
     description: document.getElementById("evt-desc").value.trim(),
     detail_content: document.getElementById("evt-detail").value.trim(),
     is_community: false,
@@ -2617,6 +2685,7 @@ async function createEventAdmin() {
   ["evt-title","evt-org","evt-date","evt-url","evt-img","evt-desc"].forEach(id => document.getElementById(id).value = "");
   setDetailFieldValue("evt-detail", "");
   document.getElementById("evt-type").selectedIndex = 0;
+  renderStaticEventTagPickers();
   lastEvents = data.events || [];
   filterEvents();
   filterCommunityEvents();
@@ -2634,6 +2703,7 @@ async function createCommunityEventAdmin() {
     date: document.getElementById("comm-evt-date").value || null,
     url: document.getElementById("comm-evt-url").value.trim(),
     img: document.getElementById("comm-evt-img").value.trim() || null,
+    tags: getSelectedEventTags("comm-evt-tags-picker"),
     description: document.getElementById("comm-evt-desc").value.trim(),
     detail_content: document.getElementById("comm-evt-detail").value.trim(),
     is_community: true,
@@ -2649,6 +2719,7 @@ async function createCommunityEventAdmin() {
   ["comm-evt-title","comm-evt-org","comm-evt-date","comm-evt-url","comm-evt-img","comm-evt-desc"].forEach(id => document.getElementById(id).value = "");
   setDetailFieldValue("comm-evt-detail", "");
   document.getElementById("comm-evt-type").selectedIndex = 0;
+  renderStaticEventTagPickers();
   lastEvents = data.events || [];
   filterEvents();
   filterCommunityEvents();

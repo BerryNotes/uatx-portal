@@ -159,9 +159,23 @@ const isEventExpired = (dateValue) => {
 };
 
 const COMMUNITY_EVENT_CATEGORIES = ["Student Life", "Residential Life"];
+const COMMUNITY_EVENT_TAGS = ["speaker", "food", "film", "deadline"];
+const COMMUNITY_EVENT_TAG_SET = new Set(COMMUNITY_EVENT_TAGS);
 const normalizeCommunityEventCategory = (value) => {
   const raw = String(value || "").trim();
   return COMMUNITY_EVENT_CATEGORIES.includes(raw) ? raw : "Student Life";
+};
+const normalizeEventTags = (value) => {
+  const rawList = Array.isArray(value) ? value : String(value || "").split(",");
+  const seen = new Set();
+  return rawList
+    .map((tag) => String(tag || "").trim().replace(/\s+/g, " ").toLowerCase())
+    .filter((tag) => {
+      if (!tag || tag.length > 32 || seen.has(tag) || !COMMUNITY_EVENT_TAG_SET.has(tag)) return false;
+      seen.add(tag);
+      return true;
+    })
+    .slice(0, 12);
 };
 const CALENDAR_ONLY_EVENT_TYPE = "Academic Term Date";
 const CALENDAR_ONLY_EVENT_TYPES = new Set([CALENDAR_ONLY_EVENT_TYPE.toLowerCase(), "academic calendar"]);
@@ -179,6 +193,7 @@ const normalizeEventForDisplay = (event) => ({
   ...event,
   desc: event.description || event.desc || "",
   subPage: getEventSubPageId(event),
+  tags: normalizeEventTags(event.tags),
 });
 
 const getEventSortValue = (dateValue) => {
@@ -3135,6 +3150,8 @@ const ProfilePage = ({showToast, selectedIndustries, setSelectedIndustries, sele
 // ─── COMMUNITY ───
 const CommunityPage = ({mode="all", joinedClubs, setJoinedClubs, clubEmailPrefs={}, setClubEmailPrefs, showToast, serverActivities, navigate, refreshActivities, serverEvents=[], allClubEvents=[]}) => {
   useEffect(() => { refreshActivities(); }, []);
+  const [selectedCommunityTypes, setSelectedCommunityTypes] = useState([]);
+  const [selectedCommunityTags, setSelectedCommunityTags] = useState([]);
   const isJoined = (id) => {
     const clubId = normalizeClubId(id);
     return clubId !== null && joinedClubs.includes(clubId);
@@ -3178,6 +3195,17 @@ const CommunityPage = ({mode="all", joinedClubs, setJoinedClubs, clubEmailPrefs=
     }
   };
   const allActivities = buildMergedActivities(serverActivities);
+  const nextClubEventById = new Map();
+  (allClubEvents || []).forEach((event) => {
+    const activityId = normalizeClubId(event.activity_id);
+    if (activityId === null || !event.date) return;
+    const sortValue = getEventSortValue(event.date);
+    if (!Number.isFinite(sortValue)) return;
+    const existing = nextClubEventById.get(activityId);
+    if (!existing || sortValue < existing.sortValue) {
+      nextClubEventById.set(activityId, { ...event, sortValue });
+    }
+  });
 
   const seenCommunityEvents = new Set();
   const communityEvents = [...serverEvents, ...EVENTS]
@@ -3194,53 +3222,123 @@ const CommunityPage = ({mode="all", joinedClubs, setJoinedClubs, clubEmailPrefs=
     })
     .map((event) => ({
       ...event,
-      type: event.is_community ? normalizeCommunityEventCategory(event.type) : (event.type || "Campus Event"),
+      type: normalizeCommunityEventCategory(event.type),
       source: event.is_community ? "community" : "program",
     }))
     .filter(e => e.date && new Date(e.date) >= new Date(new Date().toDateString()))
     .sort((a,b) => new Date(a.date) - new Date(b.date));
+  const availableCommunityTags = Array.from(new Set(
+    communityEvents.flatMap((event) => normalizeEventTags(event.tags))
+  )).sort((a, b) => a.localeCompare(b));
+  const filteredCommunityEvents = communityEvents.filter((event) => {
+    const typeMatch = selectedCommunityTypes.length === 0 || selectedCommunityTypes.includes(event.type);
+    const eventTags = normalizeEventTags(event.tags);
+    const tagMatch = selectedCommunityTags.length === 0 || selectedCommunityTags.some((tag) => eventTags.includes(tag));
+    return typeMatch && tagMatch;
+  });
+  const toggleCommunityType = (type) => {
+    setSelectedCommunityTypes((prev) => prev.includes(type) ? prev.filter((item) => item !== type) : [...prev, type]);
+  };
+  const toggleCommunityTag = (tag) => {
+    setSelectedCommunityTags((prev) => prev.includes(tag) ? prev.filter((item) => item !== tag) : [...prev, tag]);
+  };
+  const clearCommunityFilters = () => {
+    setSelectedCommunityTypes([]);
+    setSelectedCommunityTags([]);
+  };
 
   if (mode === "events") {
     return (
       <div style={{padding:"24px 20px",animation:"fadeIn 0.3s ease"}}>
         <h1 style={{fontFamily:"Georgia, serif",fontSize:26,color:C.navy,margin:"0 0 6px"}}>Community Events</h1>
         <p style={{color:C.textLight,fontSize:13,margin:"0 0 18px"}}>Events from the UATX community.</p>
-        <div style={{display:"flex",flexDirection:"column",gap:12,width:"100%"}}>
-          {communityEvents.map(event => {
-            const eventDate = new Date(event.date).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"});
-            const shortDesc = (event.desc || "").trim();
-            const preview = shortDesc;
-            return (
-              <div key={event.id} style={{backgroundColor:C.white,border:"1px solid "+C.border,borderLeft:"3px solid "+C.navy,cursor:event.subPage?"pointer":"default"}} onClick={()=>event.subPage && navigate(event.subPage, {backTab: "community-events"})}>
-                <div style={{padding:"12px 18px"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:8}}>
-                    {event.img ? (
-                      <img src={event.img} alt={event.org || event.title} style={{width:34,height:34,borderRadius:5,objectFit:"contain",backgroundColor:C.white,border:"1px solid "+C.border,flexShrink:0}} onError={e=>{e.target.style.display="none";}}/>
-                    ) : (
-                      <div style={{width:34,height:34,borderRadius:5,backgroundColor:C.navyDark,display:"flex",alignItems:"center",justifyContent:"center",color:C.gold,fontSize:12,fontWeight:700,fontFamily:"Georgia, serif",flexShrink:0}}>{(String(event.title || "").trim().charAt(0) || "E").toUpperCase()}</div>
+        <div style={{display:"flex",gap:18,alignItems:"flex-start",flexWrap:"wrap"}}>
+          <div style={{width:260,flexShrink:0,backgroundColor:C.white,border:"1px solid "+C.border,padding:"18px 16px",position:"sticky",top:88}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:16}}>
+              <div>
+                <div style={{fontSize:16,fontWeight:700,color:C.navy,fontFamily:"Georgia, serif"}}>Filter Events</div>
+                <div style={{fontSize:11,color:C.textLight,marginTop:3}}>{filteredCommunityEvents.length} shown</div>
+              </div>
+              {(selectedCommunityTypes.length > 0 || selectedCommunityTags.length > 0) && (
+                <button onClick={clearCommunityFilters} style={{border:"none",background:"transparent",color:C.goldMuted,cursor:"pointer",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em",padding:0}}>Clear</button>
+              )}
+            </div>
+            <div style={{marginBottom:18}}>
+              <div style={{fontSize:11,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8}}>Type</div>
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                {COMMUNITY_EVENT_CATEGORIES.map((type) => {
+                  const active = selectedCommunityTypes.includes(type);
+                  return (
+                    <button key={type} onClick={() => toggleCommunityType(type)} style={{textAlign:"left",border:"1px solid "+(active ? C.gold : C.border),backgroundColor:active ? C.gold+"14" : C.cream,color:active ? C.goldMuted : C.text,padding:"10px 12px",cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"'Libre Franklin', sans-serif"}}>
+                      {type}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div>
+              <div style={{fontSize:11,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8}}>Tags</div>
+              {availableCommunityTags.length > 0 ? (
+                <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+                  {availableCommunityTags.map((tag) => {
+                    const active = selectedCommunityTags.includes(tag);
+                    return (
+                      <button key={tag} onClick={() => toggleCommunityTag(tag)} style={{border:"1px solid "+(active ? C.navy : C.border),backgroundColor:active ? C.navy : C.white,color:active ? C.cream : C.textLight,padding:"6px 10px",cursor:"pointer",fontSize:11,fontWeight:600,fontFamily:"'Libre Franklin', sans-serif",textTransform:"uppercase",letterSpacing:"0.04em"}}>
+                        {tag}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={{fontSize:12,color:C.textLight,lineHeight:1.5}}>No event tags yet.</div>
+              )}
+            </div>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:12,flex:"1 1 680px",minWidth:0}}>
+            {filteredCommunityEvents.map(event => {
+              const eventDate = new Date(event.date).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"});
+              const shortDesc = (event.desc || "").trim();
+              const preview = shortDesc;
+              return (
+                <div key={event.id} style={{backgroundColor:C.white,border:"1px solid "+C.border,borderLeft:"3px solid "+C.navy,cursor:event.subPage?"pointer":"default"}} onClick={()=>event.subPage && navigate(event.subPage, {backTab: "community-events"})}>
+                  <div style={{padding:"12px 18px"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:8}}>
+                      {event.img ? (
+                        <img src={event.img} alt={event.org || event.title} style={{width:34,height:34,borderRadius:5,objectFit:"contain",backgroundColor:C.white,border:"1px solid "+C.border,flexShrink:0}} onError={e=>{e.target.style.display="none";}}/>
+                      ) : (
+                        <div style={{width:34,height:34,borderRadius:5,backgroundColor:C.navyDark,display:"flex",alignItems:"center",justifyContent:"center",color:C.gold,fontSize:12,fontWeight:700,fontFamily:"Georgia, serif",flexShrink:0}}>{(String(event.title || "").trim().charAt(0) || "E").toUpperCase()}</div>
+                      )}
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
+                          <div style={{fontSize:15,fontWeight:700,color:C.navy,fontFamily:"Georgia, serif",lineHeight:1.25}}>{event.title}</div>
+                          <Badge color={event.type === "Residential Life" ? C.navy : C.gold} bg={event.type === "Residential Life" ? C.navy+"12" : C.gold+"14"}>{event.type}</Badge>
+                        </div>
+                        <div style={{fontSize:11,color:C.textLight,marginTop:2}}>{event.org || "Community"}</div>
+                      </div>
+                    </div>
+                    {event.tags && event.tags.length > 0 && (
+                      <div style={{display:"flex",flexWrap:"wrap",gap:6,margin:"0 0 10px 46px"}}>
+                        {event.tags.map((tag) => <Badge key={tag} color={C.textLight} bg={C.cream}>{tag}</Badge>)}
+                      </div>
                     )}
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontSize:15,fontWeight:700,color:C.navy,fontFamily:"Georgia, serif",lineHeight:1.25,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{event.title}</div>
-                      <div style={{fontSize:11,color:C.textLight,marginTop:2}}>{event.org || "Community"}{event.type ? " · " + event.type : ""}</div>
+                    <p style={{fontSize:12,color:C.text,lineHeight:1.5,margin:0,whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{preview || "Event details coming soon."}</p>
+                  </div>
+                  <div style={{padding:"7px 18px",borderTop:"1px solid "+C.border,backgroundColor:C.cream,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                    <div style={{fontSize:11,color:C.textLight,fontWeight:600}}>{eventDate}</div>
+                    <div style={{display:"flex",alignItems:"center",gap:10}}>
+                      {event.url && <a href={event.url} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{fontSize:12,color:C.goldMuted,textDecoration:"none",fontWeight:600}}>Website</a>}
+                      {event.subPage && <span style={{fontSize:12,fontWeight:600,color:C.navy}}>View Details &rarr;</span>}
                     </div>
                   </div>
-                  <p style={{fontSize:12,color:C.text,lineHeight:1.5,margin:0,whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{preview || "Event details coming soon."}</p>
                 </div>
-                <div style={{padding:"7px 18px",borderTop:"1px solid "+C.border,backgroundColor:C.cream,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                  <div style={{fontSize:11,color:C.textLight,fontWeight:600}}>{eventDate}</div>
-                  <div style={{display:"flex",alignItems:"center",gap:10}}>
-                    {event.url && <a href={event.url} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{fontSize:12,color:C.goldMuted,textDecoration:"none",fontWeight:600}}>Website</a>}
-                    {event.subPage && <span style={{fontSize:12,fontWeight:600,color:C.navy}}>View Details &rarr;</span>}
-                  </div>
-                </div>
+              );
+            })}
+            {filteredCommunityEvents.length === 0 && (
+              <div style={{backgroundColor:C.white,border:"1px solid "+C.border,padding:"18px 20px",fontSize:13,color:C.textLight}}>
+                No community events match the selected filters.
               </div>
-            );
-          })}
-          {communityEvents.length === 0 && (
-            <div style={{backgroundColor:C.white,border:"1px solid "+C.border,padding:"18px 20px",fontSize:13,color:C.textLight}}>
-              No upcoming community events right now.
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     );
@@ -3262,42 +3360,52 @@ const CommunityPage = ({mode="all", joinedClubs, setJoinedClubs, clubEmailPrefs=
         </div>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:16}}>
-        {allActivities.map(club => (
-          <div
-            key={club.id}
-            style={{backgroundColor:C.white,border:"1px solid "+C.border,overflow:"hidden",cursor:"pointer"}}
-            onClick={() => navigate(CLUB_DETAIL_PAGE_PREFIX + club.id)}
-          >
-            <div style={{height:8,backgroundColor:isJoined(club.id)?C.gold:C.navy}}/>
-            <div style={{padding:20}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
-                <h3 style={{fontFamily:"Georgia, serif",fontSize:16,color:C.navy,margin:0}}>{club.title}</h3>
-                <Badge>{club.category}</Badge>
-              </div>
-              <p style={{fontSize:13,color:C.textLight,lineHeight:1.5,margin:"0 0 8px"}}>{club.desc}</p>
-              {club.presidentEmail && (
-                <div style={{fontSize:11,color:C.textLight,marginBottom:8}}>
-                  President: <a href={"mailto:"+club.presidentEmail} onClick={(e)=>e.stopPropagation()} style={{color:C.goldMuted,fontWeight:500}}>{club.presidentEmail}</a>
+        {allActivities.map(club => {
+          const nextClubEvent = nextClubEventById.get(normalizeClubId(club.id));
+          return (
+            <div
+              key={club.id}
+              style={{backgroundColor:C.white,border:"1px solid "+C.border,overflow:"hidden",cursor:"pointer"}}
+              onClick={() => navigate(CLUB_DETAIL_PAGE_PREFIX + club.id)}
+            >
+              <div style={{height:8,backgroundColor:isJoined(club.id)?C.gold:C.navy}}/>
+              <div style={{padding:20}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                  <h3 style={{fontFamily:"Georgia, serif",fontSize:16,color:C.navy,margin:0}}>{club.title}</h3>
+                  <Badge>{club.category}</Badge>
                 </div>
-              )}
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:12,borderTop:"1px solid "+C.border}}>
-                <span style={{fontSize:11,color:C.textLight}}>{club.members} member{club.members!==1?"s":""}{club.meetDay?" · "+club.meetDay:""}</span>
-                <div style={{display:"flex",alignItems:"center",gap:8}}>
-                  {isJoined(club.id) && (
-                    <div style={{display:"flex",alignItems:"center",gap:6}}>
-                      <div onClick={(e)=>{e.stopPropagation();toggleClubEmails(club.id, club.title);}} style={{width:30,height:17,borderRadius:9,cursor:"pointer",backgroundColor:isClubEmailsEnabled(club.id)?C.gold:C.border,position:"relative",transition:"background-color 0.2s ease"}}>
-                        <div style={{width:13,height:13,borderRadius:"50%",backgroundColor:C.white,position:"absolute",top:2,left:isClubEmailsEnabled(club.id)?15:2,transition:"left 0.2s ease"}}/>
+                <p style={{fontSize:13,color:C.textLight,lineHeight:1.5,margin:"0 0 8px"}}>{club.desc}</p>
+                {club.presidentEmail && (
+                  <div style={{fontSize:11,color:C.textLight,marginBottom:8}}>
+                    President: <a href={"mailto:"+club.presidentEmail} onClick={(e)=>e.stopPropagation()} style={{color:C.goldMuted,fontWeight:500}}>{club.presidentEmail}</a>
+                  </div>
+                )}
+                {nextClubEvent && (
+                  <div style={{marginBottom:12,padding:"10px 12px",backgroundColor:C.gold+"12",border:"1px solid "+C.gold+"2a"}}>
+                    <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",color:C.goldMuted,marginBottom:4}}>Next Event</div>
+                    <div style={{fontSize:12,fontWeight:700,color:C.navy,lineHeight:1.4}}>{nextClubEvent.title || "Club Event"}</div>
+                    <div style={{fontSize:11,color:C.textLight,marginTop:3}}>{formatEventDateLabel(nextClubEvent.date)}{nextClubEvent.location ? " · " + nextClubEvent.location : ""}</div>
+                  </div>
+                )}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:12,borderTop:"1px solid "+C.border}}>
+                  <span style={{fontSize:11,color:C.textLight}}>{club.members} member{club.members!==1?"s":""}{club.meetDay?" · "+club.meetDay:""}</span>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    {isJoined(club.id) && (
+                      <div style={{display:"flex",alignItems:"center",gap:6}}>
+                        <div onClick={(e)=>{e.stopPropagation();toggleClubEmails(club.id, club.title);}} style={{width:30,height:17,borderRadius:9,cursor:"pointer",backgroundColor:isClubEmailsEnabled(club.id)?C.gold:C.border,position:"relative",transition:"background-color 0.2s ease"}}>
+                          <div style={{width:13,height:13,borderRadius:"50%",backgroundColor:C.white,position:"absolute",top:2,left:isClubEmailsEnabled(club.id)?15:2,transition:"left 0.2s ease"}}/>
+                        </div>
+                        <span style={{fontSize:10,color:C.textLight}}>Emails</span>
                       </div>
-                      <span style={{fontSize:10,color:C.textLight}}>Emails</span>
-                    </div>
-                  )}
-                  <Btn size="sm" variant={isJoined(club.id)?"primary":"secondary"} onClick={(e)=>{e.stopPropagation();toggleJoin(club);}}>{isJoined(club.id)?"Joined":"Join Club"}</Btn>
+                    )}
+                    <Btn size="sm" variant={isJoined(club.id)?"primary":"secondary"} onClick={(e)=>{e.stopPropagation();toggleJoin(club);}}>{isJoined(club.id)?"Joined":"Join Club"}</Btn>
+                  </div>
                 </div>
+                <div style={{fontSize:12,color:C.navy,fontWeight:600,paddingTop:8}}>View Club Details &rarr;</div>
               </div>
-              <div style={{fontSize:12,color:C.navy,fontWeight:600,paddingTop:8}}>View Club Details &rarr;</div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -3793,4 +3901,6 @@ requestAnimationFrame(raf);
 </script>
 </body>
 </html>
+
+
 
