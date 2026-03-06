@@ -14,15 +14,19 @@ const {
   getUserById,
   markWelcomeEmailSent,
   getAllRoster,
+  getRosterById,
   addToRoster,
   removeFromRoster,
+  updateRosterPerson,
   bulkAddToRoster,
   getPreferences,
   setPreferences,
   getAllOpportunities,
+  getOpportunityById,
   createOpportunity,
   updateOpportunity,
   deleteOpportunity,
+  approveOpportunity,
   getStudentsForNotification,
   getAllStudents,
   seedOpportunities,
@@ -52,7 +56,7 @@ const {
   updateBlogPost,
   deleteBlogPost,
 } = require("./db");
-const { sendWelcomeEmail, sendOpportunityNotification, sendClubEmail, sendClubSubmissionNotification } = require("./email");
+const { sendWelcomeEmail, sendOpportunityNotification, sendClubEmail, sendClubSubmissionNotification, sendOpportunitySubmissionNotification } = require("./email");
 
 const PORT = process.env.PORT || 3333;
 const DIR = __dirname;
@@ -174,6 +178,15 @@ function requireAdmin(req, res, next) {
   next();
 }
 
+function requireStaffFaculty(req, res, next) {
+  if (!req.session.userId) return res.status(401).json({ error: "Not authenticated" });
+  const user = getUserById(req.session.userId);
+  if (!user || (!user.is_admin && !isStaffFacultyRole(user.role))) {
+    return res.status(403).json({ error: "Staff/faculty access required" });
+  }
+  next();
+}
+
 function isLocalRequest(req) {
   const ip = String(req.ip || "").toLowerCase();
   const host = String(req.hostname || "").toLowerCase();
@@ -220,6 +233,14 @@ function normalizeOpportunity(opportunity) {
   o.logo = normalizePublicUrl(o.logo || "", { allowRelative: true }) || null;
   o.apply_url = normalizePublicUrl(o.apply_url || "", { allowRelative: false }) || "";
   return o;
+}
+
+function normalizePortalRole(value) {
+  return value === "staff_faculty" ? "staff_faculty" : "student";
+}
+
+function isStaffFacultyRole(value) {
+  return normalizePortalRole(value) === "staff_faculty";
 }
 
 function normalizeClubEmailPrefs(value) {
@@ -300,12 +321,16 @@ function normalizeAdminEventPayload(rawEvent) {
   event.url = typeof event.url === "string" ? event.url.trim() : "";
   event.img = typeof event.img === "string" ? event.img.trim() : "";
   event.date = typeof event.date === "string" && event.date.trim() ? event.date.trim() : null;
+  event.application_deadline = typeof event.application_deadline === "string" && event.application_deadline.trim() ? event.application_deadline.trim() : null;
   event.sub_page = typeof event.sub_page === "string" ? event.sub_page.trim() : "";
   event.tags = normalizeEventTags(event.tags);
   event.is_community = !!event.is_community;
 
-  if (event.is_community && !COMMUNITY_EVENT_TYPES.has(event.type)) {
-    event.type = "Student Life";
+  if (event.is_community) {
+    event.application_deadline = null;
+    if (!COMMUNITY_EVENT_TYPES.has(event.type)) {
+      event.type = "Student Life";
+    }
   }
   return event;
 }
@@ -426,16 +451,17 @@ app.post("/api/auth/google", rateLimit(60000, 10), async (req, res) => {
 
     // Auto-add admin-email users to roster if missing
     if (!isOnRoster(email) && isAdminEmail) {
-      addToRoster(name, email, 1);
+      addToRoster(name, email, 1, "staff_faculty");
     }
 
     // Check if this email is an admin on the roster
     const rosterEntry = rosterFindByEmail(email);
     const isAdmin = rosterEntry && rosterEntry.is_admin;
+    const role = normalizePortalRole(rosterEntry && rosterEntry.role);
 
     // Create or update user
     const { id, isNew, welcome_email_sent } = findOrCreateUser({
-      email, name, googleSub, avatarUrl, isAdmin,
+      email, name, googleSub, avatarUrl, role, isAdmin,
     });
 
     // Set session
@@ -453,6 +479,7 @@ app.post("/api/auth/google", rateLimit(60000, 10), async (req, res) => {
         email: user.email,
         name: user.name,
         avatar_url: user.avatar_url,
+        role: normalizePortalRole(user.role),
         is_admin: !!user.is_admin,
       },
     });
@@ -480,14 +507,16 @@ app.post("/api/auth/dev-login", rateLimit(60000, 10), (req, res) => {
   // Local dev login defaults to admin access for ease of local testing
   const forceAdmin = process.env.LOCAL_DEV_FORCE_ADMIN !== "0";
   const rosterName = name || email.split("@")[0];
-  if (!isOnRoster(email)) addToRoster(rosterName, email, forceAdmin ? 1 : 0);
+  if (!isOnRoster(email)) addToRoster(rosterName, email, forceAdmin ? 1 : 0, email.endsWith("@uaustin.org") ? "staff_faculty" : "student");
 
   const rosterEntry = rosterFindByEmail(email);
+  const role = normalizePortalRole(rosterEntry && rosterEntry.role);
   const { id } = findOrCreateUser({
     email,
     name: rosterName,
     googleSub: null,
     avatarUrl: null,
+    role,
     isAdmin: forceAdmin || !!(rosterEntry && rosterEntry.is_admin),
   });
 
@@ -499,6 +528,7 @@ app.post("/api/auth/dev-login", rateLimit(60000, 10), (req, res) => {
       email: user.email,
       name: user.name,
       avatar_url: user.avatar_url,
+      role: normalizePortalRole(user.role),
       is_admin: !!user.is_admin,
     },
   });
@@ -514,6 +544,7 @@ app.get("/api/auth/me", (req, res) => {
       email: user.email,
       name: user.name,
       avatar_url: user.avatar_url,
+      role: normalizePortalRole(user.role),
       is_admin: !!user.is_admin,
     },
   });
@@ -557,8 +588,30 @@ app.put("/api/preferences", requireAuth, (req, res) => {
 // ─── OPPORTUNITIES ROUTES ───
 
 app.get("/api/opportunities", requireAuth, (req, res) => {
-  const opportunities = getAllOpportunities().filter((opp) => !isOpportunityDeadlineHit(opp.deadline));
+  const opportunities = getAllOpportunities().filter((opp) => opp.status === "approved" && !isOpportunityDeadlineHit(opp.deadline));
   res.json({ opportunities });
+});
+
+app.post("/api/opportunities/submissions", requireStaffFaculty, async (req, res) => {
+  const user = getUserById(req.session.userId);
+  const normalizedOpp = normalizeOpportunity((req.body && req.body.opportunity) || {});
+  if (!normalizedOpp.org || !normalizedOpp.title) {
+    return res.status(400).json({ error: "Organization and title are required" });
+  }
+
+  const submission = {
+    ...normalizedOpp,
+    status: "pending",
+    submitted_by: user.email,
+  };
+  const id = createOpportunity(submission);
+
+  const adminEmail = process.env.ADMIN_EMAILS ? process.env.ADMIN_EMAILS.split(",")[0].trim() : null;
+  if (adminEmail) {
+    await sendOpportunitySubmissionNotification(adminEmail, submission, user.name, user.email);
+  }
+
+  res.json({ ok: true, id });
 });
 
 // ─── EVENTS ROUTES ───
@@ -929,10 +982,41 @@ app.get("/api/admin/roster/export.exl", requireAdmin, (req, res) => {
 });
 
 app.post("/api/admin/roster", requireAdmin, (req, res) => {
-  const { name, email, is_admin } = req.body;
+  const { name, email, is_admin, role } = req.body;
   if (!name || !email) return res.status(400).json({ error: "Name and email are required" });
-  addToRoster(name, email, is_admin);
+  addToRoster(name, email, is_admin, normalizePortalRole(role));
   res.json({ ok: true, roster: getAllRoster() });
+});
+
+app.put("/api/admin/roster/:id", requireAdmin, (req, res) => {
+  const existing = getRosterById(req.params.id);
+  if (!existing) return res.status(404).json({ error: "Roster entry not found" });
+
+  const name = String(req.body?.name || "").trim();
+  const email = String(req.body?.email || "").trim().toLowerCase();
+  const role = normalizePortalRole(req.body?.role);
+  const isAdmin = !!req.body?.is_admin;
+
+  if (!name || !email) {
+    return res.status(400).json({ error: "Name and email are required" });
+  }
+
+  const allowed =
+    email.endsWith("@student.uaustin.org") || email.endsWith("@uaustin.org");
+  if (!allowed) {
+    return res.status(400).json({ error: "Use a @student.uaustin.org or @uaustin.org email" });
+  }
+
+  if (role === "student" && email.endsWith("@uaustin.org")) {
+    return res.status(400).json({ error: "Use Staff/Faculty role for @uaustin.org accounts" });
+  }
+
+  try {
+    const updated = updateRosterPerson(req.params.id, { name, email, role, isAdmin });
+    res.json({ ok: true, roster: getAllRoster(), updated });
+  } catch (err) {
+    res.status(400).json({ error: err.message || "Failed to update roster entry" });
+  }
 });
 
 app.delete("/api/admin/roster/:id", requireAdmin, (req, res) => {
@@ -1012,7 +1096,12 @@ app.post("/api/admin/opportunities", requireAdmin, async (req, res) => {
     return res.status(400).json({ error: "Organization and title are required" });
   }
 
-  const id = createOpportunity(normalizedOpp);
+  const approvedOpp = {
+    ...normalizedOpp,
+    status: "approved",
+    submitted_by: "",
+  };
+  const id = createOpportunity(approvedOpp);
 
   // Send notifications if requested
   let notified = 0;
@@ -1033,7 +1122,20 @@ app.put("/api/admin/opportunities/:id", requireAdmin, (req, res) => {
   if (!normalizedOpp.org || !normalizedOpp.title) {
     return res.status(400).json({ error: "Organization and title are required" });
   }
-  updateOpportunity(req.params.id, normalizedOpp);
+  const existingOpp = getOpportunityById(req.params.id);
+  if (!existingOpp) return res.status(404).json({ error: "Opportunity not found" });
+  updateOpportunity(req.params.id, {
+    ...normalizedOpp,
+    status: existingOpp.status || "approved",
+    submitted_by: existingOpp.submitted_by || "",
+  });
+  res.json({ ok: true, opportunities: getAllOpportunities() });
+});
+
+app.put("/api/admin/opportunities/:id/approve", requireAdmin, (req, res) => {
+  const existingOpp = getOpportunityById(req.params.id);
+  if (!existingOpp) return res.status(404).json({ error: "Opportunity not found" });
+  approveOpportunity(req.params.id);
   res.json({ ok: true, opportunities: getAllOpportunities() });
 });
 
@@ -1523,7 +1625,7 @@ app.get("/api/admin/student/:email", requireAdmin, (req, res) => {
   ).get(req.params.email);
   if (!user) return res.json({ student: null });
   const prefs = getPreferences(user.id);
-  res.json({ student: { ...user, is_admin: !!user.is_admin }, preferences: prefs });
+  res.json({ student: { ...user, role: normalizePortalRole(user.role), is_admin: !!user.is_admin }, preferences: prefs });
 });
 
 // Admin: update a student's preferences/profile

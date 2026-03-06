@@ -200,6 +200,13 @@
           <label>Email</label>
           <input id="roster-email" placeholder="jsmith@student.uaustin.org" style="width:280px">
         </div>
+        <div class="field">
+          <label>Role</label>
+          <select id="roster-role" style="width:160px">
+            <option value="student">Student</option>
+            <option value="staff_faculty">Staff/Faculty</option>
+          </select>
+        </div>
         <div class="check-row" style="padding-bottom:2px">
           <input type="checkbox" id="roster-admin">
           <label for="roster-admin">Admin</label>
@@ -487,11 +494,13 @@
               <option>Multiple Programs</option>
               <option>Conference</option>
               <option>Workshop</option>
+              <option>Webinar</option>
             </select>
           </div>
         </div>
         <div class="form-row">
           <div class="field"><label>Date</label><input id="evt-date" type="date" style="width:160px"></div>
+          <div class="field"><label>Application Deadline</label><input id="evt-application-deadline" type="date" style="width:160px"></div>
           <div class="field"><label>URL</label><input id="evt-url" placeholder="https://..." style="width:280px"></div>
           <div class="field"><label>Image Path</label><input id="evt-img" placeholder="/images/UATX Sponsered Events & Travel/..." style="width:280px"></div>
         </div>
@@ -1080,6 +1089,10 @@ function clearRosterFilters() {
   filterRoster();
 }
 
+function getPortalRoleLabel(role) {
+  return role === "staff_faculty" ? "Staff/Faculty" : "Student";
+}
+
 function filterRoster() {
   const q = (document.getElementById("roster-search").value || "").toLowerCase();
   const indFilter = document.getElementById("roster-filter-industry").value;
@@ -1136,7 +1149,7 @@ function renderRoster(roster) {
     <tr class="clickable${isExpanded ? ' expanded' : ''}" onclick="toggleRosterDetail(${r.id}, '${esc(r.email)}', ${r.registered})">
       <td>${esc(r.name)}</td>
       <td style="font-family:monospace;font-size:12px">${esc(r.email)}</td>
-      <td>${r.is_admin ? '<span class="badge-admin">Admin</span>' : "Student"}</td>
+      <td>${r.is_admin ? '<span class="badge-admin">Admin</span> ' : ''}<span class="tag">${esc(getPortalRoleLabel(r.role))}</span></td>
       <td>${r.registered ? '<span class="badge-registered">Registered</span>' : '<span class="badge-pending">Pending</span>'}</td>
       <td style="color:#6b7280;font-size:12px">${formatDate(r.created_at)}</td>
       <td><button class="btn btn-danger" onclick="event.stopPropagation();removeStudent(${r.id})">Remove</button></td>
@@ -1178,6 +1191,8 @@ async function loadStudentDetail(rosterId, email) {
       el.innerHTML = '<span class="empty-note">Student record not found.</span>';
       return;
     }
+    const roleLabel = getPortalRoleLabel(data.student.role);
+    const isStaffFaculty = data.student.role === "staff_faculty";
     const prefs = data.preferences;
     const industries = prefs && prefs.selected_industries ? prefs.selected_industries : [];
     const areas = prefs && prefs.selected_areas ? prefs.selected_areas : [];
@@ -1190,8 +1205,15 @@ async function loadStudentDetail(rosterId, email) {
       return act ? act.title : 'Club #' + id;
     });
 
-    // Store current prefs for editing
+    // Store current data for editing
     el.dataset.email = email;
+    el.dataset.student = JSON.stringify({
+      id: rosterId,
+      name: data.student.name || "",
+      email: data.student.email || email,
+      role: data.student.role || "student",
+      is_admin: !!data.student.is_admin
+    });
     el.dataset.prefs = JSON.stringify({ selected_industries: industries, selected_areas: areas, email_alerts: prefs ? prefs.email_alerts : true, saved_opps: prefs && prefs.saved_opps ? prefs.saved_opps : [], joined_clubs: clubIds, internship_history: history });
 
     el.innerHTML = `
@@ -1200,11 +1222,23 @@ async function loadStudentDetail(rosterId, email) {
           ${data.student.avatar_url ? '<img src="' + esc(data.student.avatar_url) + '" style="width:32px;height:32px;border-radius:50%;border:1px solid #243044">' : ''}
           <div>
             <div style="font-size:14px;font-weight:600;color:#f5f0e8">${esc(data.student.name)}</div>
-            <span style="font-size:11px;color:#4b5563">Joined ${formatDate(data.student.created_at)} &middot; ${esc(data.student.email)}</span>
+            <span style="font-size:11px;color:#4b5563">Joined ${formatDate(data.student.created_at)} &middot; ${esc(data.student.email)} &middot; ${esc(roleLabel)}</span>
           </div>
         </div>
-        <button class="btn btn-gold" onclick="openProfileEdit('${esc(email)}', ${rosterId})">Edit Profile</button>
+        <button
+          class="btn btn-gold"
+          type="button"
+          data-email="${esc(data.student.email || email)}"
+          data-roster-id="${rosterId}"
+          onclick="event.stopPropagation(); openProfileEdit(this.dataset.email, Number(this.dataset.rosterId)); return false;"
+        >Edit Profile</button>
       </div>
+      ${isStaffFaculty ? `
+      <div class="detail-section">
+        <h4>Staff/Faculty Access</h4>
+        <p class="empty-note">This account has portal access without the student profile, club membership, interest selection, or internship history features.</p>
+      </div>
+      ` : `
       <div class="detail-grid" style="grid-template-columns:1fr 1fr 1fr;gap:16px">
         <div class="detail-section">
           <h4>Industry Interests</h4>
@@ -1242,6 +1276,7 @@ async function loadStudentDetail(rosterId, email) {
           `).join('') : '<p class="empty-note">No history recorded</p>'}
         </div>
       </div>
+      `}
     `;
   } catch (e) {
     el.innerHTML = '<span class="empty-note">Failed to load details.</span>';
@@ -1278,14 +1313,47 @@ const ALL_INDUSTRIES = [
 function openProfileEdit(email, rosterId) {
   const el = document.getElementById("detail-" + rosterId);
   if (!el) return;
+  const student = JSON.parse(el.dataset.student || "{}");
   const prefs = JSON.parse(el.dataset.prefs || '{}');
+  const isStaffFaculty = student.role === "staff_faculty";
   const industries = prefs.selected_industries || [];
   const history = prefs.internship_history || [];
 
   el.innerHTML = `
     <div style="border:1px solid #243044;padding:16px;background:#0d1520">
-      <h4 style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#c9a84c;margin-bottom:12px">Edit Profile — ${esc(email)}</h4>
+      <h4 style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#c9a84c;margin-bottom:12px">Edit Profile — ${esc(student.email || email)}</h4>
 
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+        <div>
+          <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;display:block;margin-bottom:8px">Name</label>
+          <input id="edit-student-name" value="${esc(student.name || "")}" style="width:100%;background:#111a26;color:#f5f0e8;border:1px solid #243044;padding:8px 10px;font-size:12px;font-family:inherit">
+        </div>
+        <div>
+          <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;display:block;margin-bottom:8px">Email</label>
+          <input id="edit-student-email" value="${esc(student.email || email)}" style="width:100%;background:#111a26;color:#f5f0e8;border:1px solid #243044;padding:8px 10px;font-size:12px;font-family:inherit">
+        </div>
+        <div>
+          <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;display:block;margin-bottom:8px">Role</label>
+          <select id="edit-student-role" style="width:100%;background:#111a26;color:#f5f0e8;border:1px solid #243044;padding:8px 10px;font-size:12px;font-family:inherit">
+            <option value="student"${student.role === "student" ? " selected" : ""}>Student</option>
+            <option value="staff_faculty"${student.role === "staff_faculty" ? " selected" : ""}>Staff/Faculty</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;display:block;margin-bottom:8px">Admin Access</label>
+          <label style="display:flex;align-items:center;gap:8px;height:36px;color:#f5f0e8;font-size:12px">
+            <input type="checkbox" id="edit-student-admin"${student.is_admin ? " checked" : ""}>
+            Admin
+          </label>
+        </div>
+      </div>
+
+      ${isStaffFaculty ? `
+      <div class="detail-section" style="margin-bottom:16px">
+        <h4>Staff/Faculty Access</h4>
+        <p class="empty-note">Staff/faculty accounts do not use the student interests, club membership, or internship history profile tools.</p>
+      </div>
+      ` : `
       <div style="margin-bottom:16px">
         <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;display:block;margin-bottom:8px">Industry Interests</label>
         <div style="display:flex;flex-wrap:wrap;gap:6px" id="edit-industries">
@@ -1302,6 +1370,7 @@ function openProfileEdit(email, rosterId) {
           ${history.length ? history.map((h, i) => historyRowHtml(h, i)).join('') : '<p class="empty-note" id="no-history-note">No history — click + Add</p>'}
         </div>
       </div>
+      `}
 
       <div style="display:flex;gap:8px;margin-top:12px">
         <button class="btn btn-gold" onclick="saveProfileEdit('${esc(email)}', ${rosterId})">Save</button>
@@ -1334,6 +1403,12 @@ function addHistoryRow() {
 
 async function saveProfileEdit(email, rosterId) {
   const el = document.getElementById("detail-" + rosterId);
+  const name = (document.getElementById("edit-student-name") || {}).value?.trim();
+  const nextEmail = ((document.getElementById("edit-student-email") || {}).value || "").trim().toLowerCase();
+  const role = (document.getElementById("edit-student-role") || {}).value || "student";
+  const is_admin = !!((document.getElementById("edit-student-admin") || {}).checked);
+  if (!name || !nextEmail) return toast("Name and email are required", true);
+
   // Collect industries
   const indTags = el.querySelectorAll("#edit-industries .edit-tag.selected");
   const selectedIndustries = Array.from(indTags).map(t => t.dataset.value);
@@ -1363,12 +1438,25 @@ async function saveProfileEdit(email, rosterId) {
   };
 
   try {
-    const res = await fetch("/api/admin/student/" + encodeURIComponent(email) + "/preferences", {
-      method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)
+    if (role !== "staff_faculty") {
+      const res = await fetch("/api/admin/student/" + encodeURIComponent(email) + "/preferences", {
+        method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)
+      });
+      if (!res.ok) { const d = await res.json(); toast(d.error || "Save failed", true); return; }
+    }
+
+    const rosterRes = await fetch("/api/admin/roster/" + rosterId, {
+      method: "PUT",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ name, email: nextEmail, role, is_admin })
     });
-    if (!res.ok) { const d = await res.json(); toast(d.error || "Save failed", true); return; }
+    const rosterData = await rosterRes.json();
+    if (!rosterRes.ok) { toast(rosterData.error || "Save failed", true); return; }
+
+    lastRoster = rosterData.roster || lastRoster;
+    filterRoster();
     toast("Profile updated");
-    loadStudentDetail(rosterId, email);
+    loadStudentDetail(rosterId, nextEmail);
   } catch (e) {
     toast("Failed to save", true);
   }
@@ -1377,19 +1465,21 @@ async function saveProfileEdit(email, rosterId) {
 async function addStudent() {
   const name = document.getElementById("roster-name").value.trim();
   const email = document.getElementById("roster-email").value.trim();
+  const role = document.getElementById("roster-role").value;
   const is_admin = document.getElementById("roster-admin").checked;
   if (!name || !email) return toast("Name and email are required", true);
   const res = await fetch("/api/admin/roster", {
     method: "POST", headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({ name, email, is_admin })
+    body: JSON.stringify({ name, email, role, is_admin })
   });
   const data = await res.json();
   if (!res.ok) return toast(data.error, true);
   document.getElementById("roster-name").value = "";
   document.getElementById("roster-email").value = "";
+  document.getElementById("roster-role").value = "student";
   document.getElementById("roster-admin").checked = false;
   lastRoster = data.roster; filterRoster();
-  toast("Student added to roster");
+  toast(getPortalRoleLabel(role) + " added to roster");
 }
 
 async function removeStudent(id) {
@@ -1685,15 +1775,36 @@ async function loadOpportunities() {
   const res = await fetch("/api/admin/opportunities");
   const data = await res.json();
   lastCustomOpps = data.opportunities;
-  renderOpportunities(data.opportunities);
+  renderOpportunities(getVisibleOppsForAdmin());
   filterExpired();
+}
+
+function getActiveOpps() {
+  const today = todayISO();
+  return lastCustomOpps.filter(o => {
+    const dateOnly = normalizeDateOnly(o.deadline);
+    return !dateOnly || dateOnly > today;
+  });
+}
+
+function getVisibleOppsForAdmin() {
+  const activeOpps = getActiveOpps();
+  const pendingOpps = lastCustomOpps.filter(o => o.status === "pending" && !activeOpps.some(active => active.id === o.id));
+  const visibleOpps = [...pendingOpps, ...activeOpps];
+  if (editingOppId === null) return visibleOpps;
+
+  const editingOpp = lastCustomOpps.find(o => o.id === editingOppId);
+  if (!editingOpp) return visibleOpps;
+  if (visibleOpps.some(o => o.id === editingOppId)) return visibleOpps;
+  return [editingOpp, ...visibleOpps];
 }
 
 function filterOpps() {
   const q = (document.getElementById("opp-search").value || "").toLowerCase();
-  if (!q) { renderOpportunities(lastCustomOpps); return; }
-  const filtered = lastCustomOpps.filter(o =>
-    (o.org + " " + o.title + " " + o.industry + " " + o.type + " " + o.location + " " + o.description).toLowerCase().includes(q)
+  const visibleOpps = getVisibleOppsForAdmin();
+  if (!q) { renderOpportunities(visibleOpps); return; }
+  const filtered = visibleOpps.filter(o =>
+    (o.org + " " + o.title + " " + o.industry + " " + o.type + " " + o.location + " " + o.description + " " + (o.submitted_by || "")).toLowerCase().includes(q)
   );
   renderOpportunities(filtered);
 }
@@ -1705,6 +1816,7 @@ function renderOpportunities(opps) {
   if (opps.length === 0) { body.innerHTML = ""; empty.style.display = "block"; return; }
   empty.style.display = "none";
   body.innerHTML = opps.map(o => {
+    const isPending = o.status === "pending";
     if (editingOppId === o.id) {
       return `<div class="opp-card editing">
         <div class="opp-edit-grid">
@@ -1759,10 +1871,10 @@ function renderOpportunities(opps) {
         </div>
       </div>`;
     }
-    return `<div class="opp-card">
+    return `<div class="opp-card" style="${isPending ? 'border-left:3px solid #d4a017;' : ''}">
       <div class="opp-card-header">
         <div class="opp-card-info">
-          <div class="opp-card-title">${esc(o.title)}</div>
+          <div class="opp-card-title">${esc(o.title)}${isPending ? ' <span class="badge-pending" style="margin-left:8px;color:#d4a017;background:rgba(212,160,23,0.12)">Pending Review</span>' : ''}</div>
           <div class="opp-card-org">${esc(o.org)}</div>
           <div class="opp-card-meta">
             ${o.industry ? '<span>' + esc(o.industry) + '</span>' : ''}
@@ -1774,10 +1886,12 @@ function renderOpportunities(opps) {
             ${o.paid ? '<span class="badge-paid">Paid</span>' : ''}
             ${o.detail_content ? '<span style="color:#6b7280;font-size:10px">Has detail page</span>' : ''}
           </div>
+          ${o.submitted_by ? '<div style="font-size:11px;color:#6b7280;margin-bottom:6px">Submitted by ' + esc(o.submitted_by) + '</div>' : ''}
           ${o.description ? '<div class="opp-card-desc">' + esc(o.description).substring(0, 200) + (o.description.length > 200 ? '...' : '') + '</div>' : ''}
         </div>
       </div>
       <div class="opp-card-actions">
+        ${isPending ? '<button class="btn btn-notify" onclick="approveOpp(' + o.id + ')">Approve</button>' : ''}
         <button class="btn btn-outline" onclick="startOppEdit(${o.id})">Edit</button>
         <button class="btn btn-danger" onclick="deleteOpp(${o.id})">Delete</button>
       </div>
@@ -1802,12 +1916,12 @@ let lastCustomOpps = [];
 
 function startOppEdit(id) {
   editingOppId = id;
-  renderOpportunities(lastCustomOpps);
+  renderOpportunities(getVisibleOppsForAdmin());
 }
 
 function cancelOppEdit() {
   editingOppId = null;
-  renderOpportunities(lastCustomOpps);
+  renderOpportunities(getVisibleOppsForAdmin());
 }
 
 async function saveOppEdit(id) {
@@ -1834,7 +1948,7 @@ async function saveOppEdit(id) {
   if (!res.ok) return toast(data.error, true);
   editingOppId = null;
   lastCustomOpps = data.opportunities;
-  renderOpportunities(data.opportunities);
+  renderOpportunities(getVisibleOppsForAdmin());
   filterExpired();
   toast("Opportunity updated");
 }
@@ -1867,7 +1981,7 @@ async function createOpp(notify) {
   document.getElementById("opp-type").selectedIndex = 0;
   document.getElementById("opp-paid").checked = false;
   lastCustomOpps = data.opportunities;
-  renderOpportunities(data.opportunities);
+  renderOpportunities(getVisibleOppsForAdmin());
   filterExpired();
   toast(notify ? `Opportunity created, ${data.notified} student(s) notified` : "Opportunity created");
 }
@@ -1877,9 +1991,19 @@ async function deleteOpp(id) {
   const res = await fetch("/api/admin/opportunities/" + id, { method: "DELETE" });
   const data = await res.json();
   lastCustomOpps = data.opportunities;
-  renderOpportunities(data.opportunities);
+  renderOpportunities(getVisibleOppsForAdmin());
   filterExpired();
   toast("Opportunity deleted");
+}
+
+async function approveOpp(id) {
+  const res = await fetch("/api/admin/opportunities/" + id + "/approve", { method: "PUT" });
+  const data = await res.json();
+  if (!res.ok) return toast(data.error || "Approval failed", true);
+  lastCustomOpps = data.opportunities;
+  renderOpportunities(getVisibleOppsForAdmin());
+  filterExpired();
+  toast("Opportunity approved and now public");
 }
 
 function attr(s) { return (s || '').replace(/"/g, '&quot;'); }
@@ -2061,7 +2185,7 @@ let googleCalendarPreview = [];
 let googleCalendarPreviewName = "";
 let googleCalendarImportFile = null;
 
-const EVENT_TYPES = ["Student Visit","VIP Event Partnership","Study Abroad","Summer Program","Seminar Series","Multiple Programs","Conference","Workshop","Academic Term Date"];
+const EVENT_TYPES = ["Student Visit","VIP Event Partnership","Study Abroad","Summer Program","Seminar Series","Multiple Programs","Conference","Workshop","Webinar","Academic Term Date"];
 const COMMUNITY_EVENT_TYPES = ["Student Life", "Residential Life"];
 const COMMUNITY_EVENT_TAGS = ["speaker", "food", "film", "deadline"];
 const COMMUNITY_EVENT_TAG_SET = new Set(COMMUNITY_EVENT_TAGS);
@@ -2396,7 +2520,7 @@ async function importSelectedGoogleCalendarEvents() {
   if (!res.ok) return toast(data.error || "Import failed", true);
 
   lastCustomOpps = data.opportunities || [];
-  renderOpportunities(lastCustomOpps);
+  renderOpportunities(getVisibleOppsForAdmin());
   lastEvents = data.events || [];
   filterEvents();
   filterCommunityEvents();
@@ -2449,7 +2573,7 @@ function filterEvents() {
   const programs = getProgramEvents(lastEvents);
   if (!q) { renderEvents(programs); return; }
   const filtered = programs.filter(e =>
-    (e.title + " " + e.org + " " + e.type + " " + e.description + " " + formatEventTagsInput(e.tags)).toLowerCase().includes(q)
+    (e.title + " " + e.org + " " + e.type + " " + e.description + " " + (e.application_deadline || "") + " " + formatEventTagsInput(e.tags)).toLowerCase().includes(q)
   );
   renderEvents(filtered);
 }
@@ -2563,6 +2687,7 @@ function renderEvents(events) {
             </select>
           </div>
           <div class="field"><label>Date</label><input id="edit-evt-date" type="date" min="${todayISO()}" value="${e.date || ''}"></div>
+          <div class="field"><label>Application Deadline</label><input id="edit-evt-application-deadline" type="date" value="${e.application_deadline || ''}"></div>
           <div class="field"><label>URL</label><input id="edit-evt-url" value="${attr(e.url || '')}"></div>
           <div class="field"><label>Image Path</label><input id="edit-evt-img" value="${attr(e.img || '')}"></div>
         </div>
@@ -2606,6 +2731,7 @@ function renderEvents(events) {
           <div class="opp-card-meta">
             ${e.type ? '<span>' + esc(e.type) + '</span>' : ''}
             <span>${e.date ? formatDate(e.date) : 'No date'}</span>
+            ${e.application_deadline ? '<span style="color:#c75c3a">Apply by ' + formatDate(e.application_deadline) + '</span>' : ''}
             ${e.url ? '<span><a href="' + attr(e.url) + '" target="_blank" style="color:#c9a84c;text-decoration:none">Link &rarr;</a></span>' : ''}
           </div>
           ${renderEventTagBadges(e.tags)}
@@ -2637,6 +2763,7 @@ async function saveEventEdit(id) {
     org: document.getElementById("edit-evt-org").value.trim(),
     type: normalizedType,
     date: document.getElementById("edit-evt-date").value || null,
+    application_deadline: existing.is_community ? null : (document.getElementById("edit-evt-application-deadline")?.value || null),
     url: document.getElementById("edit-evt-url").value.trim(),
     img: document.getElementById("edit-evt-img").value.trim() || null,
     tags: getSelectedEventTags("edit-evt-tags-picker"),
@@ -2667,6 +2794,7 @@ async function createEventAdmin() {
     org: document.getElementById("evt-org").value.trim(),
     type: document.getElementById("evt-type").value,
     date: document.getElementById("evt-date").value || null,
+    application_deadline: document.getElementById("evt-application-deadline").value || null,
     url: document.getElementById("evt-url").value.trim(),
     img: document.getElementById("evt-img").value.trim() || null,
     tags: getSelectedEventTags("evt-tags-picker"),
@@ -2682,7 +2810,7 @@ async function createEventAdmin() {
   });
   const data = await res.json();
   if (!res.ok) return toast(data.error, true);
-  ["evt-title","evt-org","evt-date","evt-url","evt-img","evt-desc"].forEach(id => document.getElementById(id).value = "");
+  ["evt-title","evt-org","evt-date","evt-application-deadline","evt-url","evt-img","evt-desc"].forEach(id => document.getElementById(id).value = "");
   setDetailFieldValue("evt-detail", "");
   document.getElementById("evt-type").selectedIndex = 0;
   renderStaticEventTagPickers();
@@ -2790,7 +2918,7 @@ function filterExpired() {
     let expiredPrograms = getExpiredProgramEvents();
     if (q) {
       expiredPrograms = expiredPrograms.filter(e =>
-        (e.title + " " + e.org + " " + e.type + " " + e.description + " " + e.url).toLowerCase().includes(q)
+        (e.title + " " + e.org + " " + e.type + " " + e.description + " " + e.url + " " + (e.application_deadline || "")).toLowerCase().includes(q)
       );
     }
     renderExpiredPrograms(expiredPrograms);
@@ -2851,6 +2979,7 @@ function renderExpiredPrograms(events) {
         <div class="opp-card-meta">
           ${e.type ? '<span>' + esc(e.type) + '</span>' : ''}
           <span style="color:#c75c3a">Expired ${formatDate(e.date)}</span>
+          ${e.application_deadline ? '<span style="color:#c9a84c">Applied by ' + formatDate(e.application_deadline) + '</span>' : ''}
           ${e.url ? '<span><a href="' + attr(e.url) + '" target="_blank" style="color:#c9a84c;text-decoration:none">Link &rarr;</a></span>' : ''}
         </div>
         ${e.description ? '<div class="opp-card-desc">' + esc(e.description).substring(0, 200) + (e.description.length > 200 ? '...' : '') + '</div>' : ''}

@@ -29,6 +29,7 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    role TEXT NOT NULL DEFAULT 'student',
     is_admin INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
@@ -39,6 +40,7 @@ db.exec(`
     name TEXT NOT NULL,
     google_sub TEXT UNIQUE,
     avatar_url TEXT,
+    role TEXT NOT NULL DEFAULT 'student',
     is_admin INTEGER NOT NULL DEFAULT 0,
     welcome_email_sent INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -93,6 +95,8 @@ db.exec(`
     logo TEXT,
     detail_content TEXT NOT NULL DEFAULT '',
     apply_url TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'approved',
+    submitted_by TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
@@ -106,6 +110,7 @@ db.exec(`
     detail_content TEXT NOT NULL DEFAULT '',
     url TEXT NOT NULL DEFAULT '',
     img TEXT,
+    application_deadline TEXT,
     tags TEXT NOT NULL DEFAULT '[]',
     is_community INTEGER NOT NULL DEFAULT 0,
     sub_page TEXT NOT NULL DEFAULT '',
@@ -148,8 +153,12 @@ db.exec(`
 // ─── MIGRATIONS (add columns to existing tables) ───
 try { db.exec("ALTER TABLE activities ADD COLUMN status TEXT NOT NULL DEFAULT 'approved'"); } catch (e) {}
 try { db.exec("ALTER TABLE activities ADD COLUMN submitted_by TEXT NOT NULL DEFAULT ''"); } catch (e) {}
+try { db.exec("ALTER TABLE roster ADD COLUMN role TEXT NOT NULL DEFAULT 'student'"); } catch (e) {}
+try { db.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'student'"); } catch (e) {}
 try { db.exec("ALTER TABLE opportunities ADD COLUMN detail_content TEXT NOT NULL DEFAULT ''"); } catch (e) {}
 try { db.exec("ALTER TABLE opportunities ADD COLUMN apply_url TEXT NOT NULL DEFAULT ''"); } catch (e) {}
+try { db.exec("ALTER TABLE opportunities ADD COLUMN status TEXT NOT NULL DEFAULT 'approved'"); } catch (e) {}
+try { db.exec("ALTER TABLE opportunities ADD COLUMN submitted_by TEXT NOT NULL DEFAULT ''"); } catch (e) {}
 try { db.exec("ALTER TABLE user_preferences ADD COLUMN club_email_prefs TEXT NOT NULL DEFAULT '{}'"); } catch (e) {}
 try { db.exec("ALTER TABLE activities ADD COLUMN detail_content TEXT NOT NULL DEFAULT ''"); } catch (e) {}
 try { db.exec("ALTER TABLE activities ADD COLUMN show_as_event INTEGER NOT NULL DEFAULT 0"); } catch (e) {}
@@ -159,6 +168,7 @@ try { db.exec("ALTER TABLE activities ADD COLUMN event_location TEXT NOT NULL DE
 try { db.exec("ALTER TABLE activities ADD COLUMN event_description TEXT NOT NULL DEFAULT ''"); } catch (e) {}
 try { db.exec("ALTER TABLE events ADD COLUMN is_community INTEGER NOT NULL DEFAULT 0"); } catch (e) {}
 try { db.exec("ALTER TABLE events ADD COLUMN detail_content TEXT NOT NULL DEFAULT ''"); } catch (e) {}
+try { db.exec("ALTER TABLE events ADD COLUMN application_deadline TEXT"); } catch (e) {}
 try { db.exec("ALTER TABLE events ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'"); } catch (e) {}
 try { db.exec("ALTER TABLE club_events ADD COLUMN description TEXT NOT NULL DEFAULT ''"); } catch (e) {}
 try { db.exec("ALTER TABLE club_events ADD COLUMN detail_content TEXT NOT NULL DEFAULT ''"); } catch (e) {}
@@ -166,7 +176,7 @@ try { db.exec("ALTER TABLE club_events ADD COLUMN detail_content TEXT NOT NULL D
 // ─── ROSTER ───
 
 const rosterInsert = db.prepare(
-  "INSERT OR IGNORE INTO roster (name, email, is_admin) VALUES (?, ?, ?)"
+  "INSERT OR IGNORE INTO roster (name, email, role, is_admin) VALUES (?, ?, ?, ?)"
 );
 const rosterAll = db.prepare(`
   SELECT r.*,
@@ -176,22 +186,30 @@ const rosterAll = db.prepare(`
   ORDER BY r.created_at DESC
 `);
 const rosterDelete = db.prepare("DELETE FROM roster WHERE id = ?");
+const rosterFindByIdStmt = db.prepare("SELECT * FROM roster WHERE id = ?");
 const rosterFindByEmailStmt = db.prepare(
   "SELECT * FROM roster WHERE LOWER(email) = LOWER(?)"
+);
+const rosterUpdateStmt = db.prepare(
+  "UPDATE roster SET name = ?, email = ?, role = ?, is_admin = ? WHERE id = ?"
 );
 
 function rosterFindByEmail(email) {
   return rosterFindByEmailStmt.get(email);
 }
 
-function addToRoster(name, email, isAdmin = 0) {
-  return rosterInsert.run(name, email, isAdmin ? 1 : 0);
+function getRosterById(id) {
+  return rosterFindByIdStmt.get(id);
+}
+
+function addToRoster(name, email, isAdmin = 0, role = "student") {
+  return rosterInsert.run(name, email, role || "student", isAdmin ? 1 : 0);
 }
 
 function bulkAddToRoster(rows) {
   const insert = db.transaction((entries) => {
     for (const { name, email } of entries) {
-      rosterInsert.run(name, email, 0);
+      rosterInsert.run(name, email, "student", 0);
     }
   });
   insert(rows);
@@ -205,6 +223,41 @@ function removeFromRoster(id) {
   return rosterDelete.run(id);
 }
 
+const syncRosterPerson = db.transaction(({ id, name, email, role, isAdmin }) => {
+  const existing = getRosterById(id);
+  if (!existing) throw new Error("Roster entry not found");
+
+  const duplicate = rosterFindByEmail(email);
+  if (duplicate && duplicate.id !== existing.id) {
+    throw new Error("A roster entry with that email already exists");
+  }
+
+  rosterUpdateStmt.run(name, email, role || "student", isAdmin ? 1 : 0, id);
+
+  const existingUser = userFindByEmail.get(existing.email);
+  if (existingUser) {
+    userUpdateIdentity.run(email, name, role || "student", isAdmin ? 1 : 0, existingUser.id);
+  }
+
+  if (String(existing.email).toLowerCase() !== String(email).toLowerCase()) {
+    db.prepare("UPDATE activities SET president_email = ? WHERE LOWER(president_email) = LOWER(?)").run(email, existing.email);
+    db.prepare("UPDATE activities SET submitted_by = ? WHERE LOWER(submitted_by) = LOWER(?)").run(email, existing.email);
+    db.prepare("UPDATE opportunities SET submitted_by = ? WHERE LOWER(submitted_by) = LOWER(?)").run(email, existing.email);
+  }
+
+  return getRosterById(id);
+});
+
+function updateRosterPerson(id, { name, email, role, isAdmin }) {
+  return syncRosterPerson({
+    id: Number(id),
+    name,
+    email,
+    role: role || "student",
+    isAdmin: !!isAdmin,
+  });
+}
+
 function isOnRoster(email) {
   return !!rosterFindByEmail(email);
 }
@@ -216,10 +269,16 @@ const userFindByEmail = db.prepare(
 );
 const userFindById = db.prepare("SELECT * FROM users WHERE id = ?");
 const userInsert = db.prepare(
-  "INSERT INTO users (email, name, google_sub, avatar_url, is_admin) VALUES (?, ?, ?, ?, ?)"
+  "INSERT INTO users (email, name, google_sub, avatar_url, role, is_admin) VALUES (?, ?, ?, ?, ?, ?)"
 );
 const userUpdate = db.prepare(
   "UPDATE users SET name = ?, google_sub = ?, avatar_url = ? WHERE id = ?"
+);
+const userUpdateIdentity = db.prepare(
+  "UPDATE users SET email = ?, name = ?, role = ?, is_admin = ? WHERE id = ?"
+);
+const userUpdateRole = db.prepare(
+  "UPDATE users SET role = ? WHERE id = ?"
 );
 const userMarkWelcomeEmailSent = db.prepare(
   "UPDATE users SET welcome_email_sent = 1 WHERE id = ?"
@@ -235,10 +294,14 @@ const userUpdateAdmin = db.prepare(
   "UPDATE users SET is_admin = ? WHERE id = ?"
 );
 
-function findOrCreateUser({ email, name, googleSub, avatarUrl, isAdmin }) {
+function findOrCreateUser({ email, name, googleSub, avatarUrl, role, isAdmin }) {
   let user = userFindByEmail.get(email);
   if (user) {
     userUpdate.run(name, googleSub, avatarUrl, user.id);
+    const nextRole = role || "student";
+    if (user.role !== nextRole) {
+      userUpdateRole.run(nextRole, user.id);
+    }
     // Sync admin status from roster
     const adminVal = isAdmin ? 1 : 0;
     if (user.is_admin !== adminVal) {
@@ -247,7 +310,7 @@ function findOrCreateUser({ email, name, googleSub, avatarUrl, isAdmin }) {
     const updated = userFindById.get(user.id);
     return { id: updated.id, isNew: false, welcome_email_sent: updated.welcome_email_sent };
   }
-  const info = userInsert.run(email, name, googleSub, avatarUrl, isAdmin ? 1 : 0);
+  const info = userInsert.run(email, name, googleSub, avatarUrl, role || "student", isAdmin ? 1 : 0);
   const newUser = userFindById.get(info.lastInsertRowid);
   return { id: newUser.id, isNew: true, welcome_email_sent: newUser.welcome_email_sent };
 }
@@ -336,17 +399,26 @@ const oppsAll = db.prepare(
   "SELECT * FROM opportunities ORDER BY created_at DESC"
 );
 const oppInsert = db.prepare(`
-  INSERT INTO opportunities (org, title, description, industry, type, location, deadline, paid, featured, logo, detail_content, apply_url)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO opportunities (org, title, description, industry, type, location, deadline, paid, featured, logo, detail_content, apply_url, status, submitted_by)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 const oppDelete = db.prepare("DELETE FROM opportunities WHERE id = ?");
+const oppById = db.prepare("SELECT * FROM opportunities WHERE id = ?");
 const oppUpdate = db.prepare(`
-  UPDATE opportunities SET org=?, title=?, description=?, industry=?, type=?, location=?, deadline=?, paid=?, featured=?, logo=?, detail_content=?, apply_url=?
+  UPDATE opportunities SET org=?, title=?, description=?, industry=?, type=?, location=?, deadline=?, paid=?, featured=?, logo=?, detail_content=?, apply_url=?, status=?, submitted_by=?
   WHERE id=?
 `);
+const oppApprove = db.prepare(
+  "UPDATE opportunities SET status = 'approved' WHERE id = ?"
+);
 
 function getAllOpportunities() {
   return oppsAll.all().map(({ featured, ...o }) => ({ ...o, paid: !!o.paid }));
+}
+
+function getOpportunityById(id) {
+  const opp = oppById.get(id);
+  return opp ? { ...opp, paid: !!opp.paid } : null;
 }
 
 function updateOpportunity(id, opp) {
@@ -356,7 +428,7 @@ function updateOpportunity(id, opp) {
     opp.location || "", opp.deadline || null,
     opp.paid ? 1 : 0, 0,
     opp.logo || null, opp.detail_content || "",
-    opp.apply_url || "", id
+    opp.apply_url || "", opp.status || "approved", opp.submitted_by || "", id
   );
 }
 
@@ -367,9 +439,13 @@ function createOpportunity(opp) {
     opp.location || "", opp.deadline || null,
     opp.paid ? 1 : 0, 0,
     opp.logo || null, opp.detail_content || "",
-    opp.apply_url || ""
+    opp.apply_url || "", opp.status || "approved", opp.submitted_by || ""
   );
   return info.lastInsertRowid;
+}
+
+function approveOpportunity(id) {
+  return oppApprove.run(id);
 }
 
 function deleteOpportunity(id) {
@@ -557,12 +633,12 @@ const eventsAll = db.prepare(
   "SELECT * FROM events ORDER BY date ASC"
 );
 const eventInsert = db.prepare(`
-  INSERT INTO events (title, date, type, org, description, detail_content, url, img, tags, is_community, sub_page)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO events (title, date, type, org, description, detail_content, url, img, application_deadline, tags, is_community, sub_page)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 const eventDelete = db.prepare("DELETE FROM events WHERE id = ?");
 const eventUpdate = db.prepare(`
-  UPDATE events SET title=?, date=?, type=?, org=?, description=?, detail_content=?, url=?, img=?, tags=?, is_community=?, sub_page=?
+  UPDATE events SET title=?, date=?, type=?, org=?, description=?, detail_content=?, url=?, img=?, application_deadline=?, tags=?, is_community=?, sub_page=?
   WHERE id=?
 `);
 
@@ -592,7 +668,7 @@ function createEvent(e) {
   const info = eventInsert.run(
     e.title, e.date || null, e.type || "",
     e.org || "", e.description || "", e.detail_content || "", e.url || "",
-    e.img || null, JSON.stringify(parseEventTags(e.tags)), e.is_community ? 1 : 0, e.sub_page || ""
+    e.img || null, e.application_deadline || null, JSON.stringify(parseEventTags(e.tags)), e.is_community ? 1 : 0, e.sub_page || ""
   );
   return info.lastInsertRowid;
 }
@@ -601,7 +677,7 @@ function updateEvent(id, e) {
   return eventUpdate.run(
     e.title, e.date || null, e.type || "",
     e.org || "", e.description || "", e.detail_content || "", e.url || "",
-    e.img || null, JSON.stringify(parseEventTags(e.tags)), e.is_community ? 1 : 0, e.sub_page || "", id
+    e.img || null, e.application_deadline || null, JSON.stringify(parseEventTags(e.tags)), e.is_community ? 1 : 0, e.sub_page || "", id
   );
 }
 
@@ -617,7 +693,7 @@ function seedEvents(events) {
       eventInsert.run(
         e.title, e.date || null, e.type || "",
         e.org || "", e.description || e.desc || "", e.detail_content || "", e.url || "",
-        e.img || null, JSON.stringify(parseEventTags(e.tags)), e.is_community ? 1 : 0, e.sub_page || e.subPage || ""
+        e.img || null, e.application_deadline || null, JSON.stringify(parseEventTags(e.tags)), e.is_community ? 1 : 0, e.sub_page || e.subPage || ""
       );
     }
   });
@@ -696,9 +772,14 @@ function seedAdminEmails(emails) {
     if (!trimmed) continue;
     const existing = rosterFindByEmailStmt.get(trimmed);
     if (!existing) {
-      rosterInsert.run(trimmed.split("@")[0], trimmed, 1);
-    } else if (!existing.is_admin) {
-      db.prepare("UPDATE roster SET is_admin = 1 WHERE id = ?").run(existing.id);
+      rosterInsert.run(trimmed.split("@")[0], trimmed, "staff_faculty", 1);
+    } else {
+      if (!existing.is_admin) {
+        db.prepare("UPDATE roster SET is_admin = 1 WHERE id = ?").run(existing.id);
+      }
+      if (!existing.role || existing.role === "student") {
+        db.prepare("UPDATE roster SET role = 'staff_faculty' WHERE id = ?").run(existing.id);
+      }
     }
   }
 }
@@ -716,7 +797,7 @@ function seedOpportunities(opps) {
         o.location || "", o.deadline || null,
         o.paid ? 1 : 0, 0,
         o.logo || null, o.detail_content || "",
-        o.apply_url || ""
+        o.apply_url || "", o.status || "approved", o.submitted_by || ""
       );
     }
   });
@@ -788,7 +869,9 @@ module.exports = {
   addToRoster,
   bulkAddToRoster,
   getAllRoster,
+  getRosterById,
   removeFromRoster,
+  updateRosterPerson,
   isOnRoster,
   findOrCreateUser,
   getUserById,
@@ -797,9 +880,11 @@ module.exports = {
   getPreferences,
   setPreferences,
   getAllOpportunities,
+  getOpportunityById,
   createOpportunity,
   updateOpportunity,
   deleteOpportunity,
+  approveOpportunity,
   getStudentsForNotification,
   seedAdminEmails,
   rosterFindByEmail,

@@ -89,6 +89,7 @@ const normalizeJoinedClubIds = (value) => {
 
 const CLUB_DETAIL_PAGE_PREFIX = "club-detail-";
 const CLUB_MANAGE_PAGE_PREFIX = "club-manage-";
+const isStaffFacultyUser = (user) => !!user && user.role === "staff_faculty";
 
 const parseClubSubPageId = (subPage, prefix) => {
   const raw = String(subPage || "");
@@ -193,6 +194,7 @@ const normalizeEventForDisplay = (event) => ({
   ...event,
   desc: event.description || event.desc || "",
   subPage: getEventSubPageId(event),
+  applicationDeadline: event.applicationDeadline || event.application_deadline || "",
   tags: normalizeEventTags(event.tags),
 });
 
@@ -1667,7 +1669,12 @@ const SUBPAGE_CONTENT = {
     title: "List a Club or Activity",
     backTo: "clubs",
     backLabel: "Back to Clubs",
-    render: () => {
+    render: ({currentUser} = {}) => {
+      if (isStaffFacultyUser(currentUser)) {
+        return React.createElement("div", {style:{maxWidth:560}},
+          React.createElement("p", {style:{fontSize:14,color:C.text,lineHeight:1.7,margin:0}}, "Club submissions are limited to students. Staff and faculty can still browse clubs and submit job opportunities from the Opportunities tab.")
+        );
+      }
       const inputStyle = {width:"100%",padding:"10px 12px",border:"1px solid "+C.border,fontSize:13,boxSizing:"border-box",fontFamily:"'Libre Franklin', sans-serif",backgroundColor:C.white};
       const labelStyle = {fontSize:11,fontWeight:600,color:C.textLight,textTransform:"uppercase",letterSpacing:"0.5px",display:"block",marginBottom:6};
       const [form, setForm] = React.useState({title:"",category:"Academic",desc:"",presidentEmail:""});
@@ -1770,11 +1777,12 @@ const TopNav = ({activeTab, subPage, navigate, onSignOut, currentUser}) => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const showProfile = !isStaffFacultyUser(currentUser);
   const tabs = [
     {id:"home",label:"Home",hasDropdown:true,hideArrow:true},
     {id:"opportunities",label:"Opportunities"},
     {id:"calendar",label:"Calendar"},
-    {id:"profile",label:"My Profile"},
+    ...(showProfile ? [{id:"profile",label:"My Profile"}] : []),
     {id:"community-events",label:"Community Events"},
     {id:"clubs",label:"Clubs"},
     {id:"events",label:"Programs & Travel",hasDropdown:true,hideArrow:true},
@@ -1902,7 +1910,7 @@ const TopNav = ({activeTab, subPage, navigate, onSignOut, currentUser}) => {
         </div>
         {profileOpen && (
           <div style={{position:"absolute",top:"100%",right:0,marginTop:4,backgroundColor:C.navy,border:"1px solid "+C.navyLight,minWidth:180,zIndex:20,boxShadow:"0 4px 16px rgba(0,0,0,0.3)"}}>
-            <div onClick={()=>{setProfileOpen(false);navigate("profile");}} style={{padding:"10px 20px",cursor:"pointer",fontSize:13,color:C.cream+"cc",borderBottom:"1px solid "+C.navyLight,transition:"all 0.15s ease"}} onMouseEnter={e=>e.target.style.backgroundColor=C.navyLight} onMouseLeave={e=>e.target.style.backgroundColor="transparent"}>My Profile</div>
+            {showProfile && <div onClick={()=>{setProfileOpen(false);navigate("profile");}} style={{padding:"10px 20px",cursor:"pointer",fontSize:13,color:C.cream+"cc",borderBottom:"1px solid "+C.navyLight,transition:"all 0.15s ease"}} onMouseEnter={e=>e.target.style.backgroundColor=C.navyLight} onMouseLeave={e=>e.target.style.backgroundColor="transparent"}>My Profile</div>}
             <div onClick={()=>{setProfileOpen(false);setBugModal(true);setBugText("");setBugSent(false);}} style={{padding:"10px 20px",cursor:"pointer",fontSize:13,color:C.cream+"cc",borderBottom:"1px solid "+C.navyLight,transition:"all 0.15s ease"}} onMouseEnter={e=>e.target.style.backgroundColor=C.navyLight} onMouseLeave={e=>e.target.style.backgroundColor="transparent"}>Report a Bug</div>
             <div onClick={()=>{setProfileOpen(false);onSignOut();}} style={{padding:"10px 20px",cursor:"pointer",fontSize:13,color:C.alert,transition:"all 0.15s ease"}} onMouseEnter={e=>e.target.style.backgroundColor=C.navyLight} onMouseLeave={e=>e.target.style.backgroundColor="transparent"}>Sign Out</div>
           </div>
@@ -1997,7 +2005,7 @@ const DetailPage = ({subPage, navigate, currentUser, showToast, serverActivities
         <div onClick={()=>navigate(backToTarget)} style={{cursor:"pointer",color:C.goldMuted,fontSize:13,fontWeight:500,marginBottom:24,display:"inline-flex",alignItems:"center",gap:6}}>
           {"\u25C0"} {backLabel}
         </div>
-        {page.render ? page.render() : <Section items={page.content}/>}
+        {page.render ? page.render({ currentUser, navigate, showToast }) : <Section items={page.content}/>} 
       </div>
 
     </div>
@@ -2059,17 +2067,20 @@ const HomePage = ({navigate}) => {
 };
 
 // ─── OPPORTUNITIES ───
-const OpportunitiesPage = ({navigate, showToast, savedOpps, setSavedOpps, selectedIndustries, serverOpps=[]}) => {
+const OpportunitiesPage = ({navigate, showToast, currentUser, savedOpps, setSavedOpps, selectedIndustries, serverOpps=[]}) => {
   const [search, setSearch] = useState("");
   const [filterInd, setFilterInd] = useState("All");
   const [filterType, setFilterType] = useState("All");
   const [sortBy, setSortBy] = useState("deadline");
   const [showSaved, setShowSaved] = useState(false);
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({org:"",title:"",description:"",industry:"Finance & Banking",type:"Internship",location:"",deadline:"",paid:false,contactEmail:""});
+  const [submitting, setSubmitting] = useState(false);
+  const [form, setForm] = useState({org:"",title:"",description:"",industry:"Finance & Banking",type:"Internship",location:"",deadline:"",paid:false,apply_url:""});
   const [visibleIds, setVisibleIds] = useState(new Set());
   const cardRefs = useRef({});
   const sidebarItemRefs = useRef({});
+  const isStaffFaculty = currentUser?.role === "staff_faculty";
+  const canSubmitOpportunity = isStaffFaculty;
 
   const allItemsRaw = (serverOpps || []).filter((o) => !isOpportunityExpired(o.deadline));
   const seenKeys = new Set();
@@ -2082,34 +2093,48 @@ const OpportunitiesPage = ({navigate, showToast, savedOpps, setSavedOpps, select
   const availableIndustries = [...new Set(allItems.map(i => i.industry).filter(Boolean))];
   const availableTypes = [...new Set(allItems.map(i => i.type).filter(Boolean))];
   const filtered = allItems.filter(i => {
-    if (showSaved && !savedOpps.includes(i.id)) return false;
+    if (!isStaffFaculty && showSaved && !savedOpps.includes(i.id)) return false;
     const ms = i.title.toLowerCase().includes(search.toLowerCase()) || i.org.toLowerCase().includes(search.toLowerCase());
-    const mi = filterInd==="All" || i.industry===filterInd;
-    const mt = filterType==="All" || i.type===filterType;
+    const mi = filterInd === "All" || i.industry === filterInd;
+    const mt = filterType === "All" || i.type === filterType;
     return ms && mi && mt;
   }).sort((a,b) => {
-    if (sortBy==="deadline") return getOpportunityDeadlineSortValue(a.deadline) - getOpportunityDeadlineSortValue(b.deadline);
-    if (sortBy==="org") return a.org.localeCompare(b.org);
-    if (sortBy==="title") return a.title.localeCompare(b.title);
-    if (sortBy==="type") return a.type.localeCompare(b.type);
+    if (sortBy === "deadline") return getOpportunityDeadlineSortValue(a.deadline) - getOpportunityDeadlineSortValue(b.deadline);
+    if (sortBy === "org") return a.org.localeCompare(b.org);
+    if (sortBy === "title") return a.title.localeCompare(b.title);
+    if (sortBy === "type") return a.type.localeCompare(b.type);
     return 0;
   });
 
   const toggleSave = (id) => setSavedOpps(prev => prev.includes(id) ? prev.filter(x=>x!==id) : [...prev, id]);
   const isSaved = (id) => savedOpps.includes(id);
-  const matches = (ind) => selectedIndustries.includes(ind);
+  const matches = (ind) => !isStaffFaculty && selectedIndustries.includes(ind);
 
-  const submitListing = () => {
-    if (!form.org || !form.title) return;
-    const newItem = {...form, deadline:form.deadline||"2026-06-01"};
-    api("/api/admin/opportunities", { method: "POST", body: JSON.stringify({ opportunity: newItem }) })
-      .then(() => showToast("Your listing has been submitted!"))
-      .catch(() => showToast("Submission failed — you may need admin access"));
-    setForm({org:"",title:"",description:"",industry:"Finance & Banking",type:"Internship",location:"",deadline:"",paid:false,contactEmail:""});
+  const resetSubmissionForm = () => {
+    setForm({org:"",title:"",description:"",industry:"Finance & Banking",type:"Internship",location:"",deadline:"",paid:false,apply_url:""});
     setShowModal(false);
+    setSubmitting(false);
   };
 
-  // Track which cards are visible via IntersectionObserver
+  const submitListing = async () => {
+    if (!form.org || !form.title || !form.description) {
+      showToast("Organization, title, and description are required");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await api("/api/opportunities/submissions", {
+        method: "POST",
+        body: JSON.stringify({ opportunity: form })
+      });
+      showToast("Opportunity submitted for admin review");
+      resetSubmissionForm();
+    } catch (err) {
+      showToast("Submission failed");
+      setSubmitting(false);
+    }
+  };
+
   useEffect(() => {
     const observer = new IntersectionObserver((entries) => {
       setVisibleIds(prev => {
@@ -2123,9 +2148,8 @@ const OpportunitiesPage = ({navigate, showToast, savedOpps, setSavedOpps, select
     }, { rootMargin: "-80px 0px -40% 0px", threshold: 0 });
     Object.values(cardRefs.current).forEach(el => { if (el) observer.observe(el); });
     return () => observer.disconnect();
-  }, [filtered.length, search, filterInd, filterType, sortBy, showSaved]);
+  }, [filtered.length, search, filterInd, filterType, sortBy, showSaved, isStaffFaculty]);
 
-  // Auto-scroll sidebar to first visible item
   useEffect(() => {
     if (visibleIds.size === 0) return;
     const firstVisible = filtered.find(item => visibleIds.has(String(item.id)));
@@ -2139,14 +2163,14 @@ const OpportunitiesPage = ({navigate, showToast, savedOpps, setSavedOpps, select
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
-  const typeTip = {Internship:"Short-term work experience, typically 1 semester or summer",Fellowship:"Competitive program with stipend, mentorship, and structured curriculum",Program:"Training, placement, or certification-based opportunity"};
+  const typeTip = {Internship:"Short-term work experience, typically 1 semester or summer",Fellowship:"Competitive program with stipend, mentorship, and structured curriculum",Program:"Training, placement, or certification-based opportunity",Job:"Full-time or part-time role"};
   const sel = {padding:"8px 12px",border:"1px solid "+C.border,backgroundColor:C.white,fontSize:13,color:C.text,fontFamily:"'Libre Franklin', sans-serif",cursor:"pointer",minWidth:160};
-  const inputStyle = {width:"100%",padding:8,border:"1px solid "+C.border,fontSize:13,boxSizing:"border-box",fontFamily:"'Libre Franklin', sans-serif"};
+  const inputStyle = {width:"100%",padding:10,border:"1px solid "+C.border,fontSize:13,boxSizing:"border-box",fontFamily:"'Libre Franklin', sans-serif",backgroundColor:C.white};
+  const labelStyle = {fontSize:11,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:"0.05em",display:"block",marginBottom:6};
 
   return (
     <div style={{animation:"fadeIn 0.3s ease"}}>
       <div style={{display:"flex",alignItems:"stretch",minHeight:"calc(100vh - 72px)"}}>
-        {/* Sidebar — full-height nav */}
         <div data-lenis-prevent style={{width:260,flexShrink:0,backgroundColor:C.navy,overflowY:"auto",position:"sticky",top:72,height:"calc(100vh - 72px)",padding:"20px 0",borderRight:"1px solid "+C.navyLight}}>
           <div style={{padding:"0 20px 14px",borderBottom:"1px solid "+C.navyLight,marginBottom:6}}>
             <div style={{fontSize:14,fontWeight:700,color:C.cream,letterSpacing:"0.3px"}}>Opportunities</div>
@@ -2170,14 +2194,17 @@ const OpportunitiesPage = ({navigate, showToast, savedOpps, setSavedOpps, select
           })}
         </div>
 
-        {/* Main content — cards */}
         <div style={{flex:1,minWidth:0,padding:"24px 40px"}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
-            <h1 style={{fontFamily:"Georgia, serif",fontSize:26,color:C.navy,margin:0}}>Job & Internship Opportunities</h1>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:16,marginBottom:20,flexWrap:"wrap"}}>
+            <div>
+              <h1 style={{fontFamily:"Georgia, serif",fontSize:26,color:C.navy,margin:0}}>Job & Internship Opportunities</h1>
+              {canSubmitOpportunity && <p style={{fontSize:12,color:C.textLight,margin:"8px 0 0",maxWidth:620}}>Staff and faculty can submit opportunities for admin review. Approved listings will appear here for students.</p>}
+            </div>
+            {canSubmitOpportunity && <Btn onClick={()=>setShowModal(true)}>Submit Opportunity</Btn>}
           </div>
           <div style={{display:"flex",gap:10,marginBottom:20,alignItems:"center",flexWrap:"wrap"}}>
             <input type="text" placeholder="Search opportunities..." value={search} onChange={e=>setSearch(e.target.value)} style={{flex:1,minWidth:180,padding:"9px 14px",border:"1px solid "+C.border,fontSize:13,fontFamily:"'Libre Franklin', sans-serif",backgroundColor:C.white}}/>
-            <div onClick={()=>setShowSaved(!showSaved)} style={{padding:"7px 12px",border:"1px solid "+(showSaved?C.gold:C.border),backgroundColor:showSaved?C.gold+"15":C.white,cursor:"pointer",display:"flex",alignItems:"center",gap:6,fontSize:12,fontWeight:showSaved?600:400,color:showSaved?C.goldMuted:C.textLight,transition:"all 0.15s ease",whiteSpace:"nowrap"}}><span style={{fontSize:16,lineHeight:1}}>{showSaved?"\u2605":"\u2606"}</span> Saved{savedOpps.length>0?" ("+savedOpps.length+")":""}</div>
+            {!isStaffFaculty && <div onClick={()=>setShowSaved(!showSaved)} style={{padding:"7px 12px",border:"1px solid "+(showSaved?C.gold:C.border),backgroundColor:showSaved?C.gold+"15":C.white,cursor:"pointer",display:"flex",alignItems:"center",gap:6,fontSize:12,fontWeight:showSaved?600:400,color:showSaved?C.goldMuted:C.textLight,transition:"all 0.15s ease",whiteSpace:"nowrap"}}><span style={{fontSize:16,lineHeight:1}}>{showSaved?"?":"?"}</span> Saved{savedOpps.length>0?" ("+savedOpps.length+")":""}</div>}
             {availableIndustries.length > 1 && <select value={filterInd} onChange={e=>setFilterInd(e.target.value)} style={sel}>
               <option value="All">All Industries</option>
               {availableIndustries.map(ind=><option key={ind} value={ind}>{ind}</option>)}
@@ -2208,7 +2235,7 @@ const OpportunitiesPage = ({navigate, showToast, savedOpps, setSavedOpps, select
                       <div style={{fontSize:16,fontWeight:700,color:C.navy,fontFamily:"Georgia, serif"}}>{item.org}</div>
                       {item.location && <div style={{fontSize:12,color:C.textLight}}>{item.location}</div>}
                     </div>
-                    <div onClick={e=>{e.stopPropagation();toggleSave(item.id);}} style={{cursor:"pointer",fontSize:24,color:isSaved(item.id)?C.gold:C.border,transition:"color 0.2s",lineHeight:1}} title={isSaved(item.id)?"Unsave":"Save"}>{isSaved(item.id)?"\u2605":"\u2606"}</div>
+                    {!isStaffFaculty && <div onClick={e=>{e.stopPropagation();toggleSave(item.id);}} style={{cursor:"pointer",fontSize:24,color:isSaved(item.id)?C.gold:C.border,transition:"color 0.2s",lineHeight:1}} title={isSaved(item.id)?"Unsave":"Save"}>{isSaved(item.id)?"?":"?"}</div>}
                   </div>
                   <div style={{fontSize:15,fontWeight:600,color:C.navy,marginBottom:8}}>{item.title}</div>
                   <p style={{fontSize:13,color:C.text,lineHeight:1.7,margin:"0 0 16px"}}>{item.description}</p>
@@ -2220,7 +2247,7 @@ const OpportunitiesPage = ({navigate, showToast, savedOpps, setSavedOpps, select
                 </div>
                 <div style={{padding:"12px 28px",borderTop:"1px solid "+C.border,backgroundColor:C.cream,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                   <div style={{fontSize:12,color:C.alert,fontWeight:600}}>Deadline: {formatOpportunityDeadline(item.deadline)}</div>
-                  {item.subPage && <span style={{fontSize:12,fontWeight:600,color:C.navy}}>View Details &rarr;</span>}
+                  {item.subPage && <span style={{fontSize:12,fontWeight:600,color:C.navy}}>View Details ?</span>}
                 </div>
               </div>
             ))}
@@ -2228,11 +2255,71 @@ const OpportunitiesPage = ({navigate, showToast, savedOpps, setSavedOpps, select
         </div>
       </div>
 
+      {showModal && (
+        <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,backgroundColor:"rgba(0,0,0,0.55)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}} onClick={()=>!submitting && resetSubmissionForm()}>
+          <div style={{width:"100%",maxWidth:720,backgroundColor:C.cream,border:"1px solid "+C.border,boxShadow:"0 18px 60px rgba(0,0,0,0.25)",padding:24}} onClick={e=>e.stopPropagation()}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,marginBottom:18}}>
+              <div>
+                <h2 style={{fontFamily:"Georgia, serif",fontSize:22,color:C.navy,margin:"0 0 6px"}}>Submit Opportunity</h2>
+                <p style={{fontSize:12,color:C.textLight,margin:0}}>This will go to admin for approval before students can see it. Follow-up questions will go to {currentUser?.email || "your account"}.</p>
+              </div>
+              <button onClick={resetSubmissionForm} style={{border:"none",background:"transparent",cursor:"pointer",fontSize:20,color:C.textLight,lineHeight:1}}>?</button>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(2, minmax(0, 1fr))",gap:14}}>
+              <div>
+                <label style={labelStyle}>Organization</label>
+                <input value={form.org} onChange={e=>setForm({...form, org:e.target.value})} style={inputStyle}/>
+              </div>
+              <div>
+                <label style={labelStyle}>Title</label>
+                <input value={form.title} onChange={e=>setForm({...form, title:e.target.value})} style={inputStyle}/>
+              </div>
+              <div>
+                <label style={labelStyle}>Industry</label>
+                <select value={form.industry} onChange={e=>setForm({...form, industry:e.target.value})} style={inputStyle}>
+                  {INDUSTRIES.map(ind => <option key={ind} value={ind}>{ind}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={labelStyle}>Type</label>
+                <select value={form.type} onChange={e=>setForm({...form, type:e.target.value})} style={inputStyle}>
+                  {["Internship","Fellowship","Program","Job"].map(type => <option key={type} value={type}>{type}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={labelStyle}>Location</label>
+                <input value={form.location} onChange={e=>setForm({...form, location:e.target.value})} style={inputStyle}/>
+              </div>
+              <div>
+                <label style={labelStyle}>Deadline</label>
+                <input type="date" value={form.deadline} onChange={e=>setForm({...form, deadline:e.target.value})} style={inputStyle}/>
+              </div>
+            </div>
+            <div style={{marginTop:14}}>
+              <label style={labelStyle}>Description</label>
+              <textarea value={form.description} onChange={e=>setForm({...form, description:e.target.value})} rows={5} style={{...inputStyle,resize:"vertical"}}/>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"minmax(0, 1fr) auto",gap:14,alignItems:"end",marginTop:14}}>
+              <div>
+                <label style={labelStyle}>Apply URL (optional)</label>
+                <input value={form.apply_url} onChange={e=>setForm({...form, apply_url:e.target.value})} placeholder="https://..." style={inputStyle}/>
+              </div>
+              <label style={{display:"flex",alignItems:"center",gap:8,fontSize:12,color:C.text,cursor:"pointer",paddingBottom:10}}>
+                <input type="checkbox" checked={form.paid} onChange={e=>setForm({...form, paid:e.target.checked})} style={{accentColor:C.gold}}/>
+                Paid
+              </label>
+            </div>
+            <div style={{display:"flex",justifyContent:"flex-end",gap:10,marginTop:20}}>
+              <Btn variant="ghost" onClick={resetSubmissionForm}>Cancel</Btn>
+              <Btn onClick={submitListing}>{submitting ? "Submitting..." : "Submit for Review"}</Btn>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
-// ─── CALENDAR ───
 const CalendarPage = ({allInternships, navigate, serverActivities=[], serverEvents=[], allClubEvents=[]}) => {
   const [calMonth, setCalMonth] = useState(() => new Date().getMonth());
   const [calYear, setCalYear] = useState(() => new Date().getFullYear());
@@ -2908,6 +2995,7 @@ const ProfilePage = ({showToast, selectedIndustries, setSelectedIndustries, sele
   const [editingId, setEditingId] = useState(null);
   const emptyEntry = {org:"",role:"",industry:"Finance & Banking",startDate:"",endDate:"",isCurrent:false,description:"",summary:"",careerNotes:""};
   const [entry, setEntry] = useState(emptyEntry);
+  const isStaffFaculty = isStaffFacultyUser(currentUser);
 
   const toggleInd = (ind) => setSelectedIndustries(prev => prev.includes(ind) ? prev.filter(i=>i!==ind) : [...prev,ind]);
   const toggleArea = (area) => setSelectedAreas(prev => prev.includes(area) ? prev.filter(a=>a!==area) : [...prev,area]);
@@ -2965,6 +3053,25 @@ const ProfilePage = ({showToast, selectedIndustries, setSelectedIndustries, sele
   };
 
   const inputStyle = {width:"100%",padding:8,border:"1px solid "+C.border,fontSize:13,boxSizing:"border-box",fontFamily:"'Libre Franklin', sans-serif"};
+
+  if (isStaffFaculty) {
+    return (
+      <div style={{padding:"32px 40px",animation:"fadeIn 0.3s ease"}}>
+        <h1 style={{fontFamily:"Georgia, serif",fontSize:26,color:C.navy,margin:"0 0 20px"}}>Portal Access</h1>
+        <div style={{maxWidth:720,backgroundColor:C.white,border:"1px solid "+C.border,padding:24}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:16,flexWrap:"wrap"}}>
+            <div>
+              <div style={{fontSize:12,fontWeight:700,color:C.goldMuted,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8}}>Staff / Faculty</div>
+              <h2 style={{fontFamily:"Georgia, serif",fontSize:22,color:C.navy,margin:"0 0 10px"}}>{currentUser?.name || "Portal User"}</h2>
+              <p style={{fontSize:14,color:C.text,lineHeight:1.7,margin:"0 0 14px"}}>Your account can browse the portal and submit job opportunities for admin review. Student-only profile tools, club membership, interests, and internship history are intentionally disabled for this role.</p>
+              <div style={{fontSize:12,color:C.textLight}}>{currentUser?.email || ""}</div>
+            </div>
+            <Btn onClick={()=>navigate("opportunities")}>Submit Opportunity</Btn>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{padding:"32px 40px",animation:"fadeIn 0.3s ease"}}>
@@ -3148,10 +3255,11 @@ const ProfilePage = ({showToast, selectedIndustries, setSelectedIndustries, sele
 };
 
 // ─── COMMUNITY ───
-const CommunityPage = ({mode="all", joinedClubs, setJoinedClubs, clubEmailPrefs={}, setClubEmailPrefs, showToast, serverActivities, navigate, refreshActivities, serverEvents=[], allClubEvents=[]}) => {
+const CommunityPage = ({mode="all", joinedClubs, setJoinedClubs, clubEmailPrefs={}, setClubEmailPrefs, showToast, serverActivities, navigate, refreshActivities, serverEvents=[], allClubEvents=[], currentUser}) => {
   useEffect(() => { refreshActivities(); }, []);
   const [selectedCommunityTypes, setSelectedCommunityTypes] = useState([]);
   const [selectedCommunityTags, setSelectedCommunityTags] = useState([]);
+  const isStaffFaculty = isStaffFacultyUser(currentUser);
   const isJoined = (id) => {
     const clubId = normalizeClubId(id);
     return clubId !== null && joinedClubs.includes(clubId);
@@ -3351,24 +3459,32 @@ const CommunityPage = ({mode="all", joinedClubs, setJoinedClubs, clubEmailPrefs=
           <h1 style={{fontFamily:"Georgia, serif",fontSize:26,color:C.navy,margin:0}}>Clubs & Activities</h1>
           <p style={{color:C.textLight,fontSize:13,margin:"6px 0 0"}}>Student activities, clubs, and campus life</p>
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:10,marginLeft:"auto"}}>
-          <div style={{backgroundColor:C.gold+"15",border:"1px solid "+C.gold+"40",padding:"10px 12px",display:"flex",alignItems:"center",gap:8,maxWidth:640}}>
-            <span style={{fontSize:16,flexShrink:0}}>{"\u2709"}</span>
-            <p style={{fontSize:13,color:C.text,margin:0,lineHeight:1.5}}>Run a club or activity? List it here so other students can find and join.</p>
+        {!isStaffFaculty && (
+          <div style={{display:"flex",alignItems:"center",gap:10,marginLeft:"auto"}}>
+            <div style={{backgroundColor:C.gold+"15",border:"1px solid "+C.gold+"40",padding:"10px 12px",display:"flex",alignItems:"center",gap:8,maxWidth:640}}>
+              <span style={{fontSize:16,flexShrink:0}}>{"✉"}</span>
+              <p style={{fontSize:13,color:C.text,margin:0,lineHeight:1.5}}>Run a club or activity? List it here so other students can find and join.</p>
+            </div>
+            <Btn size="sm" onClick={()=>navigate("submit-activity")}>List Your Club</Btn>
           </div>
-          <Btn size="sm" onClick={()=>navigate("submit-activity")}>List Your Club</Btn>
-        </div>
+        )}
       </div>
+      {isStaffFaculty && (
+        <div style={{marginBottom:16,backgroundColor:C.white,border:"1px solid "+C.border,padding:"12px 16px",fontSize:13,color:C.textLight}}>
+          Staff and faculty can browse clubs, but club membership and student submissions are limited to students.
+        </div>
+      )}
       <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:16}}>
         {allActivities.map(club => {
           const nextClubEvent = nextClubEventById.get(normalizeClubId(club.id));
+          const joined = !isStaffFaculty && isJoined(club.id);
           return (
             <div
               key={club.id}
               style={{backgroundColor:C.white,border:"1px solid "+C.border,overflow:"hidden",cursor:"pointer"}}
               onClick={() => navigate(CLUB_DETAIL_PAGE_PREFIX + club.id)}
             >
-              <div style={{height:8,backgroundColor:isJoined(club.id)?C.gold:C.navy}}/>
+              <div style={{height:8,backgroundColor:joined?C.gold:C.navy}}/>
               <div style={{padding:20}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
                   <h3 style={{fontFamily:"Georgia, serif",fontSize:16,color:C.navy,margin:0}}>{club.title}</h3>
@@ -3389,17 +3505,19 @@ const CommunityPage = ({mode="all", joinedClubs, setJoinedClubs, clubEmailPrefs=
                 )}
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:12,borderTop:"1px solid "+C.border}}>
                   <span style={{fontSize:11,color:C.textLight}}>{club.members} member{club.members!==1?"s":""}{club.meetDay?" · "+club.meetDay:""}</span>
-                  <div style={{display:"flex",alignItems:"center",gap:8}}>
-                    {isJoined(club.id) && (
-                      <div style={{display:"flex",alignItems:"center",gap:6}}>
-                        <div onClick={(e)=>{e.stopPropagation();toggleClubEmails(club.id, club.title);}} style={{width:30,height:17,borderRadius:9,cursor:"pointer",backgroundColor:isClubEmailsEnabled(club.id)?C.gold:C.border,position:"relative",transition:"background-color 0.2s ease"}}>
-                          <div style={{width:13,height:13,borderRadius:"50%",backgroundColor:C.white,position:"absolute",top:2,left:isClubEmailsEnabled(club.id)?15:2,transition:"left 0.2s ease"}}/>
+                  {!isStaffFaculty && (
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      {joined && (
+                        <div style={{display:"flex",alignItems:"center",gap:6}}>
+                          <div onClick={(e)=>{e.stopPropagation();toggleClubEmails(club.id, club.title);}} style={{width:30,height:17,borderRadius:9,cursor:"pointer",backgroundColor:isClubEmailsEnabled(club.id)?C.gold:C.border,position:"relative",transition:"background-color 0.2s ease"}}>
+                            <div style={{width:13,height:13,borderRadius:"50%",backgroundColor:C.white,position:"absolute",top:2,left:isClubEmailsEnabled(club.id)?15:2,transition:"left 0.2s ease"}}/>
+                          </div>
+                          <span style={{fontSize:10,color:C.textLight}}>Emails</span>
                         </div>
-                        <span style={{fontSize:10,color:C.textLight}}>Emails</span>
-                      </div>
-                    )}
-                    <Btn size="sm" variant={isJoined(club.id)?"primary":"secondary"} onClick={(e)=>{e.stopPropagation();toggleJoin(club);}}>{isJoined(club.id)?"Joined":"Join Club"}</Btn>
-                  </div>
+                      )}
+                      <Btn size="sm" variant={joined?"primary":"secondary"} onClick={(e)=>{e.stopPropagation();toggleJoin(club);}}>{joined?"Joined":"Join Club"}</Btn>
+                    </div>
+                  )}
                 </div>
                 <div style={{fontSize:12,color:C.navy,fontWeight:600,paddingTop:8}}>View Club Details &rarr;</div>
               </div>
@@ -3449,8 +3567,11 @@ const EventsPage = ({navigate, serverEvents=[]}) => {
                 {event.url && <a href={event.url} target="_blank" rel="noopener noreferrer" style={{fontSize:11,color:C.goldMuted,textDecoration:"none",fontWeight:500}}>{"\u2197"} Website</a>}
               </div>
               <p style={{fontSize:13,color:C.textLight,lineHeight:1.5,margin:"10px 0",flex:1}}>{event.desc}</p>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:12,borderTop:"1px solid "+C.border}}>
-                <span style={{fontSize:12,color:C.text,fontWeight:600}}>{new Date(event.date).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"})}</span>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:12,borderTop:"1px solid "+C.border,gap:12}}>
+                <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                  <span style={{fontSize:12,color:C.text,fontWeight:600}}>{new Date(event.date).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"})}</span>
+                  {event.applicationDeadline && <span style={{fontSize:11,color:C.alert,fontWeight:700}}>Apply by {formatEventDateLabel(event.applicationDeadline)}</span>}
+                </div>
                 <Btn size="sm" onClick={()=>navigate(event.subPage)}>Learn More</Btn>
               </div>
             </div>
@@ -3600,10 +3721,28 @@ const App = () => {
 
   // Toast state
   const [toasts, setToasts] = useState([]);
+  const isStaffFaculty = isStaffFacultyUser(currentUser);
   const showToast = (msg) => {
     const id = Date.now();
     setToasts(prev => [...prev, {id, msg}]);
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3500);
+  };
+
+  const resetStudentState = () => {
+    setSavedOpps([]);
+    setJoinedClubs([]);
+    setClubEmailPrefs({});
+    setSelectedIndustries([]);
+    setSelectedAreas([]);
+    setEmailAlerts(true);
+    setInternshipHistory([]);
+    save("savedOpps", []);
+    save("joinedClubs", []);
+    save("clubEmailPrefs", {});
+    save("industries", []);
+    save("areas", []);
+    save("emailAlerts", true);
+    save("history", []);
   };
 
   // Check for existing session on mount
@@ -3612,7 +3751,8 @@ const App = () => {
       if (data.user) {
         _lsUserId = data.user.id;
         setCurrentUser(data.user);
-        loadServerPrefs();
+        if (isStaffFacultyUser(data.user)) resetStudentState();
+        else loadServerPrefs();
         loadServerOpps();
         loadServerActivities();
         loadServerEvents();
@@ -3697,6 +3837,7 @@ const App = () => {
             e.type = normalizeCommunityEventCategory(e.type);
           }
           const detailText = (e.detail_content || "").trim();
+          e.applicationDeadline = e.applicationDeadline || e.application_deadline || "";
           const pageKey = "event-server-" + e.id;
 
           if (!detailText) {
@@ -3707,7 +3848,8 @@ const App = () => {
 
           const content = [];
           const dateStr = e.date ? new Date(e.date).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"}) : "Date TBD";
-          content.push({p:'<strong style="color:#c9a84c">' + (e.type || "Event") + "</strong>" + (e.org ? " &middot; " + e.org : "") + " &middot; " + dateStr});
+          const applicationDeadlineStr = e.applicationDeadline ? " &middot; Apply by " + formatEventDateLabel(e.applicationDeadline) : "";
+          content.push({p:'<strong style="color:#c9a84c">' + (e.type || "Event") + "</strong>" + (e.org ? " &middot; " + e.org : "") + " &middot; " + dateStr + applicationDeadlineStr});
           content.push({hr:true});
           content.push(...parseRichDetailContent(detailText));
           if (e.url) {
@@ -3776,7 +3918,7 @@ const App = () => {
   prefsRef.current = { selected_industries: selectedIndustries, selected_areas: selectedAreas, email_alerts: emailAlerts, saved_opps: savedOpps, joined_clubs: normalizeJoinedClubIds(joinedClubs), club_email_prefs: clubEmailPrefs, internship_history: internshipHistory };
 
   const syncToServer = () => {
-    if (!currentUser) return;
+    if (!currentUser || isStaffFacultyUser(currentUser)) return;
     debouncedSync.current(prefsRef.current);
   };
 
@@ -3793,7 +3935,8 @@ const App = () => {
   const handleSignIn = (user) => {
     _lsUserId = user.id;
     setCurrentUser(user);
-    loadServerPrefs();
+    if (isStaffFacultyUser(user)) resetStudentState();
+    else loadServerPrefs();
     loadServerOpps();
     loadServerActivities();
     loadServerEvents();
@@ -3810,8 +3953,15 @@ const App = () => {
   };
 
   // Navigation with browser history support
-  const mainTabs = ["home","opportunities","calendar","profile","community-events","clubs","events"];
+  const mainTabs = isStaffFaculty ? ["home","opportunities","calendar","community-events","clubs","events"] : ["home","opportunities","calendar","profile","community-events","clubs","events"];
   const navigateTo = (tab, sub, options={}) => {
+    if (tab === "profile" && isStaffFaculty) {
+      setActiveTab("opportunities");
+      setSubPage(null);
+      setDetailBackTab(null);
+      window.scrollTo(0, 0);
+      return;
+    }
     if (mainTabs.includes(tab)) {
       setActiveTab(tab);
       setSubPage(sub || null);
@@ -3860,11 +4010,11 @@ const App = () => {
 
   const pages = {
     home: <HomePage navigate={navigate}/>,
-    opportunities: <OpportunitiesPage navigate={navigate} showToast={showToast} savedOpps={savedOpps} setSavedOpps={setSavedOpps} selectedIndustries={selectedIndustries} serverOpps={serverOpps}/>,
+    opportunities: <OpportunitiesPage navigate={navigate} showToast={showToast} currentUser={currentUser} savedOpps={savedOpps} setSavedOpps={setSavedOpps} selectedIndustries={selectedIndustries} serverOpps={serverOpps}/>,
     calendar: <CalendarPage allInternships={allInternships} navigate={navigate} serverActivities={serverActivities} serverEvents={serverEvents} allClubEvents={allClubEvents}/>,
     profile: <ProfilePage showToast={showToast} selectedIndustries={selectedIndustries} setSelectedIndustries={setSelectedIndustries} selectedAreas={selectedAreas} setSelectedAreas={setSelectedAreas} emailAlerts={emailAlerts} setEmailAlerts={setEmailAlerts} internshipHistory={internshipHistory} setInternshipHistory={setInternshipHistory} currentUser={currentUser} serverActivities={serverActivities} joinedClubs={joinedClubs} setJoinedClubs={setJoinedClubs} clubEmailPrefs={clubEmailPrefs} setClubEmailPrefs={setClubEmailPrefs} refreshActivities={loadServerActivities} allClubEvents={allClubEvents} refreshClubEvents={loadClubEvents} navigate={navigate}/>,
-    "community-events": <CommunityPage mode="events" joinedClubs={joinedClubs} setJoinedClubs={setJoinedClubs} clubEmailPrefs={clubEmailPrefs} setClubEmailPrefs={setClubEmailPrefs} showToast={showToast} serverActivities={serverActivities} serverEvents={serverEvents} navigate={navigate} refreshActivities={loadServerActivities} allClubEvents={allClubEvents}/>,
-    clubs: <CommunityPage mode="clubs" joinedClubs={joinedClubs} setJoinedClubs={setJoinedClubs} clubEmailPrefs={clubEmailPrefs} setClubEmailPrefs={setClubEmailPrefs} showToast={showToast} serverActivities={serverActivities} serverEvents={serverEvents} navigate={navigate} refreshActivities={loadServerActivities} allClubEvents={allClubEvents}/>,
+    "community-events": <CommunityPage mode="events" currentUser={currentUser} joinedClubs={joinedClubs} setJoinedClubs={setJoinedClubs} clubEmailPrefs={clubEmailPrefs} setClubEmailPrefs={setClubEmailPrefs} showToast={showToast} serverActivities={serverActivities} serverEvents={serverEvents} navigate={navigate} refreshActivities={loadServerActivities} allClubEvents={allClubEvents}/>,
+    clubs: <CommunityPage mode="clubs" currentUser={currentUser} joinedClubs={joinedClubs} setJoinedClubs={setJoinedClubs} clubEmailPrefs={clubEmailPrefs} setClubEmailPrefs={setClubEmailPrefs} showToast={showToast} serverActivities={serverActivities} serverEvents={serverEvents} navigate={navigate} refreshActivities={loadServerActivities} allClubEvents={allClubEvents}/>,
     events: <EventsPage navigate={navigate} serverEvents={serverEvents}/>,
   };
 
@@ -3901,6 +4051,4 @@ requestAnimationFrame(raf);
 </script>
 </body>
 </html>
-
-
 

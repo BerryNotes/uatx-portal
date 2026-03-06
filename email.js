@@ -159,4 +159,44 @@ function sendClubSubmissionNotification(adminEmail, activity, submitterName) {
   });
 }
 
-module.exports = { sendWelcomeEmail, sendOpportunityNotification, sendClubEmail, sendClubSubmissionNotification };
+function sendOpportunitySubmissionNotification(adminEmail, opportunity, submitterName, submitterEmail) {
+  const name = escapeHtml(submitterName);
+  const email = escapeHtml(submitterEmail);
+  const org = escapeHtml(opportunity.org);
+  const title = escapeHtml(opportunity.title);
+  const industry = escapeHtml(opportunity.industry);
+  const type = escapeHtml(opportunity.type || "Opportunity");
+  const location = escapeHtml(opportunity.location);
+  const desc = escapeHtml(opportunity.description);
+  const deadline = opportunity.deadline
+    ? new Date(opportunity.deadline).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
+    : "Rolling";
+  return sendEmail({
+    to: adminEmail,
+    subject: `New Opportunity Submission: ${opportunity.title}`,
+    replyTo: submitterEmail || undefined,
+    html: wrapper(`
+      <h2 style="margin:0 0 16px;color:#1a2332;font-size:22px;">New Opportunity Submission</h2>
+      <p style="margin:0 0 16px;color:#2c2c2c;font-size:15px;line-height:1.7;">
+        <strong>${name}</strong> submitted a new opportunity for review.
+      </p>
+      <p style="margin:0 0 16px;color:#6b6b6b;font-size:13px;line-height:1.6;">
+        Contact: <a href="mailto:${email}" style="color:#c9a84c">${email}</a>
+      </p>
+      <div style="margin:20px 0;padding:20px;background:#f9f7f3;border-left:3px solid #c9a84c;">
+        <h3 style="margin:0 0 8px;color:#1a2332;font-size:17px;">${title}</h3>
+        <p style="margin:0 0 8px;color:#c9a84c;font-size:13px;font-weight:600;">${org}</p>
+        ${desc ? '<p style="margin:0 0 8px;color:#2c2c2c;font-size:14px;line-height:1.6;">' + desc + '</p>' : ''}
+        <p style="margin:0;font-size:13px;color:#6b6b6b;">
+          ${industry ? industry + ' &middot; ' : ''}${type}
+          ${location ? ' &middot; ' + location : ''} &middot; Deadline: ${deadline}
+        </p>
+      </div>
+      <p style="margin:0;color:#2c2c2c;font-size:14px;line-height:1.7;">
+        Review and approve it in the <strong>Admin Dashboard</strong>.
+      </p>
+    `),
+  });
+}
+
+module.exports = { sendWelcomeEmail, sendOpportunityNotification, sendClubEmail, sendClubSubmissionNotification, sendOpportunitySubmissionNotification };
