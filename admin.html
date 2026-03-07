@@ -230,6 +230,7 @@
           <option value="pending">Pending</option>
           <option value="admin">Admins Only</option>
         </select>
+        <button class="btn btn-outline" onclick="copyFilteredRosterEmails()" style="font-size:11px;padding:5px 10px">Copy Filtered Emails</button>
         <button class="btn btn-outline" onclick="clearRosterFilters()" style="font-size:11px;padding:5px 10px">Clear Filters</button>
       </div>
 
@@ -1092,6 +1093,8 @@ function getPortalRoleLabel(role) {
   return role === "staff_faculty" ? "Staff/Faculty" : "Student";
 }
 
+let lastFilteredRoster = [];
+
 function filterRoster() {
   const q = (document.getElementById("roster-search").value || "").toLowerCase();
   const indFilter = document.getElementById("roster-filter-industry").value;
@@ -1130,6 +1133,7 @@ function filterRoster() {
       } catch(e) { return false; }
     });
   }
+  lastFilteredRoster = [...filtered];
   renderRoster(filtered);
 }
 
@@ -1166,6 +1170,19 @@ function renderRoster(roster) {
       const el = document.getElementById("detail-" + expandedRosterId);
       if (el) el.innerHTML = '<span class="empty-note">This student hasn\'t signed in yet. No data available.</span>';
     }
+  }
+}
+
+async function copyFilteredRosterEmails() {
+  const emails = (lastFilteredRoster || [])
+    .map(r => String(r.email || "").trim())
+    .filter(Boolean);
+  if (!emails.length) return toast("No filtered emails to copy", true);
+  try {
+    await navigator.clipboard.writeText(emails.join(", "));
+    toast("Copied " + emails.length + " email" + (emails.length !== 1 ? "s" : ""));
+  } catch (e) {
+    toast("Failed to copy emails", true);
   }
 }
 
