@@ -1370,10 +1370,13 @@ function parseGoogleCalendarIcs(icsText) {
       const description = String(raw.description || "").trim();
       const org = String(raw.organizer_cn || "").trim() || calendarName || "";
       const url = normalizePublicUrl(raw.url || "", { allowRelative: false }) || "";
-
-      const descParts = [];
-      if (description) descParts.push(description.replace(/\s+/g, " ").trim());
-      if (location) descParts.push(`Location: ${location}`);
+      const shortDescription = description
+        ? description.replace(/\s+/g, " ").trim().slice(0, 500)
+        : (location ? `Location: ${location}` : "");
+      const detailParts = [];
+      if (location) detailParts.push(`Location: ${location}`);
+      if (description) detailParts.push(description);
+      if (url) detailParts.push(`Event Link: ${url}`);
 
       return {
         source_uid: raw.uid || "",
@@ -1384,8 +1387,8 @@ function parseGoogleCalendarIcs(icsText) {
         location,
         url,
         img: null,
-        description: descParts.join(" | ").slice(0, 500),
-        detail_content: "",
+        description: shortDescription,
+        detail_content: detailParts.join("\n\n").trim(),
       };
     })
     .filter(Boolean)

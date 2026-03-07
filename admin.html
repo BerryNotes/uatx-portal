@@ -644,7 +644,6 @@ if (window.location.hostname === "www.uaustinportal.org") {
 }
 // ─── STATE ───
 let currentUser = null;
-
 function todayISO() {
   const now = new Date();
   const tzOffsetMs = now.getTimezoneOffset() * 60000;
@@ -2408,9 +2407,11 @@ function renderGoogleCalendarPreview() {
           <div class="opp-card-meta">
             ${selectedType ? '<span>' + esc(selectedType) + '</span>' : ''}
             <span>${e.date ? formatDate(e.date) : 'No date'}</span>
+            ${e.location ? '<span>' + esc(e.location) + '</span>' : ''}
             ${e.url ? '<span><a href="' + attr(e.url) + '" target="_blank" style="color:#c9a84c;text-decoration:none">Link &rarr;</a></span>' : ''}
           </div>
           ${e.description ? '<div class="opp-card-desc">' + esc(e.description).substring(0, 260) + (e.description.length > 260 ? '...' : '') + '</div>' : ''}
+          ${e.detail_content ? '<div style="font-size:11px;color:#6b7280;line-height:1.5;margin-top:8px;white-space:pre-wrap">' + esc(e.detail_content).substring(0, 360) + (e.detail_content.length > 360 ? '...' : '') + '</div>' : ''}
         </div>
       </div>
     </div>`;

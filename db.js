@@ -148,6 +148,7 @@ db.exec(`
     content TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
+
 `);
 
 // ─── MIGRATIONS (add columns to existing tables) ───

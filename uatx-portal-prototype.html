@@ -2360,15 +2360,15 @@ const CalendarPage = ({allInternships, navigate, serverActivities=[], serverEven
     const items = [];
     deadlines.forEach(dl => {
       if (dl.dateObj.getFullYear()===calYear && dl.dateObj.getMonth()===calMonth && dl.dateObj.getDate()===day)
-        items.push({type:"deadline",label:dl.org,summary:dl.description || "",subPage:dl.subPage});
+        items.push({type:"deadline",label:dl.org,summary:dl.description || "",location:dl.location || "",subPage:dl.subPage});
     });
     events.forEach(ev => {
       if (ev.dateObj.getFullYear()===calYear && ev.dateObj.getMonth()===calMonth && ev.dateObj.getDate()===day)
-        items.push({type:"event",label:ev.title,summary:ev.desc || ev.description || "",subPage:ev.subPage});
+        items.push({type:"event",label:ev.title,summary:ev.desc || ev.description || "",location:ev.location || "",subPage:ev.subPage});
     });
     clubEvtsParsed.forEach(ce => {
       if (ce.dateObj.getFullYear()===calYear && ce.dateObj.getMonth()===calMonth && ce.dateObj.getDate()===day)
-        items.push({type:"club",label:ce.title,summary:ce.description || ce.desc || "",subPage:ce.subPage});
+        items.push({type:"club",label:ce.title,summary:ce.description || ce.desc || "",location:ce.location || "",subPage:ce.subPage});
     });
     return items;
   };
@@ -2508,6 +2508,9 @@ const CalendarPage = ({allInternships, navigate, serverActivities=[], serverEven
                       {item.type==="deadline" ? "Deadline" : item.type==="club" ? "Club Event" : "Event"}
                     </div>
                     <div style={{fontSize:13,fontWeight:600,color:C.navy,lineHeight:1.35}}>{item.label}</div>
+                    {!!(item.location && String(item.location).trim()) && (
+                      <div style={{fontSize:11,color:C.textLight,lineHeight:1.45,marginTop:4}}>{item.location}</div>
+                    )}
                     {!!(item.summary && String(item.summary).trim()) && (
                       <div style={{fontSize:12,color:C.textLight,lineHeight:1.45,marginTop:6}}>{item.summary}</div>
                     )}
@@ -4051,4 +4054,3 @@ requestAnimationFrame(raf);
 </script>
 </body>
 </html>
-
